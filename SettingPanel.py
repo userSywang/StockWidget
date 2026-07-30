@@ -1,3 +1,4 @@
+import json
 import os, re
 from functools import partial
 
@@ -39,9 +40,10 @@ class SettingsDialog(QDialog):
         self.tab_sizes = {
             0: QSize(360, 340),
             1: QSize(440, 420),
-            2: QSize(500, 520),
-            3: QSize(360, 350),
-            4: QSize(300, 220),
+            2: QSize(520, 240),
+            3: QSize(500, 520),
+            4: QSize(360, 350),
+            5: QSize(300, 220),
         }
         self._apply_tab_size(0)
 
@@ -205,6 +207,43 @@ class SettingsDialog(QDialog):
         data_settings.addWidget(g_flags)
 
         self.tabs.addTab(tab_1, "显示数据")
+
+        tab_source = QWidget()
+        source_settings = QVBoxLayout(tab_source)
+        source_cfg = getattr(self.win, "data_source", {}) or {}
+        if not isinstance(source_cfg, dict):
+            source_cfg = {}
+
+        g_source = QGroupBox("数据源")
+        g_source.setContentsMargins(3, 12, 3, 6)
+        gl_source = QGridLayout(g_source)
+        gl_source.setHorizontalSpacing(6)
+        gl_source.setVerticalSpacing(6)
+
+        self.cmb_data_source_mode = QComboBox()
+        self.cmb_data_source_mode.addItem("内置演示源", userData="sina")
+        self.cmb_data_source_mode.addItem("自定义 HTTP", userData="custom")
+        source_mode = source_cfg.get("mode", "sina")
+        idx_source = self.cmb_data_source_mode.findData(source_mode)
+        self.cmb_data_source_mode.setCurrentIndex(idx_source if idx_source >= 0 else 0)
+
+        self.edit_data_url = QLineEdit(str(source_cfg.get("url_template") or ""))
+        self.edit_data_url.setPlaceholderText("https://example.com/quote?codes={codes}")
+        headers = source_cfg.get("headers") if isinstance(source_cfg.get("headers"), dict) else {}
+        self.edit_data_headers = QLineEdit(json.dumps(headers, ensure_ascii=False) if headers else "")
+        self.edit_data_headers.setPlaceholderText('{"Authorization":"Bearer ..."}')
+
+        gl_source.addWidget(QLabel("模式："), 0, 0)
+        gl_source.addWidget(self.cmb_data_source_mode, 0, 1)
+        gl_source.addWidget(QLabel("接口："), 1, 0)
+        gl_source.addWidget(self.edit_data_url, 1, 1)
+        gl_source.addWidget(QLabel("请求头："), 2, 0)
+        gl_source.addWidget(self.edit_data_headers, 2, 1)
+        source_settings.addWidget(g_source)
+        source_settings.addStretch(1)
+        self._sync_data_source_enabled()
+
+        self.tabs.addTab(tab_source, "数据源")
 
         # ---- 第三页：提醒 ----
         tab_alert = QWidget()
@@ -510,6 +549,9 @@ class SettingsDialog(QDialog):
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
+        self.cmb_data_source_mode.currentIndexChanged.connect(self._on_data_source_changed)
+        self.edit_data_url.editingFinished.connect(self._on_data_source_changed)
+        self.edit_data_headers.editingFinished.connect(self._on_data_source_changed)
         self.cmb_namelength.currentIndexChanged.connect(self._on_name_length_changed)
         self.chk_default_color.toggled.connect(self._on_default_color_toggled)
         self.btn_fg.clicked.connect(self.pick_fg)
@@ -968,6 +1010,29 @@ class SettingsDialog(QDialog):
         seconds = self.cmb_interval.currentData()
         if isinstance(seconds,int): 
             self.win.set_refresh_interval(seconds)
+
+    def _sync_data_source_enabled(self):
+        custom = self.cmb_data_source_mode.currentData() == "custom"
+        self.edit_data_url.setEnabled(custom)
+        self.edit_data_headers.setEnabled(custom)
+
+    def _on_data_source_changed(self, *_args):
+        self._sync_data_source_enabled()
+        headers_text = self.edit_data_headers.text().strip()
+        headers = {}
+        if headers_text:
+            try:
+                parsed = json.loads(headers_text)
+                if isinstance(parsed, dict):
+                    headers = {str(k): str(v) for k, v in parsed.items()}
+            except Exception:
+                headers = {}
+        self.win.set_data_source({
+            "mode": self.cmb_data_source_mode.currentData() or "sina",
+            "url_template": self.edit_data_url.text().strip(),
+            "headers": headers,
+            "fields": (getattr(self.win, "data_source", {}) or {}).get("fields", {}),
+        })
 
     def _on_default_color_toggled(self, checked: bool):
         self.btn_fg.setEnabled(not checked)

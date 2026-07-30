@@ -31,6 +31,7 @@ class FakeWindow:
         self.price_alerts = []
         self.warning_visible = False
         self.warning_text = ""
+        self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
         self.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
 
     def header_is_visible(self, header):
@@ -51,6 +52,9 @@ class FakeWindow:
 
     def set_price_alerts(self, alerts):
         self.price_alerts = alerts
+
+    def set_data_source(self, data_source):
+        self.data_source = data_source
 
     def __getattr__(self, _name):
         return lambda *args, **kwargs: None
@@ -150,6 +154,21 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])
+        dlg.close()
+
+    def test_data_source_editor_updates_custom_http_config(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.cmb_data_source_mode.setCurrentIndex(dlg.cmb_data_source_mode.findData("custom"))
+        dlg.edit_data_url.setText("https://example.test/quote?codes={codes}")
+        dlg.edit_data_headers.setText('{"Authorization":"Bearer demo"}')
+        dlg._on_data_source_changed()
+
+        self.assertEqual(win.data_source["mode"], "custom")
+        self.assertEqual(win.data_source["url_template"], "https://example.test/quote?codes={codes}")
+        self.assertEqual(win.data_source["headers"]["Authorization"], "Bearer demo")
+        self.assertTrue(dlg.edit_data_url.isEnabled())
         dlg.close()
 
 
