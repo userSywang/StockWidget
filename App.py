@@ -132,6 +132,10 @@ class App(QApplication):
     def quit_app(self):
         self.tray.hide()
         self.save_now()
+        try:
+            self.win.shutdown_background()
+        except Exception:
+            pass
         keyboard.unhook_all_hotkeys()
         sys.exit(0)
 

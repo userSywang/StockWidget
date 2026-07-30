@@ -6,9 +6,21 @@ from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
-    QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog
+    QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox
 )
 from WidgetPanel import FloatLabel
+from StockLogic import (
+    DEFAULT_WARNING_TEXT,
+    default_alert_rule,
+    default_price_alert,
+    normalize_alert_rule,
+    normalize_alert_rules,
+    normalize_alert_target,
+    normalize_code_or_none,
+    normalize_price_alert,
+    normalize_price_alerts,
+)
 
 class SettingsDialog(QDialog):
     def __init__(self, win: FloatLabel, parent: QWidget, app=None):
@@ -25,10 +37,11 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         self.tab_sizes = {
-            0: QSize(300, 300),
+            0: QSize(360, 340),
             1: QSize(440, 420),
-            2: QSize(360, 350),
-            3: QSize(300, 220),
+            2: QSize(500, 520),
+            3: QSize(360, 350),
+            4: QSize(300, 220),
         }
         self._apply_tab_size(0)
 
@@ -41,32 +54,30 @@ class SettingsDialog(QDialog):
         g_codes.setContentsMargins(3,12,3,6)
         lay_codes = QHBoxLayout(g_codes)
         lay_codes.setSpacing(6)
-        # 1.1 代码列表
-        self.list_codes = QListWidget()
-        self.list_codes.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.EditKeyPressed)
-        self.list_codes.setFixedWidth(150)
-        for c in self.win.codes:
-            it = QListWidgetItem(c)
-            it.setFlags(it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            it.setCheckState(Qt.Checked if c in getattr(self.win, 'checked_codes', []) else Qt.Unchecked)
-            it.setData(Qt.UserRole, c)  # 记住上次有效值
-            self.list_codes.addItem(it)
+        # 1.1 分组代码树
+        self.tree_codes = QTreeWidget()
+        self.tree_codes.setHeaderHidden(True)
+        self.tree_codes.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.EditKeyPressed)
+        self.tree_codes.setFixedWidth(210)
+        self._load_code_tree()
         # 1.2 操作按钮
         btn_col = QVBoxLayout()
         btn_col.setSpacing(4)
         self.btn_add = QPushButton("添加")
         self.btn_add.setFixedWidth(60)
+        self.btn_add_group = QPushButton("分组")
+        self.btn_add_group.setFixedWidth(60)
         self.btn_del = QPushButton("删除")
         self.btn_del.setFixedWidth(60)
         self.btn_up  = QPushButton("上移")
         self.btn_up.setFixedWidth(60)
         self.btn_dn  = QPushButton("下移")
         self.btn_dn.setFixedWidth(60)
-        for b in (self.btn_add, self.btn_del, self.btn_up, self.btn_dn):
+        for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
             btn_col.addWidget(b)
         btn_col.addStretch(1)
 
-        lay_codes.addWidget(self.list_codes, 1)
+        lay_codes.addWidget(self.tree_codes, 1)
         lay_codes.addLayout(btn_col)
         code_settings.addWidget(g_codes)
 
@@ -195,7 +206,136 @@ class SettingsDialog(QDialog):
 
         self.tabs.addTab(tab_1, "显示数据")
 
-        # ---- 第三页 ----
+        # ---- 第三页：提醒 ----
+        tab_alert = QWidget()
+        alert_settings = QVBoxLayout(tab_alert)
+
+        g_alert = QGroupBox("联动提醒")
+        g_alert.setContentsMargins(3,12,3,6)
+        lay_alert = QHBoxLayout(g_alert)
+        lay_alert.setSpacing(6)
+
+        left_alert = QVBoxLayout()
+        self.list_alerts = QListWidget()
+        self.list_alerts.setFixedWidth(130)
+        left_alert.addWidget(self.list_alerts)
+        alert_btns = QHBoxLayout()
+        self.btn_alert_add = QPushButton("添加")
+        self.btn_alert_del = QPushButton("删除")
+        self.btn_alert_add.setFixedWidth(58)
+        self.btn_alert_del.setFixedWidth(58)
+        alert_btns.addWidget(self.btn_alert_add)
+        alert_btns.addWidget(self.btn_alert_del)
+        left_alert.addLayout(alert_btns)
+        lay_alert.addLayout(left_alert)
+
+        form_alert = QGridLayout()
+        form_alert.setHorizontalSpacing(6)
+        form_alert.setVerticalSpacing(6)
+        self.chk_alert_enabled = QCheckBox("启用")
+        self.edit_alert_name = QLineEdit()
+        self.cmb_alert_mode = QComboBox()
+        self.cmb_alert_mode.addItem("触发时显示", userData="on_trigger")
+        self.cmb_alert_mode.addItem("常显状态", userData="always")
+        self.list_alert_targets = QListWidget()
+        self.list_alert_targets.setFixedHeight(96)
+        self.btn_target_add = QPushButton("添加标的")
+        self.btn_target_del = QPushButton("删除标的")
+        self.btn_target_add.setFixedWidth(72)
+        self.btn_target_del.setFixedWidth(72)
+        self.edit_target_code = QLineEdit()
+        self.cmb_target_op = QComboBox()
+        self.cmb_target_op.addItem(">", userData=">")
+        self.cmb_target_op.addItem(">=", userData=">=")
+        self.spin_target_pct = QDoubleSpinBox()
+        self.spin_target_pct.setRange(-20.0, 20.0)
+        self.spin_target_pct.setDecimals(1)
+        self.spin_target_pct.setSuffix("%")
+        self.chk_target_volume = QCheckBox("放量")
+        self.edit_alert_message = QLineEdit()
+
+        form_alert.addWidget(self.chk_alert_enabled, 0, 0)
+        form_alert.addWidget(QLabel("名称："), 0, 1)
+        form_alert.addWidget(self.edit_alert_name, 0, 2, 1, 3)
+        form_alert.addWidget(QLabel("显示："), 1, 0)
+        form_alert.addWidget(self.cmb_alert_mode, 1, 1, 1, 2)
+        form_alert.addWidget(QLabel("标的："), 2, 0)
+        form_alert.addWidget(self.list_alert_targets, 2, 1, 1, 4)
+        target_btns = QHBoxLayout()
+        target_btns.addWidget(self.btn_target_add)
+        target_btns.addWidget(self.btn_target_del)
+        target_btns.addStretch(1)
+        form_alert.addLayout(target_btns, 3, 1, 1, 4)
+        form_alert.addWidget(QLabel("代码："), 4, 0)
+        form_alert.addWidget(self.edit_target_code, 4, 1)
+        form_alert.addWidget(self.cmb_target_op, 4, 2)
+        form_alert.addWidget(self.spin_target_pct, 4, 3)
+        form_alert.addWidget(self.chk_target_volume, 4, 4)
+        form_alert.addWidget(QLabel("消息："), 5, 0)
+        form_alert.addWidget(self.edit_alert_message, 5, 1, 1, 4)
+        lay_alert.addLayout(form_alert, 1)
+        alert_settings.addWidget(g_alert)
+
+        g_price_alert = QGroupBox("价格提醒")
+        g_price_alert.setContentsMargins(3,12,3,6)
+        lay_price_alert = QHBoxLayout(g_price_alert)
+        lay_price_alert.setSpacing(6)
+
+        left_price = QVBoxLayout()
+        self.list_price_alerts = QListWidget()
+        self.list_price_alerts.setFixedWidth(130)
+        left_price.addWidget(self.list_price_alerts)
+        price_btns = QHBoxLayout()
+        self.btn_price_alert_add = QPushButton("添加")
+        self.btn_price_alert_del = QPushButton("删除")
+        self.btn_price_alert_add.setFixedWidth(58)
+        self.btn_price_alert_del.setFixedWidth(58)
+        price_btns.addWidget(self.btn_price_alert_add)
+        price_btns.addWidget(self.btn_price_alert_del)
+        left_price.addLayout(price_btns)
+        lay_price_alert.addLayout(left_price)
+
+        form_price = QGridLayout()
+        form_price.setHorizontalSpacing(6)
+        form_price.setVerticalSpacing(6)
+        self.chk_price_alert_enabled = QCheckBox("启用")
+        self.edit_price_alert_code = QLineEdit()
+        self.cmb_price_alert_direction = QComboBox()
+        self.cmb_price_alert_direction.addItem("高于/等于", userData="above")
+        self.cmb_price_alert_direction.addItem("低于/等于", userData="below")
+        self.spin_price_alert_price = QDoubleSpinBox()
+        self.spin_price_alert_price.setRange(0.0, 99999.999)
+        self.spin_price_alert_price.setDecimals(3)
+        self.edit_price_alert_message = QLineEdit()
+
+        form_price.addWidget(self.chk_price_alert_enabled, 0, 0)
+        form_price.addWidget(QLabel("代码："), 0, 1)
+        form_price.addWidget(self.edit_price_alert_code, 0, 2)
+        form_price.addWidget(self.cmb_price_alert_direction, 0, 3)
+        form_price.addWidget(self.spin_price_alert_price, 0, 4)
+        form_price.addWidget(QLabel("提示："), 1, 0)
+        form_price.addWidget(self.edit_price_alert_message, 1, 1, 1, 4)
+        lay_price_alert.addLayout(form_price, 1)
+        alert_settings.addWidget(g_price_alert)
+
+        g_warning = QGroupBox("警醒标语")
+        g_warning.setContentsMargins(3,12,3,6)
+        lay_warning = QGridLayout(g_warning)
+        self.chk_warning_visible = QCheckBox("显示")
+        self.chk_warning_visible.setChecked(bool(getattr(self.win, "warning_visible", False)))
+        self.edit_warning_text = QLineEdit(getattr(self.win, "warning_text", DEFAULT_WARNING_TEXT))
+        lay_warning.addWidget(self.chk_warning_visible, 0, 0)
+        lay_warning.addWidget(self.edit_warning_text, 0, 1)
+        alert_settings.addWidget(g_warning)
+
+        self._loading_alert_editor = False
+        self._loading_target_editor = False
+        self._loading_price_alert_editor = False
+        self._load_alert_list()
+        self._load_price_alert_list()
+        self.tabs.addTab(tab_alert, "提醒")
+
+        # ---- 第四页 ----
         tab_2 = QWidget()
         appearance_settings = QVBoxLayout(tab_2)
 
@@ -293,7 +433,7 @@ class SettingsDialog(QDialog):
 
         self.tabs.addTab(tab_2, "外观")
 
-        # ---- 第四页 ----
+        # ---- 第五页 ----
         tab_3 = QWidget()
         other_settings = QVBoxLayout(tab_3)
 
@@ -338,11 +478,36 @@ class SettingsDialog(QDialog):
 
         # ---- 连接 ----
         # 连接：代码列表
-        self.list_codes.itemChanged.connect(self._on_codes_changed)
+        self.tree_codes.itemChanged.connect(self._on_codes_changed)
         self.btn_add.clicked.connect(self._add_code)
+        self.btn_add_group.clicked.connect(self._add_group)
         self.btn_del.clicked.connect(self._del_code)
         self.btn_up.clicked.connect(self._move_up)
         self.btn_dn.clicked.connect(self._move_down)
+        self.list_alerts.currentRowChanged.connect(self._on_alert_selected)
+        self.btn_alert_add.clicked.connect(self._add_alert_rule)
+        self.btn_alert_del.clicked.connect(self._del_alert_rule)
+        self.chk_alert_enabled.toggled.connect(self._on_alert_editor_changed)
+        self.edit_alert_name.editingFinished.connect(self._on_alert_editor_changed)
+        self.cmb_alert_mode.currentIndexChanged.connect(self._on_alert_editor_changed)
+        self.list_alert_targets.currentRowChanged.connect(self._on_alert_target_selected)
+        self.btn_target_add.clicked.connect(self._add_alert_target)
+        self.btn_target_del.clicked.connect(self._del_alert_target)
+        self.edit_target_code.editingFinished.connect(self._on_alert_target_editor_changed)
+        self.cmb_target_op.currentIndexChanged.connect(self._on_alert_target_editor_changed)
+        self.spin_target_pct.valueChanged.connect(self._on_alert_target_editor_changed)
+        self.chk_target_volume.toggled.connect(self._on_alert_target_editor_changed)
+        self.edit_alert_message.editingFinished.connect(self._on_alert_editor_changed)
+        self.list_price_alerts.currentRowChanged.connect(self._on_price_alert_selected)
+        self.btn_price_alert_add.clicked.connect(self._add_price_alert)
+        self.btn_price_alert_del.clicked.connect(self._del_price_alert)
+        self.chk_price_alert_enabled.toggled.connect(self._on_price_alert_editor_changed)
+        self.edit_price_alert_code.editingFinished.connect(self._on_price_alert_editor_changed)
+        self.cmb_price_alert_direction.currentIndexChanged.connect(self._on_price_alert_editor_changed)
+        self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
+        self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
+        self.chk_warning_visible.toggled.connect(self._on_warning_changed)
+        self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
         self.cmb_namelength.currentIndexChanged.connect(self._on_name_length_changed)
@@ -392,96 +557,411 @@ class SettingsDialog(QDialog):
         except Exception:
             pass
 
-    # —— 代码规格化 —— #
-    _re_full = re.compile(r'^(sh|sz|bj)\d+$')
-    _re_6 = re.compile(r'^\d{6}$')
+    # —— 分组自选列表 —— #
+    def _pending_role(self):
+        return Qt.UserRole + 2
 
-    def _normalize_code_or_none(self, s: str):
-        s = (s or "").strip().lower()
-        s = re.sub(r'[^a-z0-9]', '', s)
-        if not s: return None
-        if self._re_full.match(s): return s
-        if self._re_6.match(s):
-            if s[0] == '6' or s[0:2] == '90' or s[0] == '5':
-                return 'sh' + s
-            elif s[0] == '0' or s[0] == '3' or s[0] == '2' or s[0] == '1':
-                return 'sz' + s
-            elif s[0] == '8' or s[0] == '4' or s[0:2] == '92':
-                return 'bj' + s
-        return None
+    def _make_group_item(self, name: str):
+        item = QTreeWidgetItem([str(name or "分组")])
+        item.setFlags(item.flags() | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        item.setData(0, Qt.UserRole, "group")
+        return item
 
-    def _collect_codes_from_list(self):
-        codes = []
+    def _make_code_item(self, code: str, checked: bool, pending: bool = False):
+        item = QTreeWidgetItem([code])
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        item.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
+        item.setData(0, Qt.UserRole, "code")
+        item.setData(0, Qt.UserRole + 1, None if pending else code)
+        item.setData(0, self._pending_role(), bool(pending))
+        return item
+
+    def _load_code_tree(self):
+        self.tree_codes.blockSignals(True)
+        self.tree_codes.clear()
+        checked = set(getattr(self.win, "checked_codes", []))
+        for group in getattr(self.win, "groups", []) or [{"name": "默认", "codes": self.win.codes}]:
+            group_item = self._make_group_item(group.get("name", "默认"))
+            self.tree_codes.addTopLevelItem(group_item)
+            for code in group.get("codes", []):
+                group_item.addChild(self._make_code_item(code, code in checked))
+            group_item.setExpanded(True)
+        self.tree_codes.blockSignals(False)
+
+    def _collect_groups_from_tree(self):
+        groups = []
+        checked_codes = []
         seen = set()
-        for i in range(self.list_codes.count()):
-            txt = self.list_codes.item(i).text()
-            norm = self._normalize_code_or_none(txt)
-            if norm:
-                if norm not in seen:
+        self.tree_codes.blockSignals(True)
+        try:
+            for gi in range(self.tree_codes.topLevelItemCount()):
+                group_item = self.tree_codes.topLevelItem(gi)
+                name = group_item.text(0).strip() or "分组"
+                if group_item.text(0) != name:
+                    group_item.setText(0, name)
+                codes = []
+                ci = 0
+                while ci < group_item.childCount():
+                    child = group_item.child(ci)
+                    norm = normalize_code_or_none(child.text(0))
+                    if not norm:
+                        if child.data(0, self._pending_role()):
+                            ci += 1
+                            continue
+                        prev = child.data(0, Qt.UserRole + 1)
+                        if prev:
+                            child.setText(0, prev)
+                            norm = prev
+                        else:
+                            group_item.removeChild(child)
+                            continue
+                    if norm in seen:
+                        group_item.removeChild(child)
+                        continue
                     seen.add(norm)
                     codes.append(norm)
-                # 写回规范化文本
-                it = self.list_codes.item(i)
-                if it.text() != norm:
-                    self.list_codes.blockSignals(True)
-                    it.setText(norm)
-                    it.setData(Qt.UserRole, norm)
-                    self.list_codes.blockSignals(False)
-            else:
-                # 回退到上次有效值
-                it = self.list_codes.item(i)
-                prev = it.data(Qt.UserRole)
-                if prev:
-                    self.list_codes.blockSignals(True)
-                    it.setText(prev)
-                    self.list_codes.blockSignals(False)
-                else:
-                    # 没有上次有效值则删除
-                    self.list_codes.takeItem(i)
-                    return self._collect_codes_from_list()
-        return codes
+                    if child.text(0) != norm:
+                        child.setText(0, norm)
+                    child.setData(0, Qt.UserRole + 1, norm)
+                    child.setData(0, self._pending_role(), False)
+                    if child.checkState(0) == Qt.Checked:
+                        checked_codes.append(norm)
+                    ci += 1
+                if codes:
+                    groups.append({"name": name, "codes": codes})
+        finally:
+            self.tree_codes.blockSignals(False)
+        return groups, checked_codes
 
     def _on_codes_changed(self, _item):
-        codes = self._collect_codes_from_list()
-        self.win.set_codes(codes)
-        checked_codes = [
-            self.list_codes.item(i).text().split()[0]
-            for i in range(self.list_codes.count())
-            if self.list_codes.item(i).checkState() == Qt.Checked
-        ]
-        self.win.set_checked_codes(checked_codes)
+        groups, checked_codes = self._collect_groups_from_tree()
+        self.win.set_groups(groups)
+        self.win.set_checked_codes(checked_codes or self.win.codes)
+
+    def _current_group_item(self):
+        item = self.tree_codes.currentItem()
+        if item is None:
+            if self.tree_codes.topLevelItemCount() == 0:
+                self._add_group()
+            return self.tree_codes.topLevelItem(0)
+        return item if item.data(0, Qt.UserRole) == "group" else item.parent()
+
+    def _add_group(self):
+        item = self._make_group_item("新分组")
+        self.tree_codes.addTopLevelItem(item)
+        self.tree_codes.setCurrentItem(item)
+        self.tree_codes.editItem(item, 0)
 
     def _add_code(self):
-        it = QListWidgetItem("sh000001")
-        it.setFlags(it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        it.setCheckState(Qt.Unchecked)
-        it.setData(Qt.UserRole, "sh000001")
-        self.list_codes.addItem(it)
-        self.list_codes.setCurrentItem(it)
-        self.list_codes.editItem(it)
-        self._on_codes_changed(it)
+        group_item = self._current_group_item()
+        if group_item is None:
+            return
+        it = self._make_code_item("输入代码", False, pending=True)
+        self.tree_codes.blockSignals(True)
+        try:
+            group_item.addChild(it)
+            group_item.setExpanded(True)
+            self.tree_codes.setCurrentItem(it)
+        finally:
+            self.tree_codes.blockSignals(False)
+        self.tree_codes.editItem(it, 0)
 
     def _del_code(self):
-        row = self.list_codes.currentRow()
-        if row >= 0:
-            self.list_codes.takeItem(row)
-            self._on_codes_changed(None)
+        item = self.tree_codes.currentItem()
+        if item is None:
+            return
+        parent = item.parent()
+        if parent is None:
+            idx = self.tree_codes.indexOfTopLevelItem(item)
+            self.tree_codes.takeTopLevelItem(idx)
+        else:
+            parent.removeChild(item)
+        self._on_codes_changed(None)
 
     def _move_up(self):
-        row = self.list_codes.currentRow()
-        if row > 0:
-            it = self.list_codes.takeItem(row)
-            self.list_codes.insertItem(row-1, it)
-            self.list_codes.setCurrentRow(row-1)
-            self._on_codes_changed(None)
+        item = self.tree_codes.currentItem()
+        if item is None:
+            return
+        parent = item.parent()
+        if parent is None:
+            row = self.tree_codes.indexOfTopLevelItem(item)
+            if row > 0:
+                item = self.tree_codes.takeTopLevelItem(row)
+                self.tree_codes.insertTopLevelItem(row - 1, item)
+                self.tree_codes.setCurrentItem(item)
+        else:
+            row = parent.indexOfChild(item)
+            if row > 0:
+                item = parent.takeChild(row)
+                parent.insertChild(row - 1, item)
+                self.tree_codes.setCurrentItem(item)
+        self._on_codes_changed(None)
 
     def _move_down(self):
-        row = self.list_codes.currentRow()
-        if 0 <= row < self.list_codes.count()-1:
-            it = self.list_codes.takeItem(row)
-            self.list_codes.insertItem(row+1, it)
-            self.list_codes.setCurrentRow(row+1)
-            self._on_codes_changed(None)
+        item = self.tree_codes.currentItem()
+        if item is None:
+            return
+        parent = item.parent()
+        if parent is None:
+            row = self.tree_codes.indexOfTopLevelItem(item)
+            if 0 <= row < self.tree_codes.topLevelItemCount() - 1:
+                item = self.tree_codes.takeTopLevelItem(row)
+                self.tree_codes.insertTopLevelItem(row + 1, item)
+                self.tree_codes.setCurrentItem(item)
+        else:
+            row = parent.indexOfChild(item)
+            if 0 <= row < parent.childCount() - 1:
+                item = parent.takeChild(row)
+                parent.insertChild(row + 1, item)
+                self.tree_codes.setCurrentItem(item)
+        self._on_codes_changed(None)
+
+    # —— 联动提醒 —— #
+    def _load_alert_list(self, current_row=0):
+        self.list_alerts.blockSignals(True)
+        self.list_alerts.clear()
+        self._alert_rules = normalize_alert_rules(getattr(self.win, "alert_rules", []))
+        for rule in self._alert_rules:
+            self.list_alerts.addItem(QListWidgetItem(rule.get("name", "联动提醒")))
+        self.list_alerts.blockSignals(False)
+        if self.list_alerts.count() > 0:
+            self.list_alerts.setCurrentRow(max(0, min(current_row, self.list_alerts.count() - 1)))
+            self._on_alert_selected(self.list_alerts.currentRow())
+
+    def _current_alert_row(self):
+        row = self.list_alerts.currentRow()
+        return row if 0 <= row < len(getattr(self, "_alert_rules", [])) else -1
+
+    def _on_alert_selected(self, row: int):
+        if row < 0 or row >= len(getattr(self, "_alert_rules", [])):
+            return
+        rule = normalize_alert_rule(self._alert_rules[row])
+        self._loading_alert_editor = True
+        try:
+            self.chk_alert_enabled.setChecked(bool(rule.get("enabled")))
+            self.edit_alert_name.setText(rule.get("name", "联动提醒"))
+            idx = self.cmb_alert_mode.findData(rule.get("display_mode", "on_trigger"))
+            self.cmb_alert_mode.setCurrentIndex(idx if idx >= 0 else 0)
+            self.edit_alert_message.setText(rule.get("message", ""))
+            self._load_target_list(rule.get("targets", []))
+        finally:
+            self._loading_alert_editor = False
+
+    def _format_target(self, target):
+        op = target.get("op", ">=")
+        vol = "+放量" if target.get("volume") else ""
+        return f"{target.get('code', '')} {op} {float(target.get('pct', 0.0)):.1f}%{vol}"
+
+    def _load_target_list(self, targets, current_row=0):
+        self._loading_target_editor = True
+        self.list_alert_targets.blockSignals(True)
+        self.list_alert_targets.clear()
+        for target in targets or []:
+            item = QListWidgetItem(self._format_target(target))
+            item.setData(Qt.UserRole, dict(target))
+            self.list_alert_targets.addItem(item)
+        self.list_alert_targets.blockSignals(False)
+        try:
+            if self.list_alert_targets.count() > 0:
+                self.list_alert_targets.setCurrentRow(max(0, min(current_row, self.list_alert_targets.count() - 1)))
+                self._on_alert_target_selected(self.list_alert_targets.currentRow())
+        finally:
+            self._loading_target_editor = False
+
+    def _current_target_row(self):
+        row = self.list_alert_targets.currentRow()
+        return row if 0 <= row < self.list_alert_targets.count() else -1
+
+    def _targets_from_list(self):
+        targets = []
+        for i in range(self.list_alert_targets.count()):
+            data = self.list_alert_targets.item(i).data(Qt.UserRole)
+            target = normalize_alert_target(data)
+            if target:
+                targets.append(target)
+        return targets
+
+    def _collect_alert_from_editor(self):
+        row = self._current_alert_row()
+        existing = self._alert_rules[row] if row >= 0 else {}
+        return normalize_alert_rule({
+            "enabled": self.chk_alert_enabled.isChecked(),
+            "name": self.edit_alert_name.text(),
+            "display_mode": self.cmb_alert_mode.currentData(),
+            "targets": self._targets_from_list() or existing.get("targets", []),
+            "message": self.edit_alert_message.text(),
+        })
+
+    def _on_alert_editor_changed(self, *_args):
+        if getattr(self, "_loading_alert_editor", False):
+            return
+        row = self._current_alert_row()
+        if row < 0:
+            return
+        rule = self._collect_alert_from_editor()
+        self._alert_rules[row] = rule
+        item = self.list_alerts.item(row)
+        if item:
+            item.setText(rule.get("name", "联动提醒"))
+        self.win.set_alert_rules(self._alert_rules)
+
+    def _on_alert_target_selected(self, row: int):
+        if row < 0 or row >= self.list_alert_targets.count():
+            return
+        target = normalize_alert_target(self.list_alert_targets.item(row).data(Qt.UserRole))
+        if not target:
+            return
+        self._loading_target_editor = True
+        try:
+            self.edit_target_code.setText(target.get("code", ""))
+            idx = self.cmb_target_op.findData(target.get("op", ">="))
+            self.cmb_target_op.setCurrentIndex(idx if idx >= 0 else 1)
+            self.spin_target_pct.setValue(float(target.get("pct", 0.0)))
+            self.chk_target_volume.setChecked(bool(target.get("volume", False)))
+        finally:
+            self._loading_target_editor = False
+
+    def _on_alert_target_editor_changed(self, *_args):
+        if getattr(self, "_loading_alert_editor", False) or getattr(self, "_loading_target_editor", False):
+            return
+        row = self._current_target_row()
+        if row < 0:
+            return
+        target = normalize_alert_target({
+            "code": self.edit_target_code.text(),
+            "op": self.cmb_target_op.currentData(),
+            "pct": self.spin_target_pct.value(),
+            "volume": self.chk_target_volume.isChecked(),
+        })
+        if not target:
+            self._on_alert_target_selected(row)
+            return
+        item = self.list_alert_targets.item(row)
+        item.setData(Qt.UserRole, target)
+        item.setText(self._format_target(target))
+        self._on_alert_editor_changed()
+
+    def _new_target_code(self):
+        existing = {target.get("code") for target in self._targets_from_list()}
+        for code in ("sh000001", "sh512000", "sh515880", "sh513100"):
+            if code not in existing:
+                return code
+        return "sh000001"
+
+    def _add_alert_target(self):
+        target = {"code": self._new_target_code(), "op": ">=", "pct": 0.0, "volume": False}
+        item = QListWidgetItem(self._format_target(target))
+        item.setData(Qt.UserRole, target)
+        self.list_alert_targets.addItem(item)
+        self.list_alert_targets.setCurrentItem(item)
+        self._on_alert_editor_changed()
+
+    def _del_alert_target(self):
+        row = self._current_target_row()
+        if row < 0:
+            return
+        self.list_alert_targets.takeItem(row)
+        self._on_alert_editor_changed()
+        if self.list_alert_targets.count() > 0:
+            self.list_alert_targets.setCurrentRow(max(0, min(row, self.list_alert_targets.count() - 1)))
+
+    def _add_alert_rule(self):
+        rules = list(getattr(self, "_alert_rules", normalize_alert_rules([])))
+        rule = default_alert_rule()
+        rule["enabled"] = True
+        rules.append(rule)
+        self.win.set_alert_rules(rules)
+        self._load_alert_list(len(rules) - 1)
+
+    def _del_alert_rule(self):
+        row = self._current_alert_row()
+        if row < 0:
+            return
+        rules = list(getattr(self, "_alert_rules", []))
+        if 0 <= row < len(rules):
+            rules.pop(row)
+        self.win.set_alert_rules(rules)
+        self._load_alert_list(max(0, row - 1))
+
+    # —— 价格提醒 —— #
+    def _format_price_alert(self, alert):
+        direction = "高于" if alert.get("direction") == "above" else "低于"
+        suffix = "" if alert.get("enabled", True) else "（停用）"
+        return f"{alert.get('code', '')} {direction} {float(alert.get('price', 0.0)):.3f}{suffix}"
+
+    def _load_price_alert_list(self, current_row=0):
+        self.list_price_alerts.blockSignals(True)
+        self.list_price_alerts.clear()
+        self._price_alerts = normalize_price_alerts(getattr(self.win, "price_alerts", []))
+        for alert in self._price_alerts:
+            self.list_price_alerts.addItem(QListWidgetItem(self._format_price_alert(alert)))
+        self.list_price_alerts.blockSignals(False)
+        if self.list_price_alerts.count() > 0:
+            self.list_price_alerts.setCurrentRow(max(0, min(current_row, self.list_price_alerts.count() - 1)))
+            self._on_price_alert_selected(self.list_price_alerts.currentRow())
+
+    def _current_price_alert_row(self):
+        row = self.list_price_alerts.currentRow()
+        return row if 0 <= row < len(getattr(self, "_price_alerts", [])) else -1
+
+    def _on_price_alert_selected(self, row: int):
+        if row < 0 or row >= len(getattr(self, "_price_alerts", [])):
+            return
+        alert = normalize_price_alert(self._price_alerts[row])
+        self._loading_price_alert_editor = True
+        try:
+            self.chk_price_alert_enabled.setChecked(bool(alert.get("enabled", True)))
+            self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
+            idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
+            self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
+            self.spin_price_alert_price.setValue(float(alert.get("price", 0.0)))
+            self.edit_price_alert_message.setText(alert.get("message", ""))
+        finally:
+            self._loading_price_alert_editor = False
+
+    def _collect_price_alert_from_editor(self):
+        return normalize_price_alert({
+            "enabled": self.chk_price_alert_enabled.isChecked(),
+            "code": self.edit_price_alert_code.text(),
+            "direction": self.cmb_price_alert_direction.currentData(),
+            "price": self.spin_price_alert_price.value(),
+            "message": self.edit_price_alert_message.text(),
+        })
+
+    def _on_price_alert_editor_changed(self, *_args):
+        if getattr(self, "_loading_price_alert_editor", False):
+            return
+        row = self._current_price_alert_row()
+        if row < 0:
+            return
+        alert = self._collect_price_alert_from_editor()
+        self._price_alerts[row] = alert
+        item = self.list_price_alerts.item(row)
+        if item:
+            item.setText(self._format_price_alert(alert))
+        self.win.set_price_alerts(self._price_alerts)
+
+    def _add_price_alert(self):
+        alerts = list(getattr(self, "_price_alerts", normalize_price_alerts([])))
+        alert = default_price_alert()
+        if getattr(self.win, "codes", None):
+            alert["code"] = self.win.codes[0]
+        alerts.append(alert)
+        self.win.set_price_alerts(alerts)
+        self._load_price_alert_list(len(alerts) - 1)
+
+    def _del_price_alert(self):
+        row = self._current_price_alert_row()
+        if row < 0:
+            return
+        alerts = list(getattr(self, "_price_alerts", []))
+        if 0 <= row < len(alerts):
+            alerts.pop(row)
+        self.win.set_price_alerts(alerts)
+        self._load_price_alert_list(max(0, row - 1))
+
+    def _on_warning_changed(self, *_args):
+        self.win.set_warning(self.chk_warning_visible.isChecked(), self.edit_warning_text.text())
 
     # —— 其它槽 —— #
     def _on_interval_changed(self, idx):

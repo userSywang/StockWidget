@@ -1,11 +1,24 @@
 import requests, keyboard
 from functools import partial
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
 from PySide6.QtGui import QFont, QAction, QColor
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QLabel, QTableView, QHeaderView, QAbstractItemView, QFrame, QStyledItemDelegate
 
 from Display import SimpleTableModel, KLineDelegate
+from Display import PriceAlertNameDelegate
+from StockLogic import (
+    DEFAULT_WARNING_TEXT,
+    evaluate_alert_rules,
+    evaluate_price_alerts,
+    flatten_group_codes,
+    normalize_alert_rules,
+    normalize_groups,
+    normalize_codes,
+    normalize_price_alerts,
+)
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
@@ -13,6 +26,9 @@ class FloatLabel(QWidget):
         super().__init__()
         self._on_change = (lambda: None)
         self._open_settings_cb = None
+        self._fit_pending = False
+        self._last_fit_signature = None
+        self._suspend_keep_top_until = 0.0
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
@@ -20,6 +36,7 @@ class FloatLabel(QWidget):
 
         # 加载配置
         codes_cfg               = cfg.get("codes",["sh000001"])             # 自选列表
+        groups_cfg              = cfg.get("groups", [])                     # 分组自选列表
         checked_codes_cfg       = cfg.get("checked_codes", cfg.get("visible_codes", codes_cfg))  # 在浮窗中显示的股票（新名 checked_codes，兼容 visible_codes）
         self.refresh_seconds    = int(cfg.get("refresh_seconds", 2))        # 刷新间隔
         flags_cfg               = cfg.get("flags", {})                      # 指标开关（字典格式）
@@ -49,9 +66,20 @@ class FloatLabel(QWidget):
 
         self.hotkey             = cfg.get("hotkey", "Ctrl+Alt+F")           # 快捷键
         self.start_on_boot      = bool(cfg.get("start_on_boot", False))
+        self.alert_rules        = normalize_alert_rules(cfg.get("alert_rules", []))
+        self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
+        self.warning_visible    = bool(cfg.get("warning_visible", False))
+        self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
+        self._latest_quotes     = {}
+        self._http              = requests.Session()
+        self._refresh_executor  = ThreadPoolExecutor(max_workers=1)
+        self._refresh_future    = None
+        self._refresh_previous_quotes = {}
+        self._refresh_again_requested = False
 
         # 设置初值
-        self.codes = [str(c).strip() for c in codes_cfg if str(c).strip()]
+        self.groups = normalize_groups(groups_cfg, codes_cfg)
+        self.codes = flatten_group_codes(self.groups)
         # 列标题列表（提前定义，供后续旧配置解析使用）
         self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
 
@@ -80,8 +108,11 @@ class FloatLabel(QWidget):
         self.kline_visible = bool(cfg.get("kline_visible", old_flags.get("K线", False)))
 
         # 设置自选显示股票（新名 checked_codes）
-        self.codes = [str(c).strip() for c in codes_cfg if str(c).strip()]
-        self.checked_codes = [str(c).strip() for c in checked_codes_cfg if (str(c).strip() and str(c).strip() in self.codes)]
+        checked_codes_cfg = checked_codes_cfg or self.codes
+        checked_norm = normalize_codes(checked_codes_cfg)
+        self.checked_codes = [c for c in checked_norm if c in self.codes]
+        if not self.checked_codes:
+            self.checked_codes = list(self.codes)
         self.font = QFont(font_family, max(8, min(15, font_size)))
         self.bg = QColor(bg["r"],bg["g"],bg["b"],bg["a"])
         
@@ -101,10 +132,18 @@ class FloatLabel(QWidget):
         self.table.setShowGrid(False)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.setFocusPolicy(Qt.NoFocus)
+        self.table.setMouseTracking(True)
+        self.table.viewport().setMouseTracking(True)
+        self.table.setWordWrap(True)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setVisible(self.header_visible)
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # Column widths are calculated from stock rows in _fit_to_contents().
+        # ResizeToContents would later measure spanned message rows and expand
+        # the first column again after warning/alert text is rendered.
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.table.setFont(self.font)
         self.table.horizontalHeader().setFont(self.font)
         self.table.verticalHeader().setMinimumSectionSize(1)
@@ -124,6 +163,9 @@ class FloatLabel(QWidget):
         self.k_delegate.update_scheme(self.default_color, self.fg)
         self.k_delegate.set_point_size(self.font.pointSize())
         self.k_column_visible_index = None
+        self.name_delegate = PriceAlertNameDelegate(self.table)
+        self.name_delegate.update_scheme(self.fg)
+        self.name_column_visible_index = None
 
         self.vbox.addWidget(self.table)
 
@@ -171,8 +213,13 @@ class FloatLabel(QWidget):
 
     def current_config(self):
         return {
+            "groups": self.groups,
             "codes": self.codes,
             "checked_codes": self.checked_codes,
+            "alert_rules": self.alert_rules,
+            "price_alerts": self.price_alerts,
+            "warning_visible": self.warning_visible,
+            "warning_text": self.warning_text,
             "code_visible": bool(getattr(self, 'code_visible', False)),
             "name_visible": bool(getattr(self, 'name_visible', False)),
             "price_visible": bool(getattr(self, 'price_visible', False)),
@@ -272,13 +319,106 @@ class FloatLabel(QWidget):
     def _apply_row_heights(self):
         fm = self.table.fontMetrics()
         h = fm.height() + max(0, self.line_extra_px)
+        span_width = max(40, sum(self.table.columnWidth(c) for c in range(self.model.columnCount())) - 8)
         self.table.verticalHeader().setDefaultSectionSize(h)
         for r in range(self.model.rowCount()):
-            self.table.setRowHeight(r, h)
+            meta = self.model._row_meta[r] if 0 <= r < len(getattr(self.model, "_row_meta", [])) else {}
+            if meta.get("row_type") == "separator":
+                self.table.setRowHeight(r, max(4, h // 2))
+            elif meta.get("row_type") in ("alert", "warning"):
+                row = self.model._rows[r] if 0 <= r < len(getattr(self.model, "_rows", [])) else [meta.get("text", "")]
+                text = str(row[0] if row else meta.get("text", "") or "")
+                rect = fm.boundingRect(0, 0, span_width, 10000, Qt.TextWordWrap | Qt.AlignVCenter, text)
+                self.table.setRowHeight(r, max(h, rect.height() + 6))
+            else:
+                self.table.setRowHeight(r, h)
+
+    @staticmethod
+    def _column_width_source_rows(rows, meta):
+        result = []
+        for i, row in enumerate(rows or []):
+            row_meta = meta[i] if i < len(meta or []) else {}
+            if not (row_meta or {}).get("row_type"):
+                result.append(row)
+        return result
+
+    @staticmethod
+    def _wrap_text_for_width(text, max_width, measure):
+        text = str(text or "")
+        try:
+            max_width = int(max_width)
+        except Exception:
+            max_width = 0
+        if max_width <= 0 or not text:
+            return text
+        lines = []
+        paragraphs = text.splitlines() or [""]
+        for paragraph in paragraphs:
+            current = ""
+            for ch in paragraph:
+                trial = current + ch
+                if current and measure(trial) > max_width:
+                    lines.append(current)
+                    current = ch
+                else:
+                    current = trial
+            lines.append(current)
+        return "\n".join(lines)
+
+    def _resize_columns_to_contents(self):
+        headers = list(getattr(self.model, "_headers", []) or [])
+        rows = list(getattr(self.model, "_rows", []) or [])
+        meta = list(getattr(self.model, "_row_meta", []) or [])
+        col_count = self.model.columnCount()
+        body_fm = self.table.fontMetrics()
+        header_fm = self.table.horizontalHeader().fontMetrics()
+        for c in range(col_count):
+            header = headers[c] if c < len(headers) else ""
+            width = header_fm.horizontalAdvance(str(header)) + 14 if self.header_visible else 0
+            for row_index, row in enumerate(rows):
+                row_meta = meta[row_index] if row_index < len(meta) else {}
+                if (row_meta or {}).get("row_type"):
+                    continue
+                cell = row[c] if c < len(row) else ""
+                if isinstance(cell, dict) and "k" in cell:
+                    cell_width = max(46, body_fm.height() * 3)
+                else:
+                    cell_width = body_fm.horizontalAdvance(str(cell)) + 12
+                    if header == "名称":
+                        if row_meta.get("price_alerts"):
+                            cell_width += 22
+                width = max(width, cell_width)
+            self.table.setColumnWidth(c, max(18, width))
+
+    def _wrap_message_rows_to_current_width(self):
+        rows = getattr(self.model, "_rows", [])
+        meta = getattr(self.model, "_row_meta", [])
+        if not rows or not meta:
+            return
+        span_width = max(40, sum(self.table.columnWidth(c) for c in range(self.model.columnCount())) - 8)
+        fm = self.table.fontMetrics()
+        for r, row_meta in enumerate(meta):
+            if not (row_meta or {}).get("row_type") in ("alert", "warning"):
+                continue
+            if r >= len(rows) or not rows[r]:
+                continue
+            rows[r][0] = self._wrap_text_for_width(
+                row_meta.get("text", ""),
+                span_width,
+                fm.horizontalAdvance,
+            )
 
     def _fit_to_contents(self):
-        self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.resizeColumnsToContents()
+        fit_sig = self._fit_signature()
+        if fit_sig == getattr(self, "_last_fit_signature", None):
+            return
+        self._last_fit_signature = fit_sig
+
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.Fixed)
+        self._resize_columns_to_contents()
+        self._wrap_message_rows_to_current_width()
         self._apply_row_heights()
 
         cols = self.model.columnCount()
@@ -290,12 +430,40 @@ class FloatLabel(QWidget):
         total_h = hh + 2*self.table.frameWidth()
         for r in range(rows): 
             total_h += self.table.rowHeight(r)
-        self.table.setFixedSize(max(1,total_w), max(1,total_h))
+        # Qt occasionally needs a few spare pixels after header/row rounding;
+        # without this, scrollbars can appear even when content nominally fits.
+        total_w += 14
+        total_h += 8
+        self.table.setFixedSize(max(1, total_w), max(1, total_h))
         self.panel.adjustSize()
         self.resize(self.panel.size())
 
     def _defer_fit(self):
-        QTimer.singleShot(0, self._fit_to_contents)
+        if getattr(self, "_fit_pending", False):
+            return
+        self._fit_pending = True
+        QTimer.singleShot(0, self._run_deferred_fit)
+
+    def _run_deferred_fit(self):
+        self._fit_pending = False
+        self._fit_to_contents()
+
+    def _fit_signature(self):
+        rows = getattr(self.model, "_rows", [])
+        headers = getattr(self.model, "_headers", [])
+        meta = getattr(self.model, "_row_meta", [])
+        row_types = tuple((m or {}).get("row_type", "") for m in meta)
+        text_lengths = tuple(tuple(len(str(cell)) for cell in row) for row in rows)
+        return (
+            tuple(headers),
+            text_lengths,
+            row_types,
+            bool(self.header_visible),
+            bool(self.grid_visible),
+            self.font.family(),
+            self.font.pointSize(),
+            int(self.line_extra_px),
+        )
 
     # ----- 数据 & 投影 -----
     def _show_error(self, msg: str):
@@ -331,15 +499,18 @@ class FloatLabel(QWidget):
 
     # ----- 数据来源：新浪财经 -----
     def _get_price(self, codes:list):
-        label = ",".join([str(c).strip() for c in codes if str(c).strip()])
+        requested_codes = normalize_codes(codes)
+        label = ",".join(requested_codes)
         if not label:
             raise Exception("暂无数据，请添加自选")
 
-        price_data = []
-        sign_data = []
+        row_by_code = {}
+        sign_by_code = {}
+        quote_by_code = {}
         url = 'https://hq.sinajs.cn/list=' + label
         headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=3)
+        getter = getattr(getattr(self, "_http", None), "get", requests.get)
+        r = getter(url, headers=headers, timeout=3)
         r.encoding = 'gbk'
         for line in r.text.split('\n'):
             if not line or '"' not in line:
@@ -478,7 +649,7 @@ class FloatLabel(QWidget):
 
             # "代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价",  "K线"
             if code[2] not in ('1','5'):
-                price_data.append([
+                row = [
                     code[2:] if self.short_code else code,
                     name if self.name_length == 0 else name[:self.name_length],
                     f"{current_price:.2f}{arrow}",
@@ -491,9 +662,9 @@ class FloatLabel(QWidget):
                     f"{deals_amt/1e4:.2f}万" if deals_amt<1e8 else (f"{deals_amt/1e8:.2f}亿" if deals_amt<1e12 else f"{deals_amt/1e12:.2f}万亿"),
                     f"{avg:.2f}",
                     k_payload
-                ])
+                ]
             else:
-                price_data.append([
+                row = [
                     code[2:] if self.short_code else code,
                     name if self.name_length == 0 else name[:self.name_length],
                     f"{current_price:.3f}{arrow}",
@@ -506,26 +677,124 @@ class FloatLabel(QWidget):
                     f"{deals_amt/1e4:.2f}万" if deals_amt<1e8 else (f"{deals_amt/1e8:.2f}亿" if deals_amt<1e12 else f"{deals_amt/1e12:.2f}万亿"),
                     f"{avg:.3f}",
                     k_payload
-                ])
-            sign_data.append({
+                ]
+            row_by_code[code] = row
+            sign_by_code[code] = {
                 "delta": (change > 0) - (change < 0), 
                 "commi": (committee > 0) - (committee < 0),
                 "avg": (avg > prev_close) - (avg < prev_close),
                 "b1": b1_color_sign,
                 "s1": s1_color_sign,
-            })
-        
-        return price_data, sign_data
+            }
+            quote_by_code[code] = {
+                "name": name,
+                "price": current_price,
+                "change": change,
+                "change_pct": change_pct,
+                "volume": deals_vol,
+                "amount": deals_amt,
+            }
+
+        for code in requested_codes:
+            if code in row_by_code:
+                continue
+            display_code = code[2:] if self.short_code and len(code) > 2 else code
+            name = f"板块{code[2:]}" if code[:2] in ("bk", "gn", "sw") else code
+            if self.name_length > 0:
+                name = name[:self.name_length]
+            row_by_code[code] = [
+                display_code,
+                name,
+                "-",
+                "-",
+                "无数据",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "",
+            ]
+            sign_by_code[code] = {"delta": 0, "commi": 0, "avg": 0, "b1": 0, "s1": 0}
+
+        return row_by_code, sign_by_code, quote_by_code
+
+    def _message_row(self, text: str):
+        row = [""] * len(self.ALL_HEADERS)
+        row[0] = text
+        return row
+
+    def _separator_row(self):
+        return self._message_row("")
+
+    def _alert_request_codes(self):
+        codes = []
+        for rule in normalize_alert_rules(getattr(self, "alert_rules", [])):
+            codes.extend([target.get("code") for target in rule.get("targets", [])])
+        return normalize_codes(codes)
+
+    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None):
+        full_rows, meta_rows = [], []
+        checked = set(getattr(self, "checked_codes", []))
+        alert_rows_added = False
+        price_alerts_by_code = price_alerts_by_code or {}
+
+        for group in getattr(self, "groups", []):
+            group_codes = [c for c in group.get("codes", []) if c in checked]
+            if not group_codes:
+                continue
+            full_rows.append(self._message_row(str(group.get("name") or "分组")))
+            meta_rows.append({"row_type": "group", "text": str(group.get("name") or "分组")})
+            for code in group_codes:
+                if code in row_by_code:
+                    full_rows.append(row_by_code[code])
+                    meta = dict(sign_by_code.get(code, {}))
+                    if code in price_alerts_by_code:
+                        meta["price_alerts"] = price_alerts_by_code[code]
+                    meta_rows.append(meta)
+
+        for state in alert_states:
+            rule = state.get("rule", {})
+            if rule.get("display_mode") != "always" and not state.get("triggered"):
+                continue
+            if not alert_rows_added:
+                full_rows.append(self._separator_row())
+                meta_rows.append({"row_type": "separator", "text": ""})
+                alert_rows_added = True
+            text = f"{rule.get('name', '联动提醒')}：{state.get('status', '')}"
+            if state.get("triggered") and state.get("text"):
+                text = f"{text}，{state.get('text')}"
+            full_rows.append(self._message_row(text))
+            meta_rows.append({"row_type": "alert", "text": text, "triggered": bool(state.get("triggered"))})
+
+        if getattr(self, "warning_visible", False) and getattr(self, "warning_text", ""):
+            text = str(self.warning_text).strip()
+            if full_rows:
+                full_rows.append(self._separator_row())
+                meta_rows.append({"row_type": "separator", "text": ""})
+            full_rows.append(self._message_row(text))
+            meta_rows.append({"row_type": "warning", "text": text})
+
+        return full_rows, meta_rows
 
     def _project_columns(self, full_rows, sign_data):
         # 从 ALL_HEADERS 中按显示顺序筛选已启用的列
         cols = [i for i, h in enumerate(self.ALL_HEADERS) if self.header_is_visible(h)]
+        if not cols:
+            cols = [1]
         headers = [self.ALL_HEADERS[i] for i in cols]
 
         proj_rows, proj_meta = [], []
         for r, row in enumerate(full_rows):
-            proj_rows.append([row[i] for i in cols])
-            proj_meta.append(sign_data[r])
+            meta = sign_data[r] if r < len(sign_data) else {}
+            if meta.get("row_type"):
+                projected = [""] * len(cols)
+                projected[0] = meta.get("text", "")
+                proj_rows.append(projected)
+            else:
+                proj_rows.append([row[i] for i in cols])
+            proj_meta.append(meta)
 
         # 右对齐：除了名称、K线、卖一外的所有列都右对齐
         right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一")]
@@ -533,8 +802,19 @@ class FloatLabel(QWidget):
         self.model.set_rows_headers(proj_rows, headers, meta=proj_meta)
         self.model.set_color_scheme(self.default_color, self.fg)
 
+        try:
+            self.table.clearSpans()
+            if len(headers) > 1:
+                for r, meta in enumerate(proj_meta):
+                    if meta.get("row_type"):
+                        self.table.setSpan(r, 0, 1, len(headers))
+        except Exception:
+            pass
+
         if "K线" in headers:
             col = headers.index("K线")
+            if self.k_column_visible_index is not None and self.k_column_visible_index != col:
+                self.table.setItemDelegateForColumn(self.k_column_visible_index, QStyledItemDelegate(self.table))
             self.k_column_visible_index = col
             self.k_delegate.update_scheme(self.default_color, self.fg)
             self.k_delegate.set_point_size(self.font.pointSize())
@@ -544,12 +824,36 @@ class FloatLabel(QWidget):
                 self.table.setItemDelegateForColumn(self.k_column_visible_index, QStyledItemDelegate(self.table))
                 self.k_column_visible_index = None
 
+        if "名称" in headers:
+            col = headers.index("名称")
+            if self.name_column_visible_index is not None and self.name_column_visible_index != col:
+                self.table.setItemDelegateForColumn(self.name_column_visible_index, QStyledItemDelegate(self.table))
+            self.name_column_visible_index = col
+            self.name_delegate.update_scheme(self.fg)
+            self.table.setItemDelegateForColumn(col, self.name_delegate)
+        else:
+            if self.name_column_visible_index is not None:
+                self.table.setItemDelegateForColumn(self.name_column_visible_index, QStyledItemDelegate(self.table))
+                self.name_column_visible_index = None
+
         self._fit_to_contents()
 
     def _refresh_from_function(self):
+        if getattr(self, "_refresh_future", None) is not None and not self._refresh_future.done():
+            self._refresh_again_requested = True
+            return
         try:
-            full_rows, sign = self._get_price(self.checked_codes)
+            request_codes = normalize_codes(list(self.checked_codes) + self._alert_request_codes())
+            self._refresh_previous_quotes = dict(getattr(self, "_latest_quotes", {}))
+            executor = getattr(self, "_refresh_executor", None)
+            if executor is None:
+                row_by_code, sign_by_code, quote_by_code = self._get_price(request_codes)
+                self._apply_refresh_result(row_by_code, sign_by_code, quote_by_code, self._refresh_previous_quotes)
+                return
+            self._refresh_future = executor.submit(self._get_price, request_codes)
+            self._poll_refresh_future()
         except Exception as e:
+            self._refresh_future = None
             try:
                 import requests as _req
                 if isinstance(e, _req.exceptions.RequestException):
@@ -560,38 +864,88 @@ class FloatLabel(QWidget):
                 self._show_error(str(e))
             return
 
+    def _poll_refresh_future(self):
+        future = getattr(self, "_refresh_future", None)
+        if future is None:
+            return
+        if not future.done():
+            QTimer.singleShot(30, self._poll_refresh_future)
+            return
+
+        self._refresh_future = None
+        try:
+            row_by_code, sign_by_code, quote_by_code = future.result()
+            self._apply_refresh_result(
+                row_by_code,
+                sign_by_code,
+                quote_by_code,
+                getattr(self, "_refresh_previous_quotes", {}),
+            )
+        except Exception as e:
+            try:
+                import requests as _req
+                if isinstance(e, _req.exceptions.RequestException):
+                    self._show_error(_req.exceptions.RequestException())
+                else:
+                    self._show_error(str(e))
+            except Exception:
+                self._show_error(str(e))
+
+    def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes):
+        alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
+        price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
+        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states)
+        self._latest_quotes = quote_by_code
+
         try:
             self._clear_error()
         except Exception:
             pass
         self._project_columns(full_rows, sign)
+        if getattr(self, "_refresh_again_requested", False):
+            self._refresh_again_requested = False
+            QTimer.singleShot(0, self._refresh_from_function)
 
     # ----- 应用设置 -----
+    def set_groups(self, groups):
+        self.groups = normalize_groups(groups, self.codes)
+        self.codes = flatten_group_codes(self.groups)
+        self.checked_codes = [c for c in self.checked_codes if c in self.codes]
+        if not self.checked_codes:
+            self.checked_codes = list(self.codes)
+        self._notify_change()
+        self._refresh_from_function()
+
     def set_codes(self, codes_list):
-        seen = set()
-        new = []
-        for c in codes_list:
-            s = str(c).strip().lower()
-            if s and s not in seen:
-                seen.add(s)
-                new.append(s)
+        new = normalize_codes(codes_list)
         if not new: 
             new = ["sh000001"]
         self.codes = new
+        self.groups = [{"name": "默认", "codes": list(new)}]
         self._notify_change()
         self._refresh_from_function()
 
     def set_checked_codes(self, codes_list):
-        seen = set()
-        new = []
-        for c in codes_list:
-            s = str(c).strip().lower()
-            if s and s not in seen:
-                seen.add(s)
-                new.append(s)
+        new = [c for c in normalize_codes(codes_list) if c in self.codes]
         if not new: 
-            new = ["sh000001"]
+            new = [self.codes[0] if self.codes else "sh000001"]
         self.checked_codes = new
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_alert_rules(self, rules):
+        self.alert_rules = normalize_alert_rules(rules)
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_price_alerts(self, alerts):
+        self.price_alerts = normalize_price_alerts(alerts)
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_warning(self, visible: bool, text: str):
+        self.warning_visible = bool(visible)
+        self.warning_text = str(text or "").strip() or DEFAULT_WARNING_TEXT
         self._notify_change()
         self._refresh_from_function()
 
@@ -824,6 +1178,15 @@ class FloatLabel(QWidget):
         event.ignore()
         self.hide()
 
+    def shutdown_background(self):
+        try:
+            executor = getattr(self, "_refresh_executor", None)
+            if executor is not None:
+                executor.shutdown(wait=False, cancel_futures=True)
+                self._refresh_executor = None
+        except Exception:
+            pass
+
     def showEvent(self, event):
         super().showEvent(event)
         if self.timer and not self.timer.isActive(): 
@@ -842,6 +1205,8 @@ class FloatLabel(QWidget):
     def _ensure_on_top(self):
         if not self.isVisible():
             return
+        if time.monotonic() < getattr(self, "_suspend_keep_top_until", 0.0):
+            return
         try:
             aw = QApplication.activeWindow()
             popup = QApplication.activePopupWidget()
@@ -852,6 +1217,15 @@ class FloatLabel(QWidget):
         except Exception:
             pass
         self.raise_()
+
+    def suspend_keep_top(self, seconds: float = 6.0):
+        try:
+            self._suspend_keep_top_until = max(
+                getattr(self, "_suspend_keep_top_until", 0.0),
+                time.monotonic() + max(0.5, float(seconds)),
+            )
+        except Exception:
+            pass
 
     def _register_hotkey(self):
         try:

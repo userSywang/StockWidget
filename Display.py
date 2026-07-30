@@ -1,6 +1,6 @@
-from PySide6.QtCore import Qt, QRect, QAbstractTableModel, QModelIndex
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush
-from PySide6.QtWidgets import QStyledItemDelegate
+from PySide6.QtCore import Qt, QRect, QPoint, QAbstractTableModel, QModelIndex, QEvent
+from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont
+from PySide6.QtWidgets import QStyledItemDelegate, QToolTip
 
 # ----- 颜色配置 -----
 UP_COLOR = QColor("#dd2100")
@@ -41,17 +41,49 @@ class SimpleTableModel(QAbstractTableModel):
                 return cell["k"]
             return None
 
+        if role == Qt.UserRole + 1:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            return meta.get("price_alerts") or []
+
+        if role == Qt.UserRole + 2:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            alerts = meta.get("price_alerts") or []
+            if not alerts:
+                return ""
+            return "\n\n".join(str(a.get("detail", "")) for a in alerts if a.get("detail"))
+
         if role == Qt.DisplayRole:
             return "" if isinstance(cell, dict) else str(cell)
 
         if role == Qt.TextAlignmentRole:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            row_type = meta.get("row_type")
+            if row_type == "warning":
+                return Qt.AlignCenter
+            if row_type in ("group", "alert", "separator"):
+                return Qt.AlignLeft | Qt.AlignVCenter
             return (Qt.AlignRight | Qt.AlignVCenter) if c in self._align_right else (Qt.AlignLeft | Qt.AlignVCenter)
 
         if role == Qt.ForegroundRole:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            row_type = meta.get("row_type")
+            if row_type == "group":
+                c = QColor(self.fg_color)
+                c.setAlpha(210)
+                return c
+            if row_type == "alert":
+                return UP_COLOR if meta.get("triggered") else self.fg_color
+            if row_type == "warning":
+                c = QColor("#f0c36a")
+                return c
+            if row_type == "separator":
+                c = QColor(self.fg_color)
+                c.setAlpha(0)
+                return c
+
             if not self.default_color:
                 return self.fg_color
 
-            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
             header = self._headers[c] if 0 <= c < len(self._headers) else ""
             sign = 0
             if header in ("涨跌值", "涨跌幅", "现价"):
@@ -73,6 +105,13 @@ class SimpleTableModel(QAbstractTableModel):
                 return DOWN_COLOR
             return NEUTRAL_COLOR
 
+        if role == Qt.FontRole:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            if meta.get("row_type") in ("group", "alert", "warning"):
+                font = QFont()
+                font.setBold(meta.get("row_type") == "group")
+                return font
+
         return None
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -89,6 +128,75 @@ class SimpleTableModel(QAbstractTableModel):
 
     def set_align_right_cols(self, cols_idx):
         self._align_right = set(cols_idx or [])
+
+
+class PriceAlertNameDelegate(QStyledItemDelegate):
+    """
+    在名称列文字右侧绘制一个小圆圈感叹号，并只在图标区域显示提醒详情。
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.fg = QColor("#FFFFFF")
+
+    def update_scheme(self, fg: QColor):
+        self.fg = QColor(fg)
+
+    def _icon_rect(self, option, index):
+        alerts = index.data(Qt.UserRole + 1) or []
+        if not alerts:
+            return QRect()
+        text = index.data(Qt.DisplayRole) or ""
+        fm = option.fontMetrics
+        size = max(9, min(14, fm.height() - 2))
+        x = option.rect.left() + 4 + fm.horizontalAdvance(str(text)) + 5
+        max_x = option.rect.right() - size - 2
+        x = min(x, max_x)
+        y = option.rect.top() + (option.rect.height() - size) // 2
+        return QRect(x, y, size, size)
+
+    def paint(self, painter: QPainter, option, index):
+        super().paint(painter, option, index)
+        rect = self._icon_rect(option, index)
+        if rect.isNull() or rect.width() <= 0:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        alerts = index.data(Qt.UserRole + 1) or []
+        has_triggered = any(bool(a.get("triggered")) for a in alerts if isinstance(a, dict))
+        color = QColor("#f0c36a") if has_triggered else QColor(self.fg)
+        if not has_triggered:
+            color.setAlpha(150)
+        painter.setPen(QPen(color, 1.2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
+        font = QFont(option.font)
+        font.setBold(True)
+        font.setPointSize(max(7, option.font.pointSize() - 1))
+        painter.setFont(font)
+        painter.setPen(color)
+        painter.drawText(rect, Qt.AlignCenter, "!")
+        painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        if event.type() == QEvent.ToolTip:
+            detail = index.data(Qt.UserRole + 2)
+            rect = self._icon_rect(option, index)
+            if detail and rect.contains(event.pos()):
+                pos = event.globalPos() + QPoint(14, 18)
+                if view is not None and view.viewport() is not None:
+                    pos = view.viewport().mapToGlobal(rect.bottomRight() + QPoint(10, 8))
+                try:
+                    owner = view.window() if view is not None else None
+                    if owner is not None and hasattr(owner, "suspend_keep_top"):
+                        owner.suspend_keep_top(6.0)
+                except Exception:
+                    pass
+                QToolTip.showText(pos, detail, None)
+                return True
+            QToolTip.hideText()
+            return False
+        return super().helpEvent(event, view, option, index)
 
 
 class KLineDelegate(QStyledItemDelegate):
