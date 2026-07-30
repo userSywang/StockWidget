@@ -121,7 +121,11 @@ python3 -m PyInstaller -F -w .\StockWidget.py --name StockWidget --icon .\StockW
 
 ## 🌐 数据来源 & 网络
 
-* 行情通过 `requests` 从 **新浪财经**接口（`hq.sinajs.cn`）获取。
+* 默认行情源为内置演示源；也可在设置面板 → “数据源”切换为自定义 HTTP 接口。
+* 自定义接口地址支持 `{codes}` 占位符，例如：`https://example.com/quote?codes={codes}`。
+* 自定义接口应返回 JSON 数组，或包含 `data` / `quotes` / `items` / `result` 数组的 JSON 对象。
+* 推荐字段：`code`、`name`、`price`、`change`、`change_pct`、`volume`、`amount`、`open`、`high`、`low`、`prev_close`、`avg`。
+* 设置会保存到 `C:\Users\用户\APPDATA\Roaming\StockWidget\SW_config.json`，打包成 exe 后仍可在设置面板修改。
 * 程序仅发起 GET 请求，不包含任何账户/交易操作；请根据自身网络环境决定是否使用代理或更换数据源。
 * 浮窗隐藏时会暂停刷新，显示后自动恢复，减少不必要的请求。
 
