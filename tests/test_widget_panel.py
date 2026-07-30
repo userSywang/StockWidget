@@ -53,6 +53,60 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(meta[1]["price_alerts"][0]["detail"], "价格提醒")
 
+    def test_get_price_uses_custom_json_data_source(self):
+        class FakeResponse:
+            def json(self):
+                return {
+                    "data": [
+                        {
+                            "code": "sh600000",
+                            "name": "浦发银行",
+                            "price": 10.23,
+                            "change": 0.12,
+                            "change_pct": 1.19,
+                            "volume": 123456,
+                            "amount": 1260000,
+                        }
+                    ]
+                }
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            def get(self, url, headers=None, timeout=None):
+                self.calls.append((url, headers, timeout))
+                return FakeResponse()
+
+        cfg = {
+            "groups": [{"name": "自定义", "codes": ["sh600000"]}],
+            "checked_codes": ["sh600000"],
+            "data_source": {
+                "mode": "custom",
+                "url_template": "https://example.test/quote?codes={codes}",
+                "headers": {"Authorization": "Bearer test-token"},
+            },
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            fake_http = FakeHttp()
+            win._http = fake_http
+
+            row_by_code, sign_by_code, quote_by_code = win._get_price(["sh600000"])
+
+            self.assertEqual(fake_http.calls[0][0], "https://example.test/quote?codes=sh600000")
+            self.assertEqual(fake_http.calls[0][1]["Authorization"], "Bearer test-token")
+            self.assertEqual(row_by_code["sh600000"][1], "浦发银行")
+            self.assertEqual(row_by_code["sh600000"][2], "10.23 ")
+            self.assertEqual(sign_by_code["sh600000"]["delta"], 1)
+            self.assertEqual(quote_by_code["sh600000"]["change_pct"], 1.19)
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_column_width_sources_ignore_message_rows(self):
         rows = [
             ["科技ETF", "", ""],

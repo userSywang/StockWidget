@@ -1,4 +1,6 @@
+import json
 import requests, keyboard
+from urllib.parse import quote
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -70,6 +72,7 @@ class FloatLabel(QWidget):
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
+        self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
         self._latest_quotes     = {}
         self._http              = requests.Session()
         self._refresh_executor  = ThreadPoolExecutor(max_workers=1)
@@ -248,6 +251,27 @@ class FloatLabel(QWidget):
             "pos": {"x": self.x(), "y": self.y()},
             "hotkey": self.hotkey,
             "start_on_boot": bool(self.start_on_boot),
+            "data_source": self.data_source,
+        }
+
+    @staticmethod
+    def _normalize_data_source(data_source):
+        if not isinstance(data_source, dict):
+            data_source = {}
+        mode = data_source.get("mode")
+        if mode not in ("sina", "custom"):
+            mode = "sina"
+        headers = data_source.get("headers")
+        if not isinstance(headers, dict):
+            headers = {}
+        fields = data_source.get("fields")
+        if not isinstance(fields, dict):
+            fields = {}
+        return {
+            "mode": mode,
+            "url_template": str(data_source.get("url_template") or "").strip(),
+            "headers": {str(k): str(v) for k, v in headers.items() if str(k).strip()},
+            "fields": dict(fields),
         }
 
     def header_is_visible(self, header: str) -> bool:
@@ -498,8 +522,150 @@ class FloatLabel(QWidget):
                 pass
 
     # ----- 数据来源：新浪财经 -----
+    def _format_plain_quote(self, code, quote):
+        def num(name, default=0.0):
+            try:
+                return float(quote.get(name, default) or default)
+            except Exception:
+                return float(default)
+
+        name = str(quote.get("name") or code)
+        current_price = num("price")
+        change = num("change")
+        change_pct = num("change_pct")
+        prev_close = num("prev_close")
+        if prev_close <= 0 and current_price and change:
+            prev_close = current_price - change
+        if prev_close <= 0 and current_price and change_pct:
+            prev_close = current_price / (1 + change_pct / 100.0)
+        if not change and prev_close:
+            change = current_price - prev_close
+        if not change_pct and prev_close:
+            change_pct = (current_price / prev_close - 1) * 100
+
+        opening_price = num("open", current_price)
+        high_price = num("high", max(opening_price, current_price))
+        low_price = num("low", min(opening_price, current_price))
+        volume = num("volume")
+        amount = num("amount")
+        avg = num("avg", current_price if current_price else prev_close)
+        etf = len(code) > 2 and code[2] in ("1", "5")
+        decimals = 3 if etf else 2
+        arrow = " "
+        if high_price > low_price:
+            if round(current_price, decimals) == round(high_price, decimals):
+                arrow = "↑"
+            elif round(current_price, decimals) == round(low_price, decimals):
+                arrow = "↓"
+
+        display_code = code[2:] if self.short_code and len(code) > 2 else code
+        display_name = name if self.name_length == 0 else name[:self.name_length]
+        row = [
+            display_code,
+            display_name,
+            f"{current_price:.{decimals}f}{arrow}" if current_price else "-",
+            f"{change:+.{decimals}f}" if current_price else "-",
+            f"{change_pct:+.2f}%" if current_price else "无数据",
+            "-",
+            "-",
+            "-",
+            f"{volume}" if volume < 1e4 else (f"{volume/1e4:.2f}万" if volume < 1e8 else f"{volume/1e8:.2f}亿"),
+            f"{amount/1e4:.2f}万" if amount < 1e8 else (f"{amount/1e8:.2f}亿" if amount < 1e12 else f"{amount/1e12:.2f}万亿"),
+            f"{avg:.{decimals}f}" if avg else "-",
+            {"k": (opening_price, current_price, high_price, low_price, prev_close)},
+        ]
+        sign = {
+            "delta": (change > 0) - (change < 0),
+            "commi": 0,
+            "avg": (avg > prev_close) - (avg < prev_close) if prev_close else 0,
+            "b1": 0,
+            "s1": 0,
+        }
+        stored = {
+            "name": name,
+            "price": current_price,
+            "change": change,
+            "change_pct": change_pct,
+            "volume": volume,
+            "amount": amount,
+        }
+        return row, sign, stored
+
+    def _custom_value(self, item, logical_name, fallback_names):
+        fields = getattr(self, "data_source", {}).get("fields", {})
+        names = [fields.get(logical_name)] if fields.get(logical_name) else []
+        names.extend(fallback_names)
+        for name in names:
+            if name in item:
+                return item.get(name)
+        return None
+
+    def _extract_custom_items(self, payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            for key in ("data", "quotes", "items", "result"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return value
+            return [dict(value, code=key) for key, value in payload.items() if isinstance(value, dict)]
+        return []
+
+    def _get_custom_price(self, requested_codes):
+        source = getattr(self, "data_source", {})
+        template = str(source.get("url_template") or "").strip()
+        if not template:
+            raise Exception("自定义数据源未配置接口地址")
+        label = ",".join(requested_codes)
+        url = template.replace("{codes}", label).replace("{codes_url}", quote(label, safe=""))
+        headers = dict(source.get("headers") or {})
+        getter = getattr(getattr(self, "_http", None), "get", requests.get)
+        response = getter(url, headers=headers, timeout=5)
+        try:
+            payload = response.json()
+        except Exception:
+            payload = json.loads(getattr(response, "text", "") or "null")
+
+        row_by_code = {}
+        sign_by_code = {}
+        quote_by_code = {}
+        for item in self._extract_custom_items(payload):
+            if not isinstance(item, dict):
+                continue
+            raw_code = self._custom_value(item, "code", ["code", "symbol", "ts_code"])
+            codes = normalize_codes([raw_code])
+            if not codes:
+                continue
+            code = codes[0]
+            quote_data = {
+                "name": self._custom_value(item, "name", ["name", "short_name", "title"]),
+                "price": self._custom_value(item, "price", ["price", "current", "last", "close"]),
+                "change": self._custom_value(item, "change", ["change", "chg"]),
+                "change_pct": self._custom_value(item, "change_pct", ["change_pct", "pct", "percent"]),
+                "volume": self._custom_value(item, "volume", ["volume", "vol"]),
+                "amount": self._custom_value(item, "amount", ["amount", "turnover"]),
+                "open": self._custom_value(item, "open", ["open", "opening_price"]),
+                "high": self._custom_value(item, "high", ["high", "high_price"]),
+                "low": self._custom_value(item, "low", ["low", "low_price"]),
+                "prev_close": self._custom_value(item, "prev_close", ["prev_close", "pre_close", "yesterday_close"]),
+                "avg": self._custom_value(item, "avg", ["avg", "average"]),
+            }
+            row, sign, stored = self._format_plain_quote(code, quote_data)
+            row_by_code[code] = row
+            sign_by_code[code] = sign
+            quote_by_code[code] = stored
+
+        for code in requested_codes:
+            if code not in row_by_code:
+                row, sign, _ = self._format_plain_quote(code, {"name": code, "price": 0})
+                row_by_code[code] = row
+                sign_by_code[code] = sign
+        return row_by_code, sign_by_code, quote_by_code
+
     def _get_price(self, codes:list):
         requested_codes = normalize_codes(codes)
+        if getattr(self, "data_source", {}).get("mode") == "custom":
+            return self._get_custom_price(requested_codes)
         label = ",".join(requested_codes)
         if not label:
             raise Exception("暂无数据，请添加自选")
@@ -946,6 +1112,11 @@ class FloatLabel(QWidget):
     def set_warning(self, visible: bool, text: str):
         self.warning_visible = bool(visible)
         self.warning_text = str(text or "").strip() or DEFAULT_WARNING_TEXT
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_data_source(self, data_source):
+        self.data_source = self._normalize_data_source(data_source)
         self._notify_change()
         self._refresh_from_function()
 
