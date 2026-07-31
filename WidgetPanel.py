@@ -72,6 +72,7 @@ class FloatLabel(QWidget):
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
+        self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
         self._latest_quotes     = {}
         self._http              = requests.Session()
@@ -223,6 +224,7 @@ class FloatLabel(QWidget):
             "price_alerts": self.price_alerts,
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
+            "market_amount_visible": bool(self.market_amount_visible),
             "code_visible": bool(getattr(self, 'code_visible', False)),
             "name_visible": bool(getattr(self, 'name_visible', False)),
             "price_visible": bool(getattr(self, 'price_visible', False)),
@@ -894,13 +896,39 @@ class FloatLabel(QWidget):
     def _separator_row(self):
         return self._message_row("")
 
+    def _market_amount_request_codes(self):
+        return ["sh000001", "sz399001"] if getattr(self, "market_amount_visible", False) else []
+
     def _alert_request_codes(self):
         codes = []
         for rule in normalize_alert_rules(getattr(self, "alert_rules", [])):
             codes.extend([target.get("code") for target in rule.get("targets", [])])
         return normalize_codes(codes)
 
-    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None):
+    def _refresh_request_codes(self):
+        return normalize_codes(
+            list(getattr(self, "checked_codes", []))
+            + self._alert_request_codes()
+            + self._market_amount_request_codes()
+        )
+
+    def _format_market_amount(self, quote_by_code):
+        total = 0.0
+        found = False
+        for code in self._market_amount_request_codes():
+            quote = (quote_by_code or {}).get(code) or {}
+            try:
+                amount = float(quote.get("amount", 0.0) or 0.0)
+            except Exception:
+                amount = 0.0
+            if amount > 0:
+                total += amount
+                found = True
+        if not found:
+            return ""
+        return f"沪深成交额估算：{total / 1e8:.2f}亿"
+
+    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None):
         full_rows, meta_rows = [], []
         checked = set(getattr(self, "checked_codes", []))
         alert_rows_added = False
@@ -919,6 +947,14 @@ class FloatLabel(QWidget):
                     if code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
                     meta_rows.append(meta)
+
+        market_amount_text = self._format_market_amount(quote_by_code or {})
+        if market_amount_text:
+            if full_rows:
+                full_rows.append(self._separator_row())
+                meta_rows.append({"row_type": "separator", "text": ""})
+            full_rows.append(self._message_row(market_amount_text))
+            meta_rows.append({"row_type": "market_amount", "text": market_amount_text})
 
         for state in alert_states:
             rule = state.get("rule", {})
@@ -1009,7 +1045,7 @@ class FloatLabel(QWidget):
             self._refresh_again_requested = True
             return
         try:
-            request_codes = normalize_codes(list(self.checked_codes) + self._alert_request_codes())
+            request_codes = self._refresh_request_codes()
             self._refresh_previous_quotes = dict(getattr(self, "_latest_quotes", {}))
             executor = getattr(self, "_refresh_executor", None)
             if executor is None:
@@ -1060,7 +1096,7 @@ class FloatLabel(QWidget):
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
-        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states)
+        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code)
         self._latest_quotes = quote_by_code
 
         try:
@@ -1112,6 +1148,11 @@ class FloatLabel(QWidget):
     def set_warning(self, visible: bool, text: str):
         self.warning_visible = bool(visible)
         self.warning_text = str(text or "").strip() or DEFAULT_WARNING_TEXT
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_market_amount_visible(self, visible: bool):
+        self.market_amount_visible = bool(visible)
         self._notify_change()
         self._refresh_from_function()
 

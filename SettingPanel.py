@@ -367,6 +367,14 @@ class SettingsDialog(QDialog):
         lay_warning.addWidget(self.edit_warning_text, 0, 1)
         alert_settings.addWidget(g_warning)
 
+        g_market = QGroupBox("市场概览")
+        g_market.setContentsMargins(3,12,3,6)
+        lay_market = QGridLayout(g_market)
+        self.chk_market_amount_visible = QCheckBox("显示沪深成交额估算")
+        self.chk_market_amount_visible.setChecked(bool(getattr(self.win, "market_amount_visible", False)))
+        lay_market.addWidget(self.chk_market_amount_visible, 0, 0)
+        alert_settings.addWidget(g_market)
+
         self._loading_alert_editor = False
         self._loading_target_editor = False
         self._loading_price_alert_editor = False
@@ -547,6 +555,7 @@ class SettingsDialog(QDialog):
         self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
         self.chk_warning_visible.toggled.connect(self._on_warning_changed)
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
+        self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
         self.cmb_data_source_mode.currentIndexChanged.connect(self._on_data_source_changed)
@@ -1004,6 +1013,9 @@ class SettingsDialog(QDialog):
 
     def _on_warning_changed(self, *_args):
         self.win.set_warning(self.chk_warning_visible.isChecked(), self.edit_warning_text.text())
+
+    def _on_market_amount_changed(self, *_args):
+        self.win.set_market_amount_visible(self.chk_market_amount_visible.isChecked())
 
     # —— 其它槽 —— #
     def _on_interval_changed(self, idx):

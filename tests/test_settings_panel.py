@@ -31,6 +31,7 @@ class FakeWindow:
         self.price_alerts = []
         self.warning_visible = False
         self.warning_text = ""
+        self.market_amount_visible = False
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
         self.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
 
@@ -55,6 +56,9 @@ class FakeWindow:
 
     def set_data_source(self, data_source):
         self.data_source = data_source
+
+    def set_market_amount_visible(self, visible):
+        self.market_amount_visible = visible
 
     def __getattr__(self, _name):
         return lambda *args, **kwargs: None
@@ -169,6 +173,16 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.data_source["url_template"], "https://example.test/quote?codes={codes}")
         self.assertEqual(win.data_source["headers"]["Authorization"], "Bearer demo")
         self.assertTrue(dlg.edit_data_url.isEnabled())
+        dlg.close()
+
+    def test_market_amount_checkbox_updates_window(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.chk_market_amount_visible.setChecked(True)
+        dlg._on_market_amount_changed()
+
+        self.assertTrue(win.market_amount_visible)
         dlg.close()
 
 

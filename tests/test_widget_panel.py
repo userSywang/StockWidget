@@ -53,6 +53,34 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(meta[1]["price_alerts"][0]["detail"], "价格提醒")
 
+    def test_compose_display_rows_adds_market_amount_summary(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        win.groups = [{"name": "指数", "codes": ["sh000001"]}]
+        win.checked_codes = ["sh000001"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = True
+
+        rows, meta = FloatLabel._compose_display_rows(
+            win,
+            {
+                "sh000001": ["sh000001", "上证指数", "1.00", "+0.00", "+0.00%", "-", "-", "-", "-", "8262.78亿", "-", ""],
+                "sz399001": ["sz399001", "深证成指", "1.00", "+0.00", "+0.00%", "-", "-", "-", "-", "9717.22亿", "-", ""],
+            },
+            {"sh000001": {"delta": 0}, "sz399001": {"delta": 0}},
+            [],
+            {},
+            {
+                "sh000001": {"amount": 826278000000},
+                "sz399001": {"amount": 971722000000},
+            },
+        )
+
+        self.assertEqual(meta[2]["row_type"], "separator")
+        self.assertEqual(meta[3]["row_type"], "market_amount")
+        self.assertEqual(rows[3][0], "沪深成交额估算：17980.00亿")
+
     def test_get_price_uses_custom_json_data_source(self):
         class FakeResponse:
             def json(self):
@@ -106,6 +134,16 @@ class WidgetPanelTests(unittest.TestCase):
             win._keep_top_timer.stop()
             win.shutdown_background()
             win.close()
+
+    def test_refresh_request_codes_include_market_amount_indexes(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000"]
+        win.market_amount_visible = True
+        win._alert_request_codes = lambda: []
+
+        codes = FloatLabel._refresh_request_codes(win)
+
+        self.assertEqual(codes, ["sh600000", "sh000001", "sz399001"])
 
     def test_column_width_sources_ignore_message_rows(self):
         rows = [
