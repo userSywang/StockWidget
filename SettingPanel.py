@@ -616,6 +616,40 @@ class SettingsDialog(QDialog):
     def _pending_role(self):
         return Qt.UserRole + 2
 
+    def _display_name_for_code(self, code: str):
+        names = getattr(self.win, "code_names", {})
+        if not isinstance(names, dict):
+            names = {}
+        name = str(names.get(code) or "").strip()
+        return name[:2] if name else ""
+
+    def _format_code_item_text(self, code: str):
+        short_name = self._display_name_for_code(code)
+        return f"{code}  {short_name}" if short_name else code
+
+    def _code_from_item_text(self, text: str):
+        text = str(text or "").strip()
+        first = text.split()[0] if text.split() else text
+        return normalize_code_or_none(first) or normalize_code_or_none(text)
+
+    def _refresh_code_names(self, codes):
+        lookup = getattr(self.win, "lookup_code_names", None)
+        if not callable(lookup):
+            return
+        missing = []
+        names = getattr(self.win, "code_names", {})
+        if not isinstance(names, dict):
+            names = {}
+        for code in codes or []:
+            if code and not str(names.get(code) or "").strip():
+                missing.append(code)
+        if not missing:
+            return
+        try:
+            lookup(missing)
+        except Exception:
+            pass
+
     def _make_group_item(self, name: str):
         item = QTreeWidgetItem([str(name or "分组")])
         item.setFlags(item.flags() | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
@@ -623,7 +657,7 @@ class SettingsDialog(QDialog):
         return item
 
     def _make_code_item(self, code: str, checked: bool, pending: bool = False):
-        item = QTreeWidgetItem([code])
+        item = QTreeWidgetItem([code if pending else self._format_code_item_text(code)])
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
         item.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
         item.setData(0, Qt.UserRole, "code")
@@ -658,7 +692,7 @@ class SettingsDialog(QDialog):
                 ci = 0
                 while ci < group_item.childCount():
                     child = group_item.child(ci)
-                    norm = normalize_code_or_none(child.text(0))
+                    norm = self._code_from_item_text(child.text(0))
                     if not norm:
                         if child.data(0, self._pending_role()):
                             ci += 1
@@ -675,8 +709,10 @@ class SettingsDialog(QDialog):
                         continue
                     seen.add(norm)
                     codes.append(norm)
-                    if child.text(0) != norm:
-                        child.setText(0, norm)
+                    self._refresh_code_names([norm])
+                    display_text = self._format_code_item_text(norm)
+                    if child.text(0) != display_text:
+                        child.setText(0, display_text)
                     child.setData(0, Qt.UserRole + 1, norm)
                     child.setData(0, self._pending_role(), False)
                     if child.checkState(0) == Qt.Checked:

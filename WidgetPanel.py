@@ -73,6 +73,7 @@ class FloatLabel(QWidget):
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
+        self.code_names         = dict(cfg.get("code_names", {})) if isinstance(cfg.get("code_names"), dict) else {}
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
         self._latest_quotes     = {}
         self._http              = requests.Session()
@@ -225,6 +226,7 @@ class FloatLabel(QWidget):
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
+            "code_names": self.code_names,
             "code_visible": bool(getattr(self, 'code_visible', False)),
             "name_visible": bool(getattr(self, 'name_visible', False)),
             "price_visible": bool(getattr(self, 'price_visible', False)),
@@ -664,6 +666,19 @@ class FloatLabel(QWidget):
                 sign_by_code[code] = sign
         return row_by_code, sign_by_code, quote_by_code
 
+    def lookup_code_names(self, codes):
+        requested_codes = normalize_codes(codes)
+        missing = [code for code in requested_codes if not str(self.code_names.get(code) or "").strip()]
+        if not missing:
+            return {code: self.code_names.get(code, "") for code in requested_codes}
+        _, _, quote_by_code = self._get_price(missing)
+        for code, quote in quote_by_code.items():
+            name = str((quote or {}).get("name") or "").strip()
+            if name:
+                self.code_names[code] = name
+        self._notify_change()
+        return {code: self.code_names.get(code, "") for code in requested_codes}
+
     def _get_price(self, codes:list):
         requested_codes = normalize_codes(codes)
         if getattr(self, "data_source", {}).get("mode") == "custom":
@@ -1098,6 +1113,10 @@ class FloatLabel(QWidget):
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
         full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code)
         self._latest_quotes = quote_by_code
+        for code, quote in (quote_by_code or {}).items():
+            name = str((quote or {}).get("name") or "").strip()
+            if name:
+                self.code_names[code] = name
 
         try:
             self._clear_error()

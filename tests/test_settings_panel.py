@@ -4,6 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
 
 from SettingPanel import SettingsDialog
 
@@ -32,6 +33,7 @@ class FakeWindow:
         self.warning_visible = False
         self.warning_text = ""
         self.market_amount_visible = False
+        self.code_names = {"sh000001": "上证指数"}
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
         self.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
 
@@ -59,6 +61,9 @@ class FakeWindow:
 
     def set_market_amount_visible(self, visible):
         self.market_amount_visible = visible
+
+    def lookup_code_names(self, codes):
+        return {code: self.code_names.get(code, "") for code in codes}
 
     def __getattr__(self, _name):
         return lambda *args, **kwargs: None
@@ -95,6 +100,7 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_pending_code_saves_after_user_enters_valid_code(self):
         win = FakeWindow()
+        win.code_names["sh512000"] = "券商ETF"
         dlg = SettingsDialog(win, None)
         group = dlg.tree_codes.topLevelItem(0)
 
@@ -104,9 +110,30 @@ class SettingsPanelTests(unittest.TestCase):
         item.setText(0, "512000")
         dlg._on_codes_changed(item)
 
-        self.assertEqual(group.child(1).text(0), "sh512000")
+        self.assertEqual(group.child(1).text(0), "sh512000  券商")
         self.assertEqual(group.child(1).data(0, dlg._pending_role()), False)
         self.assertIn("sh512000", win.codes)
+        dlg.close()
+
+    def test_code_tree_displays_cached_two_character_name(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        group = dlg.tree_codes.topLevelItem(0)
+
+        self.assertEqual(group.child(0).text(0), "sh000001  上证")
+        self.assertEqual(group.child(0).data(0, Qt.UserRole + 1), "sh000001")
+        dlg.close()
+
+    def test_code_tree_collects_code_from_display_text(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        group = dlg.tree_codes.topLevelItem(0)
+        group.child(0).setText(0, "sh000001  上证")
+
+        groups, checked_codes = dlg._collect_groups_from_tree()
+
+        self.assertEqual(groups, [{"name": "默认", "codes": ["sh000001"]}])
+        self.assertEqual(checked_codes, ["sh000001"])
         dlg.close()
 
     def test_alert_targets_can_be_added_edited_and_deleted(self):
