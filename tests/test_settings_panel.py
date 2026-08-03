@@ -4,7 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 
 from SettingPanel import SettingsDialog
 
@@ -180,6 +180,30 @@ class SettingsPanelTests(unittest.TestCase):
         dlg._del_alert_target()
         self.assertEqual(dlg.list_alert_targets.count(), 1)
         self.assertEqual(len(win.alert_rules[0]["targets"]), 1)
+        dlg.close()
+
+    def test_alert_target_buttons_are_anchored_beside_target_list(self):
+        win = FakeWindow()
+        win.alert_rules = [{
+            "enabled": True,
+            "name": "测试提醒",
+            "display_mode": "always",
+            "targets": [{"code": "sh000001", "op": ">", "pct": 0.0, "volume": False}],
+            "message": "测试",
+        }]
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(3)
+        dlg.show()
+        self.app.processEvents()
+
+        target_rect = dlg.list_alert_targets.rect().translated(dlg.list_alert_targets.mapToGlobal(QPoint(0, 0)))
+        add_rect = dlg.btn_target_add.rect().translated(dlg.btn_target_add.mapToGlobal(QPoint(0, 0)))
+        del_rect = dlg.btn_target_del.rect().translated(dlg.btn_target_del.mapToGlobal(QPoint(0, 0)))
+
+        self.assertGreaterEqual(add_rect.left(), target_rect.right())
+        self.assertGreaterEqual(del_rect.left(), target_rect.right())
+        self.assertFalse(target_rect.intersects(add_rect))
+        self.assertFalse(target_rect.intersects(del_rect))
         dlg.close()
 
     def test_price_alerts_can_be_added_edited_and_deleted(self):
