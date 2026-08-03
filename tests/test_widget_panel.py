@@ -145,6 +145,34 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh600000", "sh000001", "sz399001"])
 
+    def test_apply_refresh_result_notifies_when_code_names_are_learned(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        win.groups = [{"name": "默认", "codes": ["sh512000"]}]
+        win.checked_codes = ["sh512000"]
+        win.alert_rules = []
+        win.price_alerts = []
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.code_names = {}
+        win._refresh_again_requested = False
+        changes = []
+        win._on_change = lambda: changes.append("saved")
+        win._project_columns = lambda *_args: None
+        row = ["sh512000", "券商ETF", "1.000", "+0.000", "+0.00%", "-", "-", "-", "0", "0", "1.000", ""]
+
+        FloatLabel._apply_refresh_result(
+            win,
+            {"sh512000": row},
+            {"sh512000": {"delta": 0}},
+            {"sh512000": {"name": "券商ETF", "price": 1.0}},
+            {},
+        )
+
+        self.assertEqual(win.code_names["sh512000"], "券商ETF")
+        self.assertEqual(changes, ["saved"])
+
     def test_column_width_sources_ignore_message_rows(self):
         rows = [
             ["科技ETF", "", ""],

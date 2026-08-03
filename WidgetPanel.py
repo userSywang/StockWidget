@@ -1113,10 +1113,14 @@ class FloatLabel(QWidget):
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
         full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code)
         self._latest_quotes = quote_by_code
+        learned_names = False
         for code, quote in (quote_by_code or {}).items():
             name = str((quote or {}).get("name") or "").strip()
-            if name:
+            if name and self.code_names.get(code) != name:
                 self.code_names[code] = name
+                learned_names = True
+        if learned_names:
+            self._notify_change()
 
         try:
             self._clear_error()

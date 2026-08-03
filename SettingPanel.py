@@ -669,7 +669,13 @@ class SettingsDialog(QDialog):
         self.tree_codes.blockSignals(True)
         self.tree_codes.clear()
         checked = set(getattr(self.win, "checked_codes", []))
-        for group in getattr(self.win, "groups", []) or [{"name": "默认", "codes": self.win.codes}]:
+        groups = getattr(self.win, "groups", []) or [{"name": "默认", "codes": self.win.codes}]
+        self._refresh_code_names(
+            code
+            for group in groups
+            for code in group.get("codes", [])
+        )
+        for group in groups:
             group_item = self._make_group_item(group.get("name", "默认"))
             self.tree_codes.addTopLevelItem(group_item)
             for code in group.get("codes", []):

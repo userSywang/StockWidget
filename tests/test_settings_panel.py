@@ -34,6 +34,7 @@ class FakeWindow:
         self.warning_text = ""
         self.market_amount_visible = False
         self.code_names = {"sh000001": "上证指数"}
+        self.lookup_names = {}
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
         self.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
 
@@ -63,6 +64,9 @@ class FakeWindow:
         self.market_amount_visible = visible
 
     def lookup_code_names(self, codes):
+        for code in codes:
+            if code in self.lookup_names:
+                self.code_names[code] = self.lookup_names[code]
         return {code: self.code_names.get(code, "") for code in codes}
 
     def __getattr__(self, _name):
@@ -122,6 +126,19 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertEqual(group.child(0).text(0), "sh000001  上证")
         self.assertEqual(group.child(0).data(0, Qt.UserRole + 1), "sh000001")
+        dlg.close()
+
+    def test_code_tree_looks_up_missing_names_when_opened(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh000001", "sh512000"]}]
+        win.codes = ["sh000001", "sh512000"]
+        win.checked_codes = ["sh000001", "sh512000"]
+        win.lookup_names = {"sh512000": "券商ETF"}
+
+        dlg = SettingsDialog(win, None)
+        group = dlg.tree_codes.topLevelItem(0)
+
+        self.assertEqual(group.child(1).text(0), "sh512000  券商")
         dlg.close()
 
     def test_code_tree_collects_code_from_display_text(self):
