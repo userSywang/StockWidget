@@ -145,6 +145,7 @@ class StockLogicTests(unittest.TestCase):
                 {"code": "512000", "cost_price": "1.234", "position_pct": 120, "buy_date": "2026-08-05"},
                 {"code": "bad"},
             ],
+            "notifications": {"desktop_popup": False, "panel_highlight": True, "remote_push": True},
             "rules": {"max_loss_pct": "6", "stale_position_days": "10"},
         })
 
@@ -152,6 +153,9 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(config["positions"][0]["code"], "sh512000")
         self.assertEqual(config["positions"][0]["cost_price"], 1.234)
         self.assertEqual(config["positions"][0]["position_pct"], 100.0)
+        self.assertFalse(config["notifications"]["desktop_popup"])
+        self.assertTrue(config["notifications"]["panel_highlight"])
+        self.assertTrue(config["notifications"]["remote_push"])
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
 

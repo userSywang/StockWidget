@@ -6,6 +6,11 @@ DEFAULT_WARNING_TEXT = "谨慎交易，信号只是辅助，仓位和纪律优�
 DEFAULT_STRATEGY_ALERT_CONFIG = {
     "enabled": False,
     "positions": [],
+    "notifications": {
+        "desktop_popup": True,
+        "panel_highlight": True,
+        "remote_push": False,
+    },
     "rules": {
         "max_loss_enabled": True,
         "max_loss_pct": 5.0,
@@ -341,7 +346,9 @@ def normalize_strategy_alert_config(config):
     if not isinstance(config, dict):
         config = {}
     default_rules = DEFAULT_STRATEGY_ALERT_CONFIG["rules"]
+    default_notifications = DEFAULT_STRATEGY_ALERT_CONFIG["notifications"]
     source_rules = config.get("rules") if isinstance(config.get("rules"), dict) else {}
+    source_notifications = config.get("notifications") if isinstance(config.get("notifications"), dict) else {}
     positions = []
     seen_codes = set()
     for item in config.get("positions", []) if isinstance(config.get("positions"), list) else []:
@@ -368,6 +375,11 @@ def normalize_strategy_alert_config(config):
     return {
         "enabled": bool(config.get("enabled", DEFAULT_STRATEGY_ALERT_CONFIG["enabled"])),
         "positions": positions,
+        "notifications": {
+            "desktop_popup": bool(source_notifications.get("desktop_popup", default_notifications["desktop_popup"])),
+            "panel_highlight": bool(source_notifications.get("panel_highlight", default_notifications["panel_highlight"])),
+            "remote_push": bool(source_notifications.get("remote_push", default_notifications["remote_push"])),
+        },
         "rules": {
             "max_loss_enabled": bool(source_rules.get("max_loss_enabled", default_rules["max_loss_enabled"])),
             "max_loss_pct": _bounded_float(source_rules.get("max_loss_pct"), default_rules["max_loss_pct"], 0.0, 100.0),

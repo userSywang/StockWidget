@@ -512,6 +512,23 @@ class SettingsDialog(QDialog):
         rules.addWidget(self.spin_strategy_stale_days, 11, 1)
         rules.addWidget(QLabel("天不上涨提醒卖出"), 11, 2, 1, 2)
         strategy_settings.addWidget(g_strategy_rules)
+
+        g_strategy_notify = QGroupBox("提醒方式")
+        g_strategy_notify.setContentsMargins(3,12,3,6)
+        notify = QGridLayout(g_strategy_notify)
+        notify.setHorizontalSpacing(6)
+        notify.setVerticalSpacing(6)
+        self.chk_strategy_notify_desktop = QCheckBox("桌面弹窗")
+        self.chk_strategy_notify_panel = QCheckBox("浮窗高亮")
+        self.chk_strategy_notify_remote = QCheckBox("远程推送")
+        self.list_strategy_preview = QListWidget()
+        self.list_strategy_preview.setFixedHeight(86)
+        notify.addWidget(self.chk_strategy_notify_desktop, 0, 0)
+        notify.addWidget(self.chk_strategy_notify_panel, 0, 1)
+        notify.addWidget(self.chk_strategy_notify_remote, 0, 2)
+        notify.addWidget(QLabel("提醒预览："), 1, 0, Qt.AlignTop)
+        notify.addWidget(self.list_strategy_preview, 1, 1, 1, 3)
+        strategy_settings.addWidget(g_strategy_notify)
         strategy_settings.addStretch(1)
 
         self._loading_strategy_editor = False
@@ -690,6 +707,9 @@ class SettingsDialog(QDialog):
         self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
         self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
         self.chk_strategy_enabled.toggled.connect(self._on_strategy_config_changed)
+        self.chk_strategy_notify_desktop.toggled.connect(self._on_strategy_config_changed)
+        self.chk_strategy_notify_panel.toggled.connect(self._on_strategy_config_changed)
+        self.chk_strategy_notify_remote.toggled.connect(self._on_strategy_config_changed)
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
         self.btn_strategy_add.clicked.connect(self._add_strategy_position)
         self.btn_strategy_del.clicked.connect(self._del_strategy_position)
@@ -1231,9 +1251,13 @@ class SettingsDialog(QDialog):
     def _load_strategy_config(self, current_row=0):
         self._strategy_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
         rules = self._strategy_config["rules"]
+        notifications = self._strategy_config["notifications"]
         self._loading_strategy_editor = True
         try:
             self.chk_strategy_enabled.setChecked(bool(self._strategy_config.get("enabled")))
+            self.chk_strategy_notify_desktop.setChecked(bool(notifications.get("desktop_popup")))
+            self.chk_strategy_notify_panel.setChecked(bool(notifications.get("panel_highlight")))
+            self.chk_strategy_notify_remote.setChecked(bool(notifications.get("remote_push")))
             self.chk_strategy_loss.setChecked(bool(rules.get("max_loss_enabled")))
             self.spin_strategy_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
             self.chk_strategy_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
@@ -1267,6 +1291,7 @@ class SettingsDialog(QDialog):
                 self._clear_strategy_position_editor()
         finally:
             self._loading_strategy_editor = False
+        self._refresh_strategy_preview()
 
     def _current_strategy_position_row(self):
         row = self.list_strategy_positions.currentRow()
@@ -1321,6 +1346,11 @@ class SettingsDialog(QDialog):
         return normalize_strategy_alert_config({
             "enabled": self.chk_strategy_enabled.isChecked(),
             "positions": list(getattr(self, "_strategy_config", {}).get("positions", [])),
+            "notifications": {
+                "desktop_popup": self.chk_strategy_notify_desktop.isChecked(),
+                "panel_highlight": self.chk_strategy_notify_panel.isChecked(),
+                "remote_push": self.chk_strategy_notify_remote.isChecked(),
+            },
             "rules": self._collect_strategy_rules_from_editor(),
         })
 
@@ -1328,7 +1358,56 @@ class SettingsDialog(QDialog):
         if getattr(self, "_loading_strategy_editor", False):
             return
         self._strategy_config = self._collect_strategy_config_from_editor()
+        self._refresh_strategy_preview()
         self.win.set_strategy_alert_config(self._strategy_config)
+
+    def _refresh_strategy_preview(self):
+        if not hasattr(self, "list_strategy_preview"):
+            return
+        config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
+        rules = config["rules"]
+        notifications = config["notifications"]
+        channels = []
+        if notifications.get("desktop_popup"):
+            channels.append("桌面弹窗")
+        if notifications.get("panel_highlight"):
+            channels.append("浮窗高亮")
+        if notifications.get("remote_push"):
+            channels.append("远程推送")
+        channel_text = "、".join(channels) if channels else "未选择提醒方式"
+
+        rows = []
+        if not config.get("enabled"):
+            rows.append("策略提醒未启用")
+        elif not config.get("positions"):
+            rows.append(f"启用后使用：{channel_text}；请先添加持仓")
+        else:
+            rows.append(f"触发后使用：{channel_text}")
+            if rules.get("max_loss_enabled"):
+                rows.append(f"持仓浮亏达到 {float(rules.get('max_loss_pct', 0.0)):.1f}%：提醒清仓")
+            if rules.get("stock_ma5_break_enabled"):
+                rows.append("个股跌破5日线：提醒卖出")
+            if rules.get("index_ma5_break_enabled") or rules.get("index_ma10_break_enabled"):
+                lines = []
+                if rules.get("index_ma5_break_enabled"):
+                    lines.append("5日线")
+                if rules.get("index_ma10_break_enabled"):
+                    lines.append("10日线")
+                rows.append(f"大盘跌破{'/'.join(lines)}：提醒全仓卖出")
+            if rules.get("trailing_profit_enabled"):
+                tiers = ", ".join(
+                    f"{float(tier.get('profit_pct', 0.0)):.0f}%锁{float(tier.get('lock_pct', 0.0)):.0f}%"
+                    for tier in rules.get("trailing_tiers", [])
+                )
+                rows.append(f"阶梯移动止盈：{tiers}")
+            if rules.get("reduce_half_enabled"):
+                rows.append(f"盈利达到 {float(rules.get('reduce_half_profit_pct', 0.0)):.1f}%：提醒减半仓")
+            if rules.get("stale_position_enabled"):
+                rows.append(f"持仓满 {int(rules.get('stale_position_days', 0))} 天不上涨：提醒卖出")
+
+        self.list_strategy_preview.clear()
+        for row in rows:
+            self.list_strategy_preview.addItem(QListWidgetItem(row))
 
     def _on_strategy_position_editor_changed(self, *_args):
         if getattr(self, "_loading_strategy_editor", False):
