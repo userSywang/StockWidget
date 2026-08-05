@@ -309,6 +309,62 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("已锁盈10%", projected[0][0][0][3])
         self.assertIn("saved", changes)
 
+    def test_strategy_push_payload_uses_wecom_markdown(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.strategy_alert_config = {
+            "notifications": {"remote_push": True, "remote_channel": "wecom", "webhook_url": "https://example.test"},
+        }
+
+        payload = FloatLabel._strategy_push_payload(win, "测试内容")
+
+        self.assertEqual(payload, {"msgtype": "markdown", "markdown": {"content": "测试内容"}})
+
+    def test_strategy_push_payload_uses_custom_json(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.strategy_alert_config = {
+            "notifications": {"remote_push": True, "remote_channel": "custom", "webhook_url": "https://example.test"},
+        }
+
+        payload = FloatLabel._strategy_push_payload(win, "测试内容")
+
+        self.assertEqual(payload["source"], "StockWidget")
+        self.assertEqual(payload["type"], "strategy_alert")
+        self.assertEqual(payload["content"], "测试内容")
+
+    def test_strategy_pushes_triggered_states_once(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_push_sent_keys = set()
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+        states = [{
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -5.2,
+            "locked_profit_pct": 0.0,
+            "triggered": True,
+            "status": "触发止损",
+        }]
+
+        FloatLabel._send_strategy_pushes(win, states)
+        FloatLabel._send_strategy_pushes(win, states)
+
+        self.assertEqual(len(win._http.posts), 1)
+        self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
+        self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
+
     def test_column_width_sources_ignore_message_rows(self):
         rows = [
             ["科技ETF", "", ""],

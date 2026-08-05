@@ -250,6 +250,8 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.chk_strategy_notify_desktop.setChecked(True)
         dlg.chk_strategy_notify_panel.setChecked(True)
         dlg.chk_strategy_notify_remote.setChecked(True)
+        dlg.cmb_strategy_remote_channel.setCurrentIndex(dlg.cmb_strategy_remote_channel.findData("wecom"))
+        dlg.edit_strategy_webhook.setText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test")
         dlg.spin_strategy_loss.setValue(6.0)
         dlg.spin_strategy_stale_days.setValue(10)
         dlg._on_strategy_config_changed()
@@ -262,6 +264,8 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(win.strategy_alert_config["notifications"]["desktop_popup"])
         self.assertTrue(win.strategy_alert_config["notifications"]["panel_highlight"])
         self.assertTrue(win.strategy_alert_config["notifications"]["remote_push"])
+        self.assertEqual(win.strategy_alert_config["notifications"]["remote_channel"], "wecom")
+        self.assertEqual(win.strategy_alert_config["notifications"]["webhook_url"], "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test")
         self.assertEqual(win.strategy_alert_config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(win.strategy_alert_config["rules"]["stale_position_days"], 10)
         preview = [dlg.list_strategy_preview.item(i).text() for i in range(dlg.list_strategy_preview.count())]

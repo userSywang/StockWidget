@@ -148,7 +148,13 @@ class StockLogicTests(unittest.TestCase):
                 {"code": "512000", "cost_price": "1.234", "position_pct": 120, "buy_date": "2026-08-05"},
                 {"code": "bad"},
             ],
-            "notifications": {"desktop_popup": False, "panel_highlight": True, "remote_push": True},
+            "notifications": {
+                "desktop_popup": False,
+                "panel_highlight": True,
+                "remote_push": True,
+                "remote_channel": "custom",
+                "webhook_url": " https://example.test/webhook ",
+            },
             "rules": {"max_loss_pct": "6", "stale_position_days": "10"},
         })
 
@@ -159,6 +165,8 @@ class StockLogicTests(unittest.TestCase):
         self.assertFalse(config["notifications"]["desktop_popup"])
         self.assertTrue(config["notifications"]["panel_highlight"])
         self.assertTrue(config["notifications"]["remote_push"])
+        self.assertEqual(config["notifications"]["remote_channel"], "custom")
+        self.assertEqual(config["notifications"]["webhook_url"], "https://example.test/webhook")
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
 

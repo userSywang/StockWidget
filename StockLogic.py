@@ -10,6 +10,8 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "desktop_popup": True,
         "panel_highlight": True,
         "remote_push": False,
+        "remote_channel": "wecom",
+        "webhook_url": "",
     },
     "rules": {
         "max_loss_enabled": True,
@@ -381,6 +383,8 @@ def normalize_strategy_alert_config(config):
             "desktop_popup": bool(source_notifications.get("desktop_popup", default_notifications["desktop_popup"])),
             "panel_highlight": bool(source_notifications.get("panel_highlight", default_notifications["panel_highlight"])),
             "remote_push": bool(source_notifications.get("remote_push", default_notifications["remote_push"])),
+            "remote_channel": source_notifications.get("remote_channel") if source_notifications.get("remote_channel") in ("wecom", "custom") else default_notifications["remote_channel"],
+            "webhook_url": str(source_notifications.get("webhook_url") or "").strip(),
         },
         "rules": {
             "max_loss_enabled": bool(source_rules.get("max_loss_enabled", default_rules["max_loss_enabled"])),

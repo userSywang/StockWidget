@@ -522,13 +522,25 @@ class SettingsDialog(QDialog):
         self.chk_strategy_notify_desktop = QCheckBox("桌面弹窗")
         self.chk_strategy_notify_panel = QCheckBox("浮窗高亮")
         self.chk_strategy_notify_remote = QCheckBox("远程推送")
+        self.cmb_strategy_remote_channel = QComboBox()
+        self.cmb_strategy_remote_channel.addItem("企业微信机器人", userData="wecom")
+        self.cmb_strategy_remote_channel.addItem("自定义Webhook", userData="custom")
+        self.edit_strategy_webhook = QLineEdit()
+        self.edit_strategy_webhook.setPlaceholderText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
+        self.btn_strategy_push_test = QPushButton("测试推送")
+        self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
         self.list_strategy_preview.setFixedHeight(86)
         notify.addWidget(self.chk_strategy_notify_desktop, 0, 0)
         notify.addWidget(self.chk_strategy_notify_panel, 0, 1)
         notify.addWidget(self.chk_strategy_notify_remote, 0, 2)
-        notify.addWidget(QLabel("提醒预览："), 1, 0, Qt.AlignTop)
-        notify.addWidget(self.list_strategy_preview, 1, 1, 1, 3)
+        notify.addWidget(QLabel("推送类型："), 1, 0)
+        notify.addWidget(self.cmb_strategy_remote_channel, 1, 1)
+        notify.addWidget(QLabel("Webhook："), 2, 0)
+        notify.addWidget(self.edit_strategy_webhook, 2, 1, 1, 2)
+        notify.addWidget(self.btn_strategy_push_test, 2, 3)
+        notify.addWidget(QLabel("提醒预览："), 3, 0, Qt.AlignTop)
+        notify.addWidget(self.list_strategy_preview, 3, 1, 1, 3)
         strategy_settings.addWidget(g_strategy_notify)
         strategy_settings.addStretch(1)
 
@@ -711,6 +723,9 @@ class SettingsDialog(QDialog):
         self.chk_strategy_notify_desktop.toggled.connect(self._on_strategy_config_changed)
         self.chk_strategy_notify_panel.toggled.connect(self._on_strategy_config_changed)
         self.chk_strategy_notify_remote.toggled.connect(self._on_strategy_config_changed)
+        self.cmb_strategy_remote_channel.currentIndexChanged.connect(self._on_strategy_config_changed)
+        self.edit_strategy_webhook.editingFinished.connect(self._on_strategy_config_changed)
+        self.btn_strategy_push_test.clicked.connect(self._send_strategy_push_test)
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
         self.btn_strategy_add.clicked.connect(self._add_strategy_position)
         self.btn_strategy_del.clicked.connect(self._del_strategy_position)
@@ -1259,6 +1274,9 @@ class SettingsDialog(QDialog):
             self.chk_strategy_notify_desktop.setChecked(bool(notifications.get("desktop_popup")))
             self.chk_strategy_notify_panel.setChecked(bool(notifications.get("panel_highlight")))
             self.chk_strategy_notify_remote.setChecked(bool(notifications.get("remote_push")))
+            channel_idx = self.cmb_strategy_remote_channel.findData(notifications.get("remote_channel", "wecom"))
+            self.cmb_strategy_remote_channel.setCurrentIndex(channel_idx if channel_idx >= 0 else 0)
+            self.edit_strategy_webhook.setText(notifications.get("webhook_url", ""))
             self.chk_strategy_loss.setChecked(bool(rules.get("max_loss_enabled")))
             self.spin_strategy_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
             self.chk_strategy_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
@@ -1351,6 +1369,8 @@ class SettingsDialog(QDialog):
                 "desktop_popup": self.chk_strategy_notify_desktop.isChecked(),
                 "panel_highlight": self.chk_strategy_notify_panel.isChecked(),
                 "remote_push": self.chk_strategy_notify_remote.isChecked(),
+                "remote_channel": self.cmb_strategy_remote_channel.currentData() or "wecom",
+                "webhook_url": self.edit_strategy_webhook.text().strip(),
             },
             "rules": self._collect_strategy_rules_from_editor(),
         })
@@ -1384,6 +1404,8 @@ class SettingsDialog(QDialog):
             rows.append(f"启用后使用：{channel_text}；请先添加持仓")
         else:
             rows.append(f"触发后使用：{channel_text}")
+            if notifications.get("remote_push") and not notifications.get("webhook_url"):
+                rows.append("远程推送未配置Webhook地址")
             if rules.get("max_loss_enabled"):
                 rows.append(f"持仓浮亏达到 {float(rules.get('max_loss_pct', 0.0)):.1f}%：提醒清仓")
             if rules.get("stock_ma5_break_enabled"):
@@ -1456,6 +1478,12 @@ class SettingsDialog(QDialog):
         self.win.set_strategy_alert_config(config)
         self._strategy_config = config
         self._load_strategy_config(max(0, row - 1))
+
+    def _send_strategy_push_test(self):
+        self._on_strategy_config_changed()
+        sender = getattr(self.win, "send_strategy_push_test", None)
+        if callable(sender):
+            sender()
 
     def _on_warning_changed(self, *_args):
         self.win.set_warning(self.chk_warning_visible.isChecked(), self.edit_warning_text.text())
