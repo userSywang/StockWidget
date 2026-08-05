@@ -272,6 +272,22 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"], [])
         dlg.close()
 
+    def test_strategy_rule_controls_do_not_overlap_after_show(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.show()
+        self.app.processEvents()
+
+        loss_rect = dlg.chk_strategy_loss.geometry()
+        stock_ma5_rect = dlg.chk_strategy_stock_ma5.geometry()
+        trailing_rect = dlg.chk_strategy_trailing.geometry()
+
+        self.assertGreater(stock_ma5_rect.top(), loss_rect.bottom())
+        self.assertGreater(trailing_rect.top(), stock_ma5_rect.bottom())
+        self.assertGreaterEqual(dlg.size().height(), 660)
+        dlg.close()
+
     def test_data_source_editor_updates_custom_http_config(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

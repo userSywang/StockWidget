@@ -44,7 +44,7 @@ class SettingsDialog(QDialog):
             1: QSize(440, 420),
             2: QSize(520, 240),
             3: QSize(500, 520),
-            4: QSize(560, 500),
+            4: QSize(560, 660),
             5: QSize(360, 350),
             6: QSize(300, 220),
         }
@@ -449,6 +449,7 @@ class SettingsDialog(QDialog):
 
         g_strategy_rules = QGroupBox("策略规则")
         g_strategy_rules.setContentsMargins(3,12,3,6)
+        g_strategy_rules.setMinimumHeight(275)
         rules = QGridLayout(g_strategy_rules)
         rules.setHorizontalSpacing(6)
         rules.setVerticalSpacing(6)
