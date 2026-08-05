@@ -222,6 +222,36 @@ class StockLogicTests(unittest.TestCase):
         self.assertIn("上证破5日线", states[0]["status"])
         self.assertIn("深成破10日线", states[0]["status"])
 
+    def test_strategy_alerts_include_display_indicators_and_stop_price(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0, "locked_profit_pct": 10.0}],
+            "rules": {
+                "max_loss_enabled": True,
+                "max_loss_pct": 5.0,
+                "stock_ma5_break_enabled": True,
+                "index_ma5_break_enabled": True,
+                "index_ma10_break_enabled": False,
+                "trailing_profit_enabled": True,
+                "reduce_half_enabled": False,
+                "block_heavy_position_on_index_ma5_down": False,
+                "stale_position_enabled": False,
+            },
+        })
+        daily_rows = [{"close": float(v)} for v in range(1, 21)]
+
+        states = evaluate_strategy_alerts(
+            config,
+            {"sh603259": {"price": 112.0, "name": "药明康德"}},
+            {"sh603259": daily_rows},
+        )
+
+        self.assertEqual(states[0]["stop_price"], 110.0)
+        self.assertEqual(states[0]["ma5"], 18.0)
+        self.assertEqual(states[0]["ma10"], 15.5)
+        self.assertEqual(states[0]["ma20"], 10.5)
+        self.assertEqual(states[0]["enabled_rules"], ["止损", "个股MA5", "大盘MA5", "移动止盈"])
+
     def test_strategy_alerts_report_daily_source_unavailable(self):
         config = normalize_strategy_alert_config({
             "enabled": True,

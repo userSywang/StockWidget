@@ -435,6 +435,55 @@ def moving_average(daily_rows, days):
     return sum(closes[-int(days):]) / int(days)
 
 
+def strategy_stop_price(cost, rules, locked_profit_pct):
+    try:
+        cost = float(cost)
+    except Exception:
+        cost = 0.0
+    if cost <= 0:
+        return None
+
+    stop_prices = []
+    try:
+        locked_profit_pct = float(locked_profit_pct)
+    except Exception:
+        locked_profit_pct = 0.0
+    if locked_profit_pct > 0:
+        stop_prices.append(cost * (1.0 + locked_profit_pct / 100.0))
+    if (rules or {}).get("max_loss_enabled"):
+        try:
+            max_loss_pct = float((rules or {}).get("max_loss_pct", 0.0))
+        except Exception:
+            max_loss_pct = 0.0
+        if max_loss_pct > 0:
+            stop_prices.append(cost * (1.0 - max_loss_pct / 100.0))
+    if not stop_prices:
+        return None
+    return round(max(stop_prices), 4)
+
+
+def strategy_enabled_rule_labels(rules):
+    rules = rules or {}
+    labels = []
+    if rules.get("max_loss_enabled"):
+        labels.append("止损")
+    if rules.get("stock_ma5_break_enabled"):
+        labels.append("个股MA5")
+    if rules.get("index_ma5_break_enabled"):
+        labels.append("大盘MA5")
+    if rules.get("index_ma10_break_enabled"):
+        labels.append("大盘MA10")
+    if rules.get("trailing_profit_enabled"):
+        labels.append("移动止盈")
+    if rules.get("reduce_half_enabled"):
+        labels.append("减半仓")
+    if rules.get("block_heavy_position_on_index_ma5_down"):
+        labels.append("限重仓")
+    if rules.get("stale_position_enabled"):
+        labels.append("持仓天数")
+    return labels
+
+
 def ma_is_down(daily_rows, days):
     closes = []
     for row in daily_rows or []:
@@ -548,12 +597,22 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             price = float(quote.get("price", 0.0))
         except Exception:
             price = 0.0
+        lock_pct = float(position.get("locked_profit_pct", 0.0))
+        daily_rows = daily_by_code.get(position["code"])
+        stock_ma5 = moving_average(daily_rows, 5)
+        stock_ma10 = moving_average(daily_rows, 10)
+        stock_ma20 = moving_average(daily_rows, 20)
         if cost <= 0 or price <= 0:
             states.append({
                 "code": position["code"],
                 "name": name,
                 "profit_pct": None,
-                "locked_profit_pct": float(position.get("locked_profit_pct", 0.0)),
+                "locked_profit_pct": lock_pct,
+                "stop_price": strategy_stop_price(cost, rules, lock_pct),
+                "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
+                "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
+                "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
+                "enabled_rules": strategy_enabled_rule_labels(rules),
                 "triggered": False,
                 "severity": "neutral",
                 "status": "等待价格",
@@ -561,7 +620,6 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             continue
 
         profit_pct = round((price / cost - 1.0) * 100.0, 4)
-        lock_pct = float(position.get("locked_profit_pct", 0.0))
         status_parts = []
         triggered = False
         severity = "neutral"
@@ -582,14 +640,12 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             if severity != "danger":
                 severity = "warning"
         if rules.get("stock_ma5_break_enabled"):
-            daily_rows = daily_by_code.get(position["code"])
             error_text = daily_error_text(daily_rows)
-            ma5 = moving_average(daily_rows, 5)
             if error_text:
                 status_parts.append(error_text)
-            elif ma5 is None:
+            elif stock_ma5 is None:
                 status_parts.append("个股日线不足")
-            elif price < ma5:
+            elif price < stock_ma5:
                 status_parts.append("个股破5日线")
                 triggered = True
                 severity = "danger"
@@ -609,6 +665,11 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "name": name,
             "profit_pct": profit_pct,
             "locked_profit_pct": lock_pct,
+            "stop_price": strategy_stop_price(cost, rules, lock_pct),
+            "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
+            "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
+            "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
+            "enabled_rules": strategy_enabled_rule_labels(rules),
             "triggered": triggered,
             "severity": severity,
             "status": "，".join(status_parts),

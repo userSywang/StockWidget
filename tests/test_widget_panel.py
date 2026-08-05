@@ -340,13 +340,18 @@ class WidgetPanelTests(unittest.TestCase):
                 "name": "券商ETF",
                 "profit_pct": 9.0,
                 "locked_profit_pct": 10.0,
+                "stop_price": 1.1,
+                "ma5": 1.05,
+                "ma10": 1.03,
+                "ma20": 1.01,
+                "enabled_rules": ["止损", "个股MA5"],
                 "triggered": True,
                 "severity": "danger",
                 "status": "触发锁盈10%",
             }],
         )
 
-        self.assertEqual(rows[0], ["券商ETF", "+9.0%", "+10.0%", "触发锁盈10%"])
+        self.assertEqual(rows[0], ["券商ETF", "+9.0%", "1.10", "1.05", "1.03", "1.01", "开:止损/个股MA5 | 触发锁盈10%"])
         self.assertTrue(meta[0]["triggered"])
         self.assertEqual(meta[0]["severity"], "danger")
 
@@ -408,8 +413,8 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(projected[0][0][0][0], "药明康德")
         self.assertEqual(projected[0][0][0][1], "+20.0%")
-        self.assertEqual(projected[0][0][0][2], "+10.0%")
-        self.assertIn("已锁盈10%", projected[0][0][0][3])
+        self.assertEqual(len(projected[0][0][0]), 7)
+        self.assertIn("已锁盈10%", projected[0][0][0][6])
         self.assertIn("saved", changes)
 
     def test_strategy_push_payload_uses_wecom_markdown(self):

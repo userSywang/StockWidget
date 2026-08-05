@@ -1191,12 +1191,18 @@ class FloatLabel(QWidget):
         rows, meta = [], []
         for state in strategy_states:
             profit = state.get("profit_pct")
-            lock_pct = float(state.get("locked_profit_pct", 0.0))
+            rules_text = "/".join(state.get("enabled_rules") or [])
+            status = state.get("status", "")
+            if rules_text:
+                status = f"开:{rules_text} | {status}"
             rows.append([
                 state.get("name") or state.get("code") or "",
                 "-" if profit is None else f"{float(profit):+.1f}%",
-                "成本线" if lock_pct <= 0 else f"+{lock_pct:.1f}%",
-                state.get("status", ""),
+                self._format_strategy_price(state.get("stop_price")),
+                self._format_strategy_price(state.get("ma5")),
+                self._format_strategy_price(state.get("ma10")),
+                self._format_strategy_price(state.get("ma20")),
+                status,
             ])
             meta.append({
                 "strategy": True,
@@ -1204,13 +1210,23 @@ class FloatLabel(QWidget):
                 "severity": state.get("severity", "neutral"),
             })
         if not rows:
-            rows.append(["策略", "-", "-", "未启用或未添加持仓"])
+            rows.append(["策略", "-", "-", "-", "-", "-", "未启用或未添加持仓"])
             meta.append({"strategy": True, "severity": "neutral"})
         return rows, meta
 
+    @staticmethod
+    def _format_strategy_price(value):
+        try:
+            value = float(value)
+        except Exception:
+            return "-"
+        if value <= 0:
+            return "-"
+        return f"{value:.2f}"
+
     def _project_strategy_columns(self, rows, meta):
-        headers = ["名称", "盈亏", "止盈线", "状态"]
-        self.model.set_align_right_cols([1, 2])
+        headers = ["名称", "盈亏", "止损价", "MA5", "MA10", "MA20", "状态"]
+        self.model.set_align_right_cols([1, 2, 3, 4, 5])
         self.model.set_rows_headers(rows, headers, meta=meta)
         self.model.set_color_scheme(self.default_color, self.fg)
         try:
