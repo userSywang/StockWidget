@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -396,8 +396,11 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(tab_alert, "提醒")
 
         # ---- 第四页：策略 ----
-        tab_strategy = QWidget()
-        strategy_settings = QVBoxLayout(tab_strategy)
+        tab_strategy = QScrollArea()
+        tab_strategy.setWidgetResizable(True)
+        tab_strategy.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        tab_strategy_content = QWidget()
+        strategy_settings = QVBoxLayout(tab_strategy_content)
 
         g_strategy_positions = QGroupBox("持仓风控")
         g_strategy_positions.setContentsMargins(3,12,3,6)
@@ -527,6 +530,7 @@ class SettingsDialog(QDialog):
         self.cmb_strategy_remote_channel.addItem("自定义Webhook", userData="custom")
         self.edit_strategy_webhook = QLineEdit()
         self.edit_strategy_webhook.setPlaceholderText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
+        self.edit_strategy_webhook.setMinimumWidth(320)
         self.btn_strategy_push_test = QPushButton("测试推送")
         self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
@@ -535,17 +539,18 @@ class SettingsDialog(QDialog):
         notify.addWidget(self.chk_strategy_notify_panel, 0, 1)
         notify.addWidget(self.chk_strategy_notify_remote, 0, 2)
         notify.addWidget(QLabel("推送类型："), 1, 0)
-        notify.addWidget(self.cmb_strategy_remote_channel, 1, 1)
+        notify.addWidget(self.cmb_strategy_remote_channel, 1, 1, 1, 3)
         notify.addWidget(QLabel("Webhook："), 2, 0)
-        notify.addWidget(self.edit_strategy_webhook, 2, 1, 1, 2)
-        notify.addWidget(self.btn_strategy_push_test, 2, 3)
-        notify.addWidget(QLabel("提醒预览："), 3, 0, Qt.AlignTop)
-        notify.addWidget(self.list_strategy_preview, 3, 1, 1, 3)
+        notify.addWidget(self.edit_strategy_webhook, 2, 1, 1, 3)
+        notify.addWidget(self.btn_strategy_push_test, 3, 1, Qt.AlignLeft)
+        notify.addWidget(QLabel("提醒预览："), 4, 0, Qt.AlignTop)
+        notify.addWidget(self.list_strategy_preview, 4, 1, 1, 3)
         strategy_settings.addWidget(g_strategy_notify)
         strategy_settings.addStretch(1)
 
         self._loading_strategy_editor = False
         self._load_strategy_config()
+        tab_strategy.setWidget(tab_strategy_content)
         self.tabs.addTab(tab_strategy, "策略")
 
         # ---- 第四页 ----

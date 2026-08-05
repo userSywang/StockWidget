@@ -1193,9 +1193,8 @@ class FloatLabel(QWidget):
             profit = state.get("profit_pct")
             rows.append([
                 state.get("name") or state.get("code") or "",
-                "-" if profit is None else f"{float(profit):+.1f}%",
-                "止" + self._format_strategy_price(state.get("stop_price")),
-                self._format_strategy_ma_values(state),
+                "盈亏 -" if profit is None else f"盈亏 {float(profit):+.1f}%",
+                "止损 " + self._format_strategy_price(state.get("stop_price")),
                 state.get("status", ""),
             ])
             meta.append({
@@ -1203,8 +1202,20 @@ class FloatLabel(QWidget):
                 "triggered": bool(state.get("triggered")),
                 "severity": state.get("severity", "neutral"),
             })
+            rows.append([
+                "",
+                "MA5 " + self._format_strategy_price(state.get("ma5")),
+                "MA10 " + self._format_strategy_price(state.get("ma10")),
+                "MA20 " + self._format_strategy_price(state.get("ma20")),
+            ])
+            meta.append({
+                "strategy": True,
+                "strategy_detail": True,
+                "triggered": bool(state.get("triggered")),
+                "severity": state.get("severity", "neutral"),
+            })
         if not rows:
-            rows.append(["策略", "-", "-", "-", "未启用或未添加持仓"])
+            rows.append(["策略", "-", "-", "未启用或未添加持仓"])
             meta.append({"strategy": True, "severity": "neutral"})
         return rows, meta
 
@@ -1218,16 +1229,9 @@ class FloatLabel(QWidget):
             return "-"
         return f"{value:.2f}"
 
-    @classmethod
-    def _format_strategy_ma_values(cls, state):
-        ma5 = cls._format_strategy_price(state.get("ma5"))
-        ma10 = cls._format_strategy_price(state.get("ma10"))
-        ma20 = cls._format_strategy_price(state.get("ma20"))
-        return f"5/10/20:{ma5}/{ma10}/{ma20}"
-
     def _project_strategy_columns(self, rows, meta):
-        headers = ["名称", "盈亏", "止损", "均线", "状态"]
-        self.model.set_align_right_cols([1, 2])
+        headers = ["名称", "盈亏/MA5", "止损/MA10", "状态/MA20"]
+        self.model.set_align_right_cols([])
         self.model.set_rows_headers(rows, headers, meta=meta)
         self.model.set_color_scheme(self.default_color, self.fg)
         try:

@@ -292,6 +292,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.size().height(), 660)
         dlg.close()
 
+    def test_strategy_notify_webhook_controls_are_visible_and_not_overlapped(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.show()
+        self.app.processEvents()
+
+        page_rect = dlg.tabs.currentWidget().rect().translated(dlg.tabs.currentWidget().mapToGlobal(QPoint(0, 0)))
+        remote_rect = dlg.chk_strategy_notify_remote.rect().translated(dlg.chk_strategy_notify_remote.mapToGlobal(QPoint(0, 0)))
+        channel_rect = dlg.cmb_strategy_remote_channel.rect().translated(dlg.cmb_strategy_remote_channel.mapToGlobal(QPoint(0, 0)))
+        webhook_rect = dlg.edit_strategy_webhook.rect().translated(dlg.edit_strategy_webhook.mapToGlobal(QPoint(0, 0)))
+        test_rect = dlg.btn_strategy_push_test.rect().translated(dlg.btn_strategy_push_test.mapToGlobal(QPoint(0, 0)))
+
+        for rect in (remote_rect, channel_rect, webhook_rect, test_rect):
+            self.assertTrue(page_rect.contains(rect), f"{rect} is outside strategy page {page_rect}")
+        self.assertFalse(webhook_rect.intersects(test_rect))
+        self.assertGreaterEqual(webhook_rect.width(), 220)
+        dlg.close()
+
     def test_data_source_editor_updates_custom_http_config(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
