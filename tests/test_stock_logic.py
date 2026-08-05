@@ -9,6 +9,7 @@ from StockLogic import (
     normalize_price_alert,
     normalize_groups,
     normalize_strategy_alert_config,
+    strategy_daily_request_codes,
     update_strategy_position_state,
     evaluate_strategy_alerts,
 )
@@ -175,6 +176,43 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(updated["positions"][0]["locked_profit_pct"], 10.0)
         self.assertTrue(states[0]["triggered"])
         self.assertIn("触发锁盈10%", states[0]["status"])
+
+    def test_strategy_daily_request_codes_include_market_indexes(self):
+        codes = strategy_daily_request_codes({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+            "rules": {"index_ma5_break_enabled": True, "index_ma10_break_enabled": True},
+        })
+
+        self.assertEqual(codes, ["sh603259", "sh000001", "sz399001"])
+
+    def test_strategy_alerts_trigger_on_stock_and_index_ma_breaks(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+            "rules": {
+                "stock_ma5_break_enabled": True,
+                "index_ma5_break_enabled": True,
+                "index_ma10_break_enabled": True,
+            },
+        })
+        daily_by_code = {
+            "sh603259": [{"close": v} for v in [100, 101, 102, 103, 104]],
+            "sh000001": [{"close": v} for v in [3000, 3010, 3020, 3030, 3040, 3050, 3060, 3070, 3080, 3090]],
+            "sz399001": [{"close": v} for v in [9000, 9010, 9020, 9030, 9040, 9050, 9060, 9070, 9080, 9090]],
+        }
+        quotes = {
+            "sh603259": {"price": 99.0, "name": "药明康德"},
+            "sh000001": {"price": 3000.0},
+            "sz399001": {"price": 8800.0},
+        }
+
+        states = evaluate_strategy_alerts(config, quotes, daily_by_code)
+
+        self.assertTrue(states[0]["triggered"])
+        self.assertIn("个股破5日线", states[0]["status"])
+        self.assertIn("上证破5日线", states[0]["status"])
+        self.assertIn("深成破10日线", states[0]["status"])
 
 
 if __name__ == "__main__":

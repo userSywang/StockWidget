@@ -406,6 +406,50 @@ def strategy_request_codes(config):
     return normalize_codes(position.get("code") for position in config.get("positions", []))
 
 
+def strategy_daily_request_codes(config):
+    config = normalize_strategy_alert_config(config)
+    codes = strategy_request_codes(config)
+    rules = config.get("rules", {})
+    if rules.get("index_ma5_break_enabled") or rules.get("index_ma10_break_enabled") or rules.get("block_heavy_position_on_index_ma5_down"):
+        codes.extend(["sh000001", "sz399001"])
+    return normalize_codes(codes)
+
+
+def moving_average(daily_rows, days):
+    closes = []
+    for row in daily_rows or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            close = float(row.get("close", 0.0))
+        except Exception:
+            close = 0.0
+        if close > 0:
+            closes.append(close)
+    if len(closes) < int(days):
+        return None
+    return sum(closes[-int(days):]) / int(days)
+
+
+def ma_is_down(daily_rows, days):
+    closes = []
+    for row in daily_rows or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            close = float(row.get("close", 0.0))
+        except Exception:
+            close = 0.0
+        if close > 0:
+            closes.append(close)
+    days = int(days)
+    if len(closes) < days + 1:
+        return False
+    current = sum(closes[-days:]) / days
+    previous = sum(closes[-days - 1:-1]) / days
+    return current < previous
+
+
 def trailing_lock_pct(rules, peak_profit_pct):
     if not rules.get("trailing_profit_enabled"):
         return 0.0
@@ -446,11 +490,35 @@ def update_strategy_position_state(config, quotes):
     return config, changed
 
 
-def evaluate_strategy_alerts(config, quotes):
+def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
     config = normalize_strategy_alert_config(config)
     if not config.get("enabled"):
         return []
     rules = config["rules"]
+    daily_by_code = daily_by_code or {}
+    index_breaks = []
+    if rules.get("index_ma5_break_enabled"):
+        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+            index_quote = (quotes or {}).get(index_code) or {}
+            try:
+                index_price = float(index_quote.get("price", 0.0))
+            except Exception:
+                index_price = 0.0
+            ma5 = moving_average(daily_by_code.get(index_code), 5)
+            if index_price > 0 and ma5 and index_price < ma5:
+                index_breaks.append(f"{label}破5日线")
+    if rules.get("index_ma10_break_enabled"):
+        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+            index_quote = (quotes or {}).get(index_code) or {}
+            try:
+                index_price = float(index_quote.get("price", 0.0))
+            except Exception:
+                index_price = 0.0
+            ma10 = moving_average(daily_by_code.get(index_code), 10)
+            if index_price > 0 and ma10 and index_price < ma10:
+                index_breaks.append(f"{label}破10日线")
+    index_ma5_down = any(ma_is_down(daily_by_code.get(code), 5) for code in ("sh000001", "sz399001"))
+
     states = []
     for position in config.get("positions", []):
         quote = (quotes or {}).get(position["code"]) or {}
@@ -493,8 +561,20 @@ def evaluate_strategy_alerts(config, quotes):
             triggered = True
             if severity != "danger":
                 severity = "warning"
-        if rules.get("stock_ma5_break_enabled") or rules.get("index_ma5_break_enabled") or rules.get("index_ma10_break_enabled"):
-            status_parts.append("均线待接入")
+        if rules.get("stock_ma5_break_enabled"):
+            ma5 = moving_average(daily_by_code.get(position["code"]), 5)
+            if ma5 is None:
+                status_parts.append("个股日线不足")
+            elif price < ma5:
+                status_parts.append("个股破5日线")
+                triggered = True
+                severity = "danger"
+        if index_breaks:
+            status_parts.append("大盘" + "/".join(index_breaks))
+            triggered = True
+            severity = "danger"
+        if rules.get("block_heavy_position_on_index_ma5_down") and index_ma5_down:
+            status_parts.append("大盘5日线向下")
         if not status_parts:
             status_parts.append("未触发")
 

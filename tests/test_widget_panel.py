@@ -158,7 +158,36 @@ class WidgetPanelTests(unittest.TestCase):
 
         codes = FloatLabel._refresh_request_codes(win)
 
-        self.assertEqual(codes, ["sh600000", "sh512000"])
+        self.assertEqual(codes, ["sh600000", "sh512000", "sh000001", "sz399001"])
+
+    def test_get_daily_klines_parses_eastmoney_rows(self):
+        class FakeResponse:
+            def json(self):
+                return {
+                    "data": {
+                        "klines": [
+                            "2026-08-01,10.00,10.20,10.30,9.90,1000,2000",
+                            "2026-08-02,10.20,10.50,10.60,10.10,1100,2300",
+                        ]
+                    }
+                }
+
+        class FakeHttp:
+            def __init__(self):
+                self.urls = []
+
+            def get(self, url, headers=None, timeout=None):
+                self.urls.append(url)
+                return FakeResponse()
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+
+        daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+
+        self.assertIn("secid=1.000001", win._http.urls[0])
+        self.assertEqual(daily["sh000001"][0]["date"], "2026-08-01")
+        self.assertEqual(daily["sh000001"][1]["close"], 10.5)
 
     def test_compose_strategy_rows_shows_triggered_status(self):
         win = FloatLabel.__new__(FloatLabel)

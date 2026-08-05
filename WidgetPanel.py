@@ -22,6 +22,7 @@ from StockLogic import (
     normalize_codes,
     normalize_price_alerts,
     normalize_strategy_alert_config,
+    strategy_daily_request_codes,
     strategy_request_codes,
     update_strategy_position_state,
 )
@@ -929,7 +930,11 @@ class FloatLabel(QWidget):
         return normalize_codes(codes)
 
     def _strategy_request_codes(self):
-        return strategy_request_codes(getattr(self, "strategy_alert_config", {}))
+        config = getattr(self, "strategy_alert_config", {})
+        codes = strategy_request_codes(config)
+        if normalize_strategy_alert_config(config).get("enabled"):
+            codes.extend(strategy_daily_request_codes(config))
+        return normalize_codes(codes)
 
     def _refresh_request_codes(self):
         return normalize_codes(
@@ -954,6 +959,64 @@ class FloatLabel(QWidget):
         if not found:
             return ""
         return f"沪深成交额估算：{total / 1e8:.2f}亿"
+
+    @staticmethod
+    def _eastmoney_secid(code):
+        code = normalize_codes([code])
+        if not code:
+            return ""
+        code = code[0]
+        market = "1" if code.startswith("sh") else "0"
+        return f"{market}.{code[2:]}"
+
+    def _get_daily_klines(self, codes, limit=20):
+        daily_by_code = {}
+        getter = getattr(getattr(self, "_http", None), "get", requests.get)
+        headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
+        for code in normalize_codes(codes):
+            secid = self._eastmoney_secid(code)
+            if not secid:
+                continue
+            url = (
+                "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+                f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
+                "&fields2=f51,f52,f53,f54,f55,f56,f57"
+                f"&klt=101&fqt=1&lmt={int(limit)}&end=20500101"
+            )
+            response = getter(url, headers=headers, timeout=5)
+            payload = response.json()
+            klines = (((payload or {}).get("data") or {}).get("klines") or [])
+            rows = []
+            for raw in klines:
+                parts = str(raw).split(",")
+                if len(parts) < 6:
+                    continue
+                try:
+                    rows.append({
+                        "date": parts[0],
+                        "open": float(parts[1]),
+                        "close": float(parts[2]),
+                        "high": float(parts[3]),
+                        "low": float(parts[4]),
+                        "volume": float(parts[5]),
+                        "amount": float(parts[6]) if len(parts) > 6 else 0.0,
+                    })
+                except Exception:
+                    continue
+            if rows:
+                daily_by_code[code] = rows
+        return daily_by_code
+
+    def _get_refresh_data(self, request_codes):
+        row_by_code, sign_by_code, quote_by_code = self._get_price(request_codes)
+        daily_by_code = {}
+        config = getattr(self, "strategy_alert_config", {})
+        if normalize_strategy_alert_config(config).get("enabled"):
+            try:
+                daily_by_code = self._get_daily_klines(strategy_daily_request_codes(config), limit=20)
+            except Exception:
+                daily_by_code = {}
+        return row_by_code, sign_by_code, quote_by_code, daily_by_code
 
     def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None):
         full_rows, meta_rows = [], []
@@ -1114,10 +1177,10 @@ class FloatLabel(QWidget):
             self._refresh_previous_quotes = dict(getattr(self, "_latest_quotes", {}))
             executor = getattr(self, "_refresh_executor", None)
             if executor is None:
-                row_by_code, sign_by_code, quote_by_code = self._get_price(request_codes)
-                self._apply_refresh_result(row_by_code, sign_by_code, quote_by_code, self._refresh_previous_quotes)
+                row_by_code, sign_by_code, quote_by_code, daily_by_code = self._get_refresh_data(request_codes)
+                self._apply_refresh_result(row_by_code, sign_by_code, quote_by_code, self._refresh_previous_quotes, daily_by_code)
                 return
-            self._refresh_future = executor.submit(self._get_price, request_codes)
+            self._refresh_future = executor.submit(self._get_refresh_data, request_codes)
             self._poll_refresh_future()
         except Exception as e:
             self._refresh_future = None
@@ -1141,12 +1204,13 @@ class FloatLabel(QWidget):
 
         self._refresh_future = None
         try:
-            row_by_code, sign_by_code, quote_by_code = future.result()
+            row_by_code, sign_by_code, quote_by_code, daily_by_code = future.result()
             self._apply_refresh_result(
                 row_by_code,
                 sign_by_code,
                 quote_by_code,
                 getattr(self, "_refresh_previous_quotes", {}),
+                daily_by_code,
             )
         except Exception as e:
             try:
@@ -1158,14 +1222,14 @@ class FloatLabel(QWidget):
             except Exception:
                 self._show_error(str(e))
 
-    def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes):
+    def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
         if getattr(self, "panel_display_mode", "quotes") == "strategy":
             updated_config, strategy_changed = update_strategy_position_state(self.strategy_alert_config, quote_by_code)
             if strategy_changed:
                 self.strategy_alert_config = updated_config
-            strategy_states = evaluate_strategy_alerts(self.strategy_alert_config, quote_by_code)
+            strategy_states = evaluate_strategy_alerts(self.strategy_alert_config, quote_by_code, daily_by_code or {})
             full_rows, sign = self._compose_strategy_rows(strategy_states)
         else:
             strategy_changed = False
