@@ -3,6 +3,7 @@ import requests, keyboard
 from urllib.parse import quote
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 import time
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
@@ -89,6 +90,7 @@ class FloatLabel(QWidget):
         self._refresh_previous_quotes = {}
         self._refresh_again_requested = False
         self._strategy_push_sent_keys = set()
+        self._daily_kline_cache = {}
 
         # 设置初值
         self.groups = normalize_groups(groups_cfg, codes_cfg)
@@ -1031,15 +1033,82 @@ class FloatLabel(QWidget):
                 continue
         return rows
 
+    @staticmethod
+    def _baostock_code(code):
+        code = normalize_codes([code])
+        if not code:
+            return ""
+        code = code[0]
+        return f"{code[:2]}.{code[2:]}"
+
+    def _get_baostock_daily_klines(self, code, limit=20):
+        import baostock as bs
+
+        bs_code = self._baostock_code(code)
+        if not bs_code:
+            return []
+
+        end_date = date.today()
+        start_date = end_date - timedelta(days=max(30, int(limit) * 3))
+        login = bs.login()
+        try:
+            if getattr(login, "error_code", "0") != "0":
+                raise RuntimeError(getattr(login, "error_msg", "baostock login failed"))
+            fields = "date,code,open,high,low,close,volume,amount"
+            result = bs.query_history_k_data_plus(
+                bs_code,
+                fields,
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d"),
+                frequency="d",
+                adjustflag="2",
+            )
+            if getattr(result, "error_code", "0") != "0":
+                raise RuntimeError(getattr(result, "error_msg", "baostock query failed"))
+            rows = []
+            while result.next():
+                raw = dict(zip(result.fields, result.get_row_data()))
+                try:
+                    rows.append({
+                        "date": str(raw.get("date") or ""),
+                        "open": float(raw.get("open") or 0.0),
+                        "close": float(raw.get("close") or 0.0),
+                        "high": float(raw.get("high") or 0.0),
+                        "low": float(raw.get("low") or 0.0),
+                        "volume": float(raw.get("volume") or 0.0),
+                        "amount": float(raw.get("amount") or 0.0),
+                    })
+                except Exception:
+                    continue
+            return rows[-int(limit):]
+        finally:
+            try:
+                bs.logout()
+            except Exception:
+                pass
+
     def _get_daily_klines(self, codes, limit=20):
         daily_by_code = {}
         for code in normalize_codes(codes):
+            cache = getattr(self, "_daily_kline_cache", {})
+            cache_key = (code, int(limit))
+            cached = cache.get(cache_key) if isinstance(cache, dict) else None
+            if cached and time.monotonic() - cached.get("time", 0.0) < 300:
+                daily_by_code[code] = cached.get("rows", [])
+                continue
+
             errors = []
             try:
-                rows = self._get_tencent_daily_klines(code, limit)
+                rows = self._get_baostock_daily_klines(code, limit)
             except Exception as exc:
-                errors.append(f"腾讯:{type(exc).__name__}")
+                errors.append(f"Baostock:{type(exc).__name__}")
                 rows = []
+            if not rows:
+                try:
+                    rows = self._get_tencent_daily_klines(code, limit)
+                except Exception as exc:
+                    errors.append(f"腾讯:{type(exc).__name__}")
+                    rows = []
             if not rows:
                 try:
                     rows = self._get_eastmoney_daily_klines(code, limit)
@@ -1048,6 +1117,9 @@ class FloatLabel(QWidget):
                     rows = []
             if rows:
                 daily_by_code[code] = rows
+                if isinstance(cache, dict):
+                    cache[cache_key] = {"time": time.monotonic(), "rows": rows}
+                    self._daily_kline_cache = cache
             else:
                 daily_by_code[code] = {"error": "日线接口不可用" if errors else "日线数据为空"}
         return daily_by_code

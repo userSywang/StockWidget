@@ -160,7 +160,22 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh600000", "sh512000", "sh000001", "sz399001"])
 
-    def test_get_daily_klines_uses_tencent_rows_first(self):
+    def test_get_daily_klines_uses_baostock_rows_first(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._get_baostock_daily_klines = lambda *_args: [
+            {"date": "2026-08-01", "close": 10.2},
+            {"date": "2026-08-02", "close": 10.5},
+        ]
+        win._get_tencent_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("should not call tencent"))
+        win._get_eastmoney_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("should not call eastmoney"))
+        win._daily_kline_cache = {}
+
+        daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+
+        self.assertEqual(daily["sh000001"][0]["date"], "2026-08-01")
+        self.assertEqual(daily["sh000001"][1]["close"], 10.5)
+
+    def test_get_daily_klines_falls_back_to_tencent_rows(self):
         class FakeResponse:
             def json(self):
                 return {
@@ -185,12 +200,36 @@ class WidgetPanelTests(unittest.TestCase):
 
         win = FloatLabel.__new__(FloatLabel)
         win._http = FakeHttp()
+        win._get_baostock_daily_klines = lambda *_args: []
+        win._daily_kline_cache = {}
 
         daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
 
         self.assertIn("web.ifzq.gtimg.cn", win._http.urls[0])
         self.assertEqual(len(win._http.urls), 1)
         self.assertEqual(daily["sh000001"][0]["date"], "2026-08-01")
+        self.assertEqual(daily["sh000001"][1]["close"], 10.5)
+
+    def test_get_daily_klines_reuses_daily_cache(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+
+        def fake_baostock(*_args):
+            calls.append("baostock")
+            return [
+                {"date": "2026-08-01", "close": 10.2},
+                {"date": "2026-08-02", "close": 10.5},
+            ]
+
+        win._get_baostock_daily_klines = fake_baostock
+        win._get_tencent_daily_klines = lambda *_args: []
+        win._get_eastmoney_daily_klines = lambda *_args: []
+        win._daily_kline_cache = {}
+
+        FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+        daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+
+        self.assertEqual(calls, ["baostock"])
         self.assertEqual(daily["sh000001"][1]["close"], 10.5)
 
     def test_get_daily_klines_falls_back_to_eastmoney_rows(self):
@@ -220,6 +259,8 @@ class WidgetPanelTests(unittest.TestCase):
 
         win = FloatLabel.__new__(FloatLabel)
         win._http = FakeHttp()
+        win._get_baostock_daily_klines = lambda *_args: []
+        win._daily_kline_cache = {}
 
         daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
 
@@ -228,10 +269,63 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(daily["sh000001"][0]["date"], "2026-08-01")
         self.assertEqual(daily["sh000001"][1]["close"], 10.5)
 
+    def test_get_daily_klines_parses_baostock_rows(self):
+        class FakeLogin:
+            error_code = "0"
+            error_msg = ""
+
+        class FakeResult:
+            error_code = "0"
+            error_msg = ""
+            fields = ["date", "code", "open", "high", "low", "close", "volume", "amount"]
+
+            def __init__(self):
+                self.rows = [
+                    ["2026-08-01", "sh.000001", "10.00", "10.30", "9.90", "10.20", "1000", "2000"],
+                    ["2026-08-02", "sh.000001", "10.20", "10.60", "10.10", "10.50", "1100", "2300"],
+                ]
+                self.index = -1
+
+            def next(self):
+                self.index += 1
+                return self.index < len(self.rows)
+
+            def get_row_data(self):
+                return self.rows[self.index]
+
+        class FakeBaostock:
+            def __init__(self):
+                self.queries = []
+                self.logout_called = False
+
+            def login(self):
+                return FakeLogin()
+
+            def query_history_k_data_plus(self, *args, **kwargs):
+                self.queries.append((args, kwargs))
+                return FakeResult()
+
+            def logout(self):
+                self.logout_called = True
+
+        fake_bs = FakeBaostock()
+        win = FloatLabel.__new__(FloatLabel)
+
+        with patch.dict("sys.modules", {"baostock": fake_bs}):
+            rows = FloatLabel._get_baostock_daily_klines(win, "sh000001", limit=2)
+
+        self.assertEqual(fake_bs.queries[0][0][0], "sh.000001")
+        self.assertEqual(rows[0]["date"], "2026-08-01")
+        self.assertEqual(rows[0]["open"], 10.0)
+        self.assertEqual(rows[1]["close"], 10.5)
+        self.assertEqual(rows[1]["amount"], 2300.0)
+        self.assertTrue(fake_bs.logout_called)
+
     def test_get_daily_klines_marks_source_unavailable(self):
         win = FloatLabel.__new__(FloatLabel)
         win._get_tencent_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("blocked"))
         win._get_eastmoney_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("blocked"))
+        win._get_baostock_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("blocked"))
 
         daily = FloatLabel._get_daily_klines(win, ["sh603259"], limit=20)
 
