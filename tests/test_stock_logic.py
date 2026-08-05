@@ -8,6 +8,7 @@ from StockLogic import (
     normalize_alert_rule,
     normalize_price_alert,
     normalize_groups,
+    normalize_strategy_alert_config,
 )
 
 
@@ -136,6 +137,23 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(alert["code"], "sh512000")
         self.assertEqual(alert["direction"], "above")
         self.assertEqual(alert["price"], 0.0)
+
+    def test_strategy_alert_config_normalizes_positions_and_rules(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [
+                {"code": "512000", "cost_price": "1.234", "position_pct": 120, "buy_date": "2026-08-05"},
+                {"code": "bad"},
+            ],
+            "rules": {"max_loss_pct": "6", "stale_position_days": "10"},
+        })
+
+        self.assertTrue(config["enabled"])
+        self.assertEqual(config["positions"][0]["code"], "sh512000")
+        self.assertEqual(config["positions"][0]["cost_price"], 1.234)
+        self.assertEqual(config["positions"][0]["position_pct"], 100.0)
+        self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
+        self.assertEqual(config["rules"]["stale_position_days"], 10)
 
 
 if __name__ == "__main__":

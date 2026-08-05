@@ -3,6 +3,30 @@ import re
 
 DEFAULT_GROUP_NAME = "默认"
 DEFAULT_WARNING_TEXT = "谨慎交易，信号只是辅助，仓位和纪律优先。"
+DEFAULT_STRATEGY_ALERT_CONFIG = {
+    "enabled": False,
+    "positions": [],
+    "rules": {
+        "max_loss_enabled": True,
+        "max_loss_pct": 5.0,
+        "stock_ma5_break_enabled": True,
+        "index_ma5_break_enabled": True,
+        "index_ma10_break_enabled": True,
+        "trailing_profit_enabled": True,
+        "trailing_tiers": [
+            {"profit_pct": 20.0, "lock_pct": 10.0},
+            {"profit_pct": 30.0, "lock_pct": 20.0},
+            {"profit_pct": 40.0, "lock_pct": 30.0},
+        ],
+        "skip_raise_on_volume_drop": True,
+        "reduce_half_enabled": True,
+        "reduce_half_profit_pct": 45.0,
+        "max_position_pct": 20.0,
+        "block_heavy_position_on_index_ma5_down": True,
+        "stale_position_enabled": True,
+        "stale_position_days": 12,
+    },
+}
 
 _RE_FULL = re.compile(r"^(sh|sz|bj|bk|gn|sw)\d+$")
 _RE_6 = re.compile(r"^\d{6}$")
@@ -280,3 +304,84 @@ def evaluate_price_alerts(alerts, quotes):
             "detail": detail,
         })
     return triggered_by_code
+
+
+def _bounded_float(value, default, minimum=0.0, maximum=99999.0):
+    try:
+        number = float(value)
+    except Exception:
+        number = float(default)
+    return max(float(minimum), min(float(maximum), number))
+
+
+def _bounded_int(value, default, minimum=0, maximum=99999):
+    try:
+        number = int(value)
+    except Exception:
+        number = int(default)
+    return max(int(minimum), min(int(maximum), number))
+
+
+def normalize_strategy_position(position):
+    if not isinstance(position, dict):
+        position = {}
+    code = normalize_code_or_none(position.get("code"))
+    if not code:
+        return None
+    return {
+        "code": code,
+        "cost_price": _bounded_float(position.get("cost_price"), 0.0, 0.0, 99999.999),
+        "buy_date": str(position.get("buy_date") or "").strip(),
+        "position_pct": _bounded_float(position.get("position_pct"), 0.0, 0.0, 100.0),
+        "note": str(position.get("note") or "").strip(),
+    }
+
+
+def normalize_strategy_alert_config(config):
+    if not isinstance(config, dict):
+        config = {}
+    default_rules = DEFAULT_STRATEGY_ALERT_CONFIG["rules"]
+    source_rules = config.get("rules") if isinstance(config.get("rules"), dict) else {}
+    positions = []
+    seen_codes = set()
+    for item in config.get("positions", []) if isinstance(config.get("positions"), list) else []:
+        position = normalize_strategy_position(item)
+        if not position or position["code"] in seen_codes:
+            continue
+        seen_codes.add(position["code"])
+        positions.append(position)
+
+    tiers = []
+    source_tiers = source_rules.get("trailing_tiers")
+    if not isinstance(source_tiers, list):
+        source_tiers = default_rules["trailing_tiers"]
+    for tier in source_tiers:
+        if not isinstance(tier, dict):
+            continue
+        tiers.append({
+            "profit_pct": _bounded_float(tier.get("profit_pct"), 0.0, 0.0, 1000.0),
+            "lock_pct": _bounded_float(tier.get("lock_pct"), 0.0, 0.0, 1000.0),
+        })
+    if not tiers:
+        tiers = list(default_rules["trailing_tiers"])
+
+    return {
+        "enabled": bool(config.get("enabled", DEFAULT_STRATEGY_ALERT_CONFIG["enabled"])),
+        "positions": positions,
+        "rules": {
+            "max_loss_enabled": bool(source_rules.get("max_loss_enabled", default_rules["max_loss_enabled"])),
+            "max_loss_pct": _bounded_float(source_rules.get("max_loss_pct"), default_rules["max_loss_pct"], 0.0, 100.0),
+            "stock_ma5_break_enabled": bool(source_rules.get("stock_ma5_break_enabled", default_rules["stock_ma5_break_enabled"])),
+            "index_ma5_break_enabled": bool(source_rules.get("index_ma5_break_enabled", default_rules["index_ma5_break_enabled"])),
+            "index_ma10_break_enabled": bool(source_rules.get("index_ma10_break_enabled", default_rules["index_ma10_break_enabled"])),
+            "trailing_profit_enabled": bool(source_rules.get("trailing_profit_enabled", default_rules["trailing_profit_enabled"])),
+            "trailing_tiers": tiers,
+            "skip_raise_on_volume_drop": bool(source_rules.get("skip_raise_on_volume_drop", default_rules["skip_raise_on_volume_drop"])),
+            "reduce_half_enabled": bool(source_rules.get("reduce_half_enabled", default_rules["reduce_half_enabled"])),
+            "reduce_half_profit_pct": _bounded_float(source_rules.get("reduce_half_profit_pct"), default_rules["reduce_half_profit_pct"], 0.0, 1000.0),
+            "max_position_pct": _bounded_float(source_rules.get("max_position_pct"), default_rules["max_position_pct"], 0.0, 100.0),
+            "block_heavy_position_on_index_ma5_down": bool(source_rules.get("block_heavy_position_on_index_ma5_down", default_rules["block_heavy_position_on_index_ma5_down"])),
+            "stale_position_enabled": bool(source_rules.get("stale_position_enabled", default_rules["stale_position_enabled"])),
+            "stale_position_days": _bounded_int(source_rules.get("stale_position_days"), default_rules["stale_position_days"], 1, 3650),
+        },
+    }

@@ -20,6 +20,7 @@ from StockLogic import (
     normalize_groups,
     normalize_codes,
     normalize_price_alerts,
+    normalize_strategy_alert_config,
 )
 
 class FloatLabel(QWidget):
@@ -70,6 +71,7 @@ class FloatLabel(QWidget):
         self.start_on_boot      = bool(cfg.get("start_on_boot", False))
         self.alert_rules        = normalize_alert_rules(cfg.get("alert_rules", []))
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
+        self.strategy_alert_config = normalize_strategy_alert_config(cfg.get("strategy_alert_config", {}))
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
@@ -223,6 +225,7 @@ class FloatLabel(QWidget):
             "checked_codes": self.checked_codes,
             "alert_rules": self.alert_rules,
             "price_alerts": self.price_alerts,
+            "strategy_alert_config": self.strategy_alert_config,
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
@@ -1165,6 +1168,11 @@ class FloatLabel(QWidget):
 
     def set_price_alerts(self, alerts):
         self.price_alerts = normalize_price_alerts(alerts)
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_strategy_alert_config(self, config):
+        self.strategy_alert_config = normalize_strategy_alert_config(config)
         self._notify_change()
         self._refresh_from_function()
 

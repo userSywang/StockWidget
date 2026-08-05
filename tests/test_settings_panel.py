@@ -30,6 +30,7 @@ class FakeWindow:
         self.start_on_boot = False
         self.alert_rules = []
         self.price_alerts = []
+        self.strategy_alert_config = {}
         self.warning_visible = False
         self.warning_text = ""
         self.market_amount_visible = False
@@ -56,6 +57,9 @@ class FakeWindow:
 
     def set_price_alerts(self, alerts):
         self.price_alerts = alerts
+
+    def set_strategy_alert_config(self, config):
+        self.strategy_alert_config = config
 
     def set_data_source(self, data_source):
         self.data_source = data_source
@@ -226,6 +230,37 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])
+        dlg.close()
+
+    def test_strategy_page_edits_positions_and_rules(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.tabs.setCurrentIndex(4)
+        dlg._add_strategy_position()
+        self.assertEqual(dlg.list_strategy_positions.count(), 1)
+
+        dlg.edit_strategy_code.setText("512000")
+        dlg.spin_strategy_cost.setValue(1.234)
+        dlg.edit_strategy_buy_date.setText("2026-08-05")
+        dlg.spin_strategy_position_pct.setValue(18.0)
+        dlg.edit_strategy_note.setText("测试持仓")
+        dlg._on_strategy_position_editor_changed()
+        dlg.chk_strategy_enabled.setChecked(True)
+        dlg.spin_strategy_loss.setValue(6.0)
+        dlg.spin_strategy_stale_days.setValue(10)
+        dlg._on_strategy_config_changed()
+
+        self.assertTrue(win.strategy_alert_config["enabled"])
+        self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh512000")
+        self.assertEqual(win.strategy_alert_config["positions"][0]["cost_price"], 1.234)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["position_pct"], 18.0)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["note"], "测试持仓")
+        self.assertEqual(win.strategy_alert_config["rules"]["max_loss_pct"], 6.0)
+        self.assertEqual(win.strategy_alert_config["rules"]["stale_position_days"], 10)
+
+        dlg._del_strategy_position()
+        self.assertEqual(win.strategy_alert_config["positions"], [])
         dlg.close()
 
     def test_data_source_editor_updates_custom_http_config(self):

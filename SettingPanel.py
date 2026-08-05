@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -21,6 +21,8 @@ from StockLogic import (
     normalize_code_or_none,
     normalize_price_alert,
     normalize_price_alerts,
+    normalize_strategy_alert_config,
+    normalize_strategy_position,
 )
 
 class SettingsDialog(QDialog):
@@ -42,8 +44,9 @@ class SettingsDialog(QDialog):
             1: QSize(440, 420),
             2: QSize(520, 240),
             3: QSize(500, 520),
-            4: QSize(360, 350),
-            5: QSize(300, 220),
+            4: QSize(560, 500),
+            5: QSize(360, 350),
+            6: QSize(300, 220),
         }
         self._apply_tab_size(0)
 
@@ -392,6 +395,129 @@ class SettingsDialog(QDialog):
         self._load_price_alert_list()
         self.tabs.addTab(tab_alert, "提醒")
 
+        # ---- 第四页：策略 ----
+        tab_strategy = QWidget()
+        strategy_settings = QVBoxLayout(tab_strategy)
+
+        g_strategy_positions = QGroupBox("持仓风控")
+        g_strategy_positions.setContentsMargins(3,12,3,6)
+        lay_strategy_positions = QHBoxLayout(g_strategy_positions)
+        lay_strategy_positions.setSpacing(6)
+
+        strategy_left = QVBoxLayout()
+        self.chk_strategy_enabled = QCheckBox("启用策略提醒")
+        strategy_left.addWidget(self.chk_strategy_enabled)
+        self.list_strategy_positions = QListWidget()
+        self.list_strategy_positions.setFixedWidth(170)
+        strategy_left.addWidget(self.list_strategy_positions)
+        strategy_btns = QHBoxLayout()
+        self.btn_strategy_add = QPushButton("添加持仓")
+        self.btn_strategy_del = QPushButton("删除持仓")
+        self.btn_strategy_add.setFixedWidth(76)
+        self.btn_strategy_del.setFixedWidth(76)
+        strategy_btns.addWidget(self.btn_strategy_add)
+        strategy_btns.addWidget(self.btn_strategy_del)
+        strategy_left.addLayout(strategy_btns)
+        lay_strategy_positions.addLayout(strategy_left)
+
+        form_strategy_position = QGridLayout()
+        form_strategy_position.setHorizontalSpacing(6)
+        form_strategy_position.setVerticalSpacing(6)
+        self.edit_strategy_code = QLineEdit()
+        self.spin_strategy_cost = QDoubleSpinBox()
+        self.spin_strategy_cost.setRange(0.0, 99999.999)
+        self.spin_strategy_cost.setDecimals(3)
+        self.edit_strategy_buy_date = QLineEdit()
+        self.edit_strategy_buy_date.setPlaceholderText("YYYY-MM-DD")
+        self.spin_strategy_position_pct = QDoubleSpinBox()
+        self.spin_strategy_position_pct.setRange(0.0, 100.0)
+        self.spin_strategy_position_pct.setDecimals(1)
+        self.spin_strategy_position_pct.setSuffix("%")
+        self.edit_strategy_note = QLineEdit()
+        form_strategy_position.addWidget(QLabel("代码："), 0, 0)
+        form_strategy_position.addWidget(self.edit_strategy_code, 0, 1)
+        form_strategy_position.addWidget(QLabel("买入价："), 0, 2)
+        form_strategy_position.addWidget(self.spin_strategy_cost, 0, 3)
+        form_strategy_position.addWidget(QLabel("买入日期："), 1, 0)
+        form_strategy_position.addWidget(self.edit_strategy_buy_date, 1, 1)
+        form_strategy_position.addWidget(QLabel("仓位："), 1, 2)
+        form_strategy_position.addWidget(self.spin_strategy_position_pct, 1, 3)
+        form_strategy_position.addWidget(QLabel("备注："), 2, 0)
+        form_strategy_position.addWidget(self.edit_strategy_note, 2, 1, 1, 3)
+        lay_strategy_positions.addLayout(form_strategy_position, 1)
+        strategy_settings.addWidget(g_strategy_positions)
+
+        g_strategy_rules = QGroupBox("策略规则")
+        g_strategy_rules.setContentsMargins(3,12,3,6)
+        rules = QGridLayout(g_strategy_rules)
+        rules.setHorizontalSpacing(6)
+        rules.setVerticalSpacing(6)
+        self.chk_strategy_loss = QCheckBox("浮亏达到")
+        self.spin_strategy_loss = QDoubleSpinBox()
+        self.spin_strategy_loss.setRange(0.0, 100.0)
+        self.spin_strategy_loss.setDecimals(1)
+        self.spin_strategy_loss.setSuffix("%")
+        self.chk_strategy_stock_ma5 = QCheckBox("个股破5日线提醒卖出")
+        self.chk_strategy_index_ma5 = QCheckBox("大盘破5日线提醒全仓卖出")
+        self.chk_strategy_index_ma10 = QCheckBox("大盘破10日线提醒全仓卖出")
+        self.chk_strategy_trailing = QCheckBox("阶梯移动止盈")
+        self.spin_strategy_tier_profit = []
+        self.spin_strategy_tier_lock = []
+        for _ in range(3):
+            p = QDoubleSpinBox()
+            p.setRange(0.0, 1000.0)
+            p.setDecimals(1)
+            p.setSuffix("%")
+            l = QDoubleSpinBox()
+            l.setRange(0.0, 1000.0)
+            l.setDecimals(1)
+            l.setSuffix("%")
+            self.spin_strategy_tier_profit.append(p)
+            self.spin_strategy_tier_lock.append(l)
+        self.chk_strategy_skip_volume_drop = QCheckBox("放量大跌当日不提升止盈线")
+        self.chk_strategy_reduce_half = QCheckBox("盈利达到")
+        self.spin_strategy_reduce_half = QDoubleSpinBox()
+        self.spin_strategy_reduce_half.setRange(0.0, 1000.0)
+        self.spin_strategy_reduce_half.setDecimals(1)
+        self.spin_strategy_reduce_half.setSuffix("%")
+        self.spin_strategy_max_position = QDoubleSpinBox()
+        self.spin_strategy_max_position.setRange(0.0, 100.0)
+        self.spin_strategy_max_position.setDecimals(1)
+        self.spin_strategy_max_position.setSuffix("%")
+        self.chk_strategy_block_heavy = QCheckBox("大盘5日线向下禁止新开重仓")
+        self.chk_strategy_stale = QCheckBox("持仓满")
+        self.spin_strategy_stale_days = QSpinBox()
+        self.spin_strategy_stale_days.setRange(1, 3650)
+
+        rules.addWidget(self.chk_strategy_loss, 0, 0)
+        rules.addWidget(self.spin_strategy_loss, 0, 1)
+        rules.addWidget(QLabel("提醒清仓"), 0, 2)
+        rules.addWidget(self.chk_strategy_stock_ma5, 1, 0, 1, 3)
+        rules.addWidget(self.chk_strategy_index_ma5, 2, 0, 1, 3)
+        rules.addWidget(self.chk_strategy_index_ma10, 3, 0, 1, 3)
+        rules.addWidget(self.chk_strategy_trailing, 4, 0, 1, 3)
+        for i, (profit, lock) in enumerate(zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock), start=5):
+            rules.addWidget(QLabel(f"盈利第{i - 4}档："), i, 0)
+            rules.addWidget(profit, i, 1)
+            rules.addWidget(QLabel("锁定"), i, 2)
+            rules.addWidget(lock, i, 3)
+        rules.addWidget(self.chk_strategy_skip_volume_drop, 8, 0, 1, 4)
+        rules.addWidget(self.chk_strategy_reduce_half, 9, 0)
+        rules.addWidget(self.spin_strategy_reduce_half, 9, 1)
+        rules.addWidget(QLabel("提醒减半仓"), 9, 2)
+        rules.addWidget(QLabel("单票仓位上限："), 10, 0)
+        rules.addWidget(self.spin_strategy_max_position, 10, 1)
+        rules.addWidget(self.chk_strategy_block_heavy, 10, 2, 1, 2)
+        rules.addWidget(self.chk_strategy_stale, 11, 0)
+        rules.addWidget(self.spin_strategy_stale_days, 11, 1)
+        rules.addWidget(QLabel("天不上涨提醒卖出"), 11, 2, 1, 2)
+        strategy_settings.addWidget(g_strategy_rules)
+        strategy_settings.addStretch(1)
+
+        self._loading_strategy_editor = False
+        self._load_strategy_config()
+        self.tabs.addTab(tab_strategy, "策略")
+
         # ---- 第四页 ----
         tab_2 = QWidget()
         appearance_settings = QVBoxLayout(tab_2)
@@ -563,6 +689,36 @@ class SettingsDialog(QDialog):
         self.cmb_price_alert_direction.currentIndexChanged.connect(self._on_price_alert_editor_changed)
         self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
         self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
+        self.chk_strategy_enabled.toggled.connect(self._on_strategy_config_changed)
+        self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
+        self.btn_strategy_add.clicked.connect(self._add_strategy_position)
+        self.btn_strategy_del.clicked.connect(self._del_strategy_position)
+        self.edit_strategy_code.editingFinished.connect(self._on_strategy_position_editor_changed)
+        self.spin_strategy_cost.valueChanged.connect(self._on_strategy_position_editor_changed)
+        self.edit_strategy_buy_date.editingFinished.connect(self._on_strategy_position_editor_changed)
+        self.spin_strategy_position_pct.valueChanged.connect(self._on_strategy_position_editor_changed)
+        self.edit_strategy_note.editingFinished.connect(self._on_strategy_position_editor_changed)
+        for checkbox in (
+            self.chk_strategy_loss,
+            self.chk_strategy_stock_ma5,
+            self.chk_strategy_index_ma5,
+            self.chk_strategy_index_ma10,
+            self.chk_strategy_trailing,
+            self.chk_strategy_skip_volume_drop,
+            self.chk_strategy_reduce_half,
+            self.chk_strategy_block_heavy,
+            self.chk_strategy_stale,
+        ):
+            checkbox.toggled.connect(self._on_strategy_config_changed)
+        for spin in (
+            self.spin_strategy_loss,
+            self.spin_strategy_reduce_half,
+            self.spin_strategy_max_position,
+            self.spin_strategy_stale_days,
+            *self.spin_strategy_tier_profit,
+            *self.spin_strategy_tier_lock,
+        ):
+            spin.valueChanged.connect(self._on_strategy_config_changed)
         self.chk_warning_visible.toggled.connect(self._on_warning_changed)
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
@@ -1062,6 +1218,164 @@ class SettingsDialog(QDialog):
             alerts.pop(row)
         self.win.set_price_alerts(alerts)
         self._load_price_alert_list(max(0, row - 1))
+
+    # —— 策略提醒 —— #
+    def _format_strategy_position(self, position):
+        code = position.get("code", "")
+        cost = float(position.get("cost_price", 0.0))
+        pct = float(position.get("position_pct", 0.0))
+        date = position.get("buy_date", "")
+        date_part = f" {date}" if date else ""
+        return f"{code} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
+
+    def _load_strategy_config(self, current_row=0):
+        self._strategy_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
+        rules = self._strategy_config["rules"]
+        self._loading_strategy_editor = True
+        try:
+            self.chk_strategy_enabled.setChecked(bool(self._strategy_config.get("enabled")))
+            self.chk_strategy_loss.setChecked(bool(rules.get("max_loss_enabled")))
+            self.spin_strategy_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
+            self.chk_strategy_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
+            self.chk_strategy_index_ma5.setChecked(bool(rules.get("index_ma5_break_enabled")))
+            self.chk_strategy_index_ma10.setChecked(bool(rules.get("index_ma10_break_enabled")))
+            self.chk_strategy_trailing.setChecked(bool(rules.get("trailing_profit_enabled")))
+            tiers = rules.get("trailing_tiers", [])
+            for i, (profit, lock) in enumerate(zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock)):
+                tier = tiers[i] if i < len(tiers) else {}
+                profit.setValue(float(tier.get("profit_pct", 0.0)))
+                lock.setValue(float(tier.get("lock_pct", 0.0)))
+            self.chk_strategy_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
+            self.chk_strategy_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
+            self.spin_strategy_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
+            self.spin_strategy_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
+            self.chk_strategy_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
+            self.chk_strategy_stale.setChecked(bool(rules.get("stale_position_enabled")))
+            self.spin_strategy_stale_days.setValue(int(rules.get("stale_position_days", 12)))
+
+            self.list_strategy_positions.blockSignals(True)
+            self.list_strategy_positions.clear()
+            for position in self._strategy_config.get("positions", []):
+                item = QListWidgetItem(self._format_strategy_position(position))
+                item.setData(Qt.UserRole, position)
+                self.list_strategy_positions.addItem(item)
+            self.list_strategy_positions.blockSignals(False)
+            if self.list_strategy_positions.count() > 0:
+                self.list_strategy_positions.setCurrentRow(max(0, min(current_row, self.list_strategy_positions.count() - 1)))
+                self._on_strategy_position_selected(self.list_strategy_positions.currentRow())
+            else:
+                self._clear_strategy_position_editor()
+        finally:
+            self._loading_strategy_editor = False
+
+    def _current_strategy_position_row(self):
+        row = self.list_strategy_positions.currentRow()
+        positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        return row if 0 <= row < len(positions) else -1
+
+    def _clear_strategy_position_editor(self):
+        self.edit_strategy_code.clear()
+        self.spin_strategy_cost.setValue(0.0)
+        self.edit_strategy_buy_date.clear()
+        self.spin_strategy_position_pct.setValue(0.0)
+        self.edit_strategy_note.clear()
+
+    def _on_strategy_position_selected(self, row: int):
+        positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        if row < 0 or row >= len(positions):
+            self._clear_strategy_position_editor()
+            return
+        position = normalize_strategy_position(positions[row]) or {}
+        self._loading_strategy_editor = True
+        try:
+            self.edit_strategy_code.setText(position.get("code", ""))
+            self.spin_strategy_cost.setValue(float(position.get("cost_price", 0.0)))
+            self.edit_strategy_buy_date.setText(position.get("buy_date", ""))
+            self.spin_strategy_position_pct.setValue(float(position.get("position_pct", 0.0)))
+            self.edit_strategy_note.setText(position.get("note", ""))
+        finally:
+            self._loading_strategy_editor = False
+
+    def _collect_strategy_rules_from_editor(self):
+        return {
+            "max_loss_enabled": self.chk_strategy_loss.isChecked(),
+            "max_loss_pct": self.spin_strategy_loss.value(),
+            "stock_ma5_break_enabled": self.chk_strategy_stock_ma5.isChecked(),
+            "index_ma5_break_enabled": self.chk_strategy_index_ma5.isChecked(),
+            "index_ma10_break_enabled": self.chk_strategy_index_ma10.isChecked(),
+            "trailing_profit_enabled": self.chk_strategy_trailing.isChecked(),
+            "trailing_tiers": [
+                {"profit_pct": profit.value(), "lock_pct": lock.value()}
+                for profit, lock in zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock)
+            ],
+            "skip_raise_on_volume_drop": self.chk_strategy_skip_volume_drop.isChecked(),
+            "reduce_half_enabled": self.chk_strategy_reduce_half.isChecked(),
+            "reduce_half_profit_pct": self.spin_strategy_reduce_half.value(),
+            "max_position_pct": self.spin_strategy_max_position.value(),
+            "block_heavy_position_on_index_ma5_down": self.chk_strategy_block_heavy.isChecked(),
+            "stale_position_enabled": self.chk_strategy_stale.isChecked(),
+            "stale_position_days": self.spin_strategy_stale_days.value(),
+        }
+
+    def _collect_strategy_config_from_editor(self):
+        return normalize_strategy_alert_config({
+            "enabled": self.chk_strategy_enabled.isChecked(),
+            "positions": list(getattr(self, "_strategy_config", {}).get("positions", [])),
+            "rules": self._collect_strategy_rules_from_editor(),
+        })
+
+    def _on_strategy_config_changed(self, *_args):
+        if getattr(self, "_loading_strategy_editor", False):
+            return
+        self._strategy_config = self._collect_strategy_config_from_editor()
+        self.win.set_strategy_alert_config(self._strategy_config)
+
+    def _on_strategy_position_editor_changed(self, *_args):
+        if getattr(self, "_loading_strategy_editor", False):
+            return
+        row = self._current_strategy_position_row()
+        if row < 0:
+            return
+        position = normalize_strategy_position({
+            "code": self.edit_strategy_code.text(),
+            "cost_price": self.spin_strategy_cost.value(),
+            "buy_date": self.edit_strategy_buy_date.text(),
+            "position_pct": self.spin_strategy_position_pct.value(),
+            "note": self.edit_strategy_note.text(),
+        })
+        if not position:
+            return
+        self._strategy_config["positions"][row] = position
+        item = self.list_strategy_positions.item(row)
+        if item:
+            item.setText(self._format_strategy_position(position))
+            item.setData(Qt.UserRole, position)
+        self._on_strategy_config_changed()
+
+    def _add_strategy_position(self):
+        config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
+        default_code = self.win.codes[0] if getattr(self.win, "codes", []) else "sh000001"
+        config["positions"].append({
+            "code": default_code,
+            "cost_price": 0.0,
+            "buy_date": "",
+            "position_pct": 0.0,
+            "note": "",
+        })
+        self.win.set_strategy_alert_config(config)
+        self._strategy_config = config
+        self._load_strategy_config(len(config["positions"]) - 1)
+
+    def _del_strategy_position(self):
+        row = self._current_strategy_position_row()
+        if row < 0:
+            return
+        config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
+        if 0 <= row < len(config["positions"]):
+            config["positions"].pop(row)
+        self.win.set_strategy_alert_config(config)
+        self._strategy_config = config
+        self._load_strategy_config(max(0, row - 1))
 
     def _on_warning_changed(self, *_args):
         self.win.set_warning(self.chk_warning_visible.isChecked(), self.edit_warning_text.text())
