@@ -2,7 +2,7 @@ import json
 import os, re
 from functools import partial
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
@@ -428,10 +428,13 @@ class SettingsDialog(QDialog):
         strategy_btns = QHBoxLayout()
         self.btn_strategy_add = QPushButton("添加持仓")
         self.btn_strategy_del = QPushButton("删除持仓")
+        self.btn_strategy_save = QPushButton("保存当前持仓")
         self.btn_strategy_add.setFixedWidth(76)
         self.btn_strategy_del.setFixedWidth(76)
+        self.btn_strategy_save.setFixedWidth(100)
         strategy_btns.addWidget(self.btn_strategy_add)
         strategy_btns.addWidget(self.btn_strategy_del)
+        strategy_btns.addWidget(self.btn_strategy_save)
         strategy_left.addLayout(strategy_btns)
         lay_strategy_positions.addLayout(strategy_left)
 
@@ -462,7 +465,7 @@ class SettingsDialog(QDialog):
         lay_strategy_positions.addLayout(form_strategy_position, 1)
         strategy_settings.addWidget(g_strategy_positions)
 
-        g_strategy_rules = QGroupBox("策略规则")
+        g_strategy_rules = QGroupBox("策略规则（当前持仓）")
         g_strategy_rules.setContentsMargins(3,12,3,6)
         g_strategy_rules.setMinimumHeight(275)
         rules = QGridLayout(g_strategy_rules)
@@ -540,9 +543,11 @@ class SettingsDialog(QDialog):
         self.cmb_strategy_remote_channel = QComboBox()
         self.cmb_strategy_remote_channel.addItem("企业微信机器人", userData="wecom")
         self.cmb_strategy_remote_channel.addItem("自定义Webhook", userData="custom")
+        self.cmb_strategy_remote_channel.setFixedWidth(280)
         self.edit_strategy_webhook = QLineEdit()
         self.edit_strategy_webhook.setPlaceholderText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
-        self.edit_strategy_webhook.setMinimumWidth(320)
+        self.edit_strategy_webhook.setMinimumWidth(240)
+        self.edit_strategy_webhook.setFixedWidth(280)
         self.btn_strategy_push_test = QPushButton("测试推送")
         self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
@@ -746,6 +751,7 @@ class SettingsDialog(QDialog):
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
         self.btn_strategy_add.clicked.connect(self._add_strategy_position)
         self.btn_strategy_del.clicked.connect(self._del_strategy_position)
+        self.btn_strategy_save.clicked.connect(self._save_strategy_position)
         self.edit_strategy_code.editingFinished.connect(self._on_strategy_position_editor_changed)
         self.spin_strategy_cost.valueChanged.connect(self._on_strategy_position_editor_changed)
         self.edit_strategy_buy_date.editingFinished.connect(self._on_strategy_position_editor_changed)
@@ -1341,6 +1347,36 @@ class SettingsDialog(QDialog):
         self.spin_strategy_position_pct.setValue(0.0)
         self.edit_strategy_note.clear()
 
+    def _current_strategy_rules(self):
+        row = self._current_strategy_position_row()
+        positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        if 0 <= row < len(positions) and isinstance(positions[row].get("rules"), dict) and positions[row].get("rules"):
+            rules = dict(self._strategy_config.get("rules", {}))
+            rules.update(positions[row].get("rules", {}))
+            return rules
+        return dict(getattr(self, "_strategy_config", {}).get("rules", {}))
+
+    def _load_strategy_rules(self, rules):
+        rules = rules or {}
+        self.chk_strategy_loss.setChecked(bool(rules.get("max_loss_enabled")))
+        self.spin_strategy_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
+        self.chk_strategy_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
+        self.chk_strategy_index_ma5.setChecked(bool(rules.get("index_ma5_break_enabled")))
+        self.chk_strategy_index_ma10.setChecked(bool(rules.get("index_ma10_break_enabled")))
+        self.chk_strategy_trailing.setChecked(bool(rules.get("trailing_profit_enabled")))
+        tiers = rules.get("trailing_tiers", [])
+        for i, (profit, lock) in enumerate(zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock)):
+            tier = tiers[i] if i < len(tiers) else {}
+            profit.setValue(float(tier.get("profit_pct", 0.0)))
+            lock.setValue(float(tier.get("lock_pct", 0.0)))
+        self.chk_strategy_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
+        self.chk_strategy_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
+        self.spin_strategy_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
+        self.spin_strategy_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
+        self.chk_strategy_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
+        self.chk_strategy_stale.setChecked(bool(rules.get("stale_position_enabled")))
+        self.spin_strategy_stale_days.setValue(int(rules.get("stale_position_days", 12)))
+
     def _on_strategy_position_selected(self, row: int):
         positions = getattr(self, "_strategy_config", {}).get("positions", [])
         if row < 0 or row >= len(positions):
@@ -1354,8 +1390,12 @@ class SettingsDialog(QDialog):
             self.edit_strategy_buy_date.setText(position.get("buy_date", ""))
             self.spin_strategy_position_pct.setValue(float(position.get("position_pct", 0.0)))
             self.edit_strategy_note.setText(position.get("note", ""))
+            rules = dict(self._strategy_config.get("rules", {}))
+            rules.update(position.get("rules") or {})
+            self._load_strategy_rules(rules)
         finally:
             self._loading_strategy_editor = False
+        self._refresh_strategy_preview()
 
     def _collect_strategy_rules_from_editor(self):
         return {
@@ -1379,9 +1419,16 @@ class SettingsDialog(QDialog):
         }
 
     def _collect_strategy_config_from_editor(self):
+        rules = self._collect_strategy_rules_from_editor()
+        positions = list(getattr(self, "_strategy_config", {}).get("positions", []))
+        row = self._current_strategy_position_row()
+        if 0 <= row < len(positions):
+            position = dict(positions[row])
+            position["rules"] = rules
+            positions[row] = position
         return normalize_strategy_alert_config({
             "enabled": self.chk_strategy_enabled.isChecked(),
-            "positions": list(getattr(self, "_strategy_config", {}).get("positions", [])),
+            "positions": positions,
             "notifications": {
                 "desktop_popup": self.chk_strategy_notify_desktop.isChecked(),
                 "panel_highlight": self.chk_strategy_notify_panel.isChecked(),
@@ -1389,7 +1436,7 @@ class SettingsDialog(QDialog):
                 "remote_channel": self.cmb_strategy_remote_channel.currentData() or "wecom",
                 "webhook_url": self.edit_strategy_webhook.text().strip(),
             },
-            "rules": self._collect_strategy_rules_from_editor(),
+            "rules": rules,
         })
 
     def _on_strategy_config_changed(self, *_args):
@@ -1399,11 +1446,19 @@ class SettingsDialog(QDialog):
         self._refresh_strategy_preview()
         self.win.set_strategy_alert_config(self._strategy_config)
 
+    def _save_strategy_position(self):
+        if self._current_strategy_position_row() < 0:
+            return
+        self._on_strategy_position_editor_changed()
+        self._on_strategy_config_changed()
+        self.btn_strategy_save.setText("已保存")
+        QTimer.singleShot(1200, lambda: self.btn_strategy_save.setText("保存当前持仓"))
+
     def _refresh_strategy_preview(self):
         if not hasattr(self, "list_strategy_preview"):
             return
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
-        rules = config["rules"]
+        rules = self._current_strategy_rules()
         notifications = config["notifications"]
         channels = []
         if notifications.get("desktop_popup"):
@@ -1461,6 +1516,7 @@ class SettingsDialog(QDialog):
             "buy_date": self.edit_strategy_buy_date.text(),
             "position_pct": self.spin_strategy_position_pct.value(),
             "note": self.edit_strategy_note.text(),
+            "rules": self._strategy_config["positions"][row].get("rules", {}),
         })
         if not position:
             return

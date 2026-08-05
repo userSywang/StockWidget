@@ -335,6 +335,7 @@ def normalize_strategy_position(position):
     code = normalize_code_or_none(position.get("code"))
     if not code:
         return None
+    position_rules = position.get("rules") if isinstance(position.get("rules"), dict) else None
     return {
         "code": code,
         "cost_price": _bounded_float(position.get("cost_price"), 0.0, 0.0, 99999.999),
@@ -343,6 +344,7 @@ def normalize_strategy_position(position):
         "peak_profit_pct": _bounded_float(position.get("peak_profit_pct"), 0.0, -100.0, 10000.0),
         "locked_profit_pct": _bounded_float(position.get("locked_profit_pct"), 0.0, 0.0, 10000.0),
         "note": str(position.get("note") or "").strip(),
+        "rules": dict(position_rules) if position_rules is not None else {},
     }
 
 
@@ -413,8 +415,17 @@ def strategy_request_codes(config):
 def strategy_daily_request_codes(config):
     config = normalize_strategy_alert_config(config)
     codes = strategy_request_codes(config)
-    rules = config.get("rules", {})
-    if rules.get("index_ma5_break_enabled") or rules.get("index_ma10_break_enabled") or rules.get("block_heavy_position_on_index_ma5_down"):
+    rules_list = [config.get("rules", {})]
+    for position in config.get("positions", []):
+        merged = dict(config.get("rules", {}))
+        merged.update(position.get("rules") or {})
+        rules_list.append(merged)
+    if any(
+        rules.get("index_ma5_break_enabled")
+        or rules.get("index_ma10_break_enabled")
+        or rules.get("block_heavy_position_on_index_ma5_down")
+        for rules in rules_list
+    ):
         codes.extend(["sh000001", "sz399001"])
     return normalize_codes(codes)
 
@@ -528,6 +539,8 @@ def update_strategy_position_state(config, quotes):
     positions = []
     for position in config.get("positions", []):
         item = dict(position)
+        position_rules = dict(rules)
+        position_rules.update(item.get("rules") or {})
         quote = (quotes or {}).get(item["code"]) or {}
         cost = float(item.get("cost_price", 0.0))
         try:
@@ -537,7 +550,7 @@ def update_strategy_position_state(config, quotes):
         if cost > 0 and price > 0:
             profit_pct = round((price / cost - 1.0) * 100.0, 4)
             peak_pct = max(float(item.get("peak_profit_pct", 0.0)), profit_pct)
-            lock_pct = max(float(item.get("locked_profit_pct", 0.0)), trailing_lock_pct(rules, peak_pct))
+            lock_pct = max(float(item.get("locked_profit_pct", 0.0)), trailing_lock_pct(position_rules, peak_pct))
             if abs(peak_pct - float(item.get("peak_profit_pct", 0.0))) > 0.0001:
                 item["peak_profit_pct"] = round(peak_pct, 4)
                 changed = True
@@ -549,47 +562,43 @@ def update_strategy_position_state(config, quotes):
     return config, changed
 
 
+def _strategy_index_status(rules, quotes, daily_by_code):
+    breaks = []
+    errors = []
+    for enabled, days in ((rules.get("index_ma5_break_enabled"), 5), (rules.get("index_ma10_break_enabled"), 10)):
+        if not enabled:
+            continue
+        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+            error_text = daily_error_text(daily_by_code.get(index_code))
+            if error_text:
+                item = f"{label}{error_text}"
+                if item not in errors:
+                    errors.append(item)
+                continue
+            index_quote = (quotes or {}).get(index_code) or {}
+            try:
+                index_price = float(index_quote.get("price", 0.0))
+            except Exception:
+                index_price = 0.0
+            average = moving_average(daily_by_code.get(index_code), days)
+            if index_price > 0 and average and index_price < average:
+                breaks.append(f"{label}破{days}日线")
+    return breaks, errors
+
+
 def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
     config = normalize_strategy_alert_config(config)
     if not config.get("enabled"):
         return []
     rules = config["rules"]
     daily_by_code = daily_by_code or {}
-    index_breaks = []
-    index_daily_errors = []
-    if rules.get("index_ma5_break_enabled"):
-        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
-            error_text = daily_error_text(daily_by_code.get(index_code))
-            if error_text:
-                index_daily_errors.append(f"{label}{error_text}")
-                continue
-            index_quote = (quotes or {}).get(index_code) or {}
-            try:
-                index_price = float(index_quote.get("price", 0.0))
-            except Exception:
-                index_price = 0.0
-            ma5 = moving_average(daily_by_code.get(index_code), 5)
-            if index_price > 0 and ma5 and index_price < ma5:
-                index_breaks.append(f"{label}破5日线")
-    if rules.get("index_ma10_break_enabled"):
-        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
-            error_text = daily_error_text(daily_by_code.get(index_code))
-            if error_text:
-                if f"{label}{error_text}" not in index_daily_errors:
-                    index_daily_errors.append(f"{label}{error_text}")
-                continue
-            index_quote = (quotes or {}).get(index_code) or {}
-            try:
-                index_price = float(index_quote.get("price", 0.0))
-            except Exception:
-                index_price = 0.0
-            ma10 = moving_average(daily_by_code.get(index_code), 10)
-            if index_price > 0 and ma10 and index_price < ma10:
-                index_breaks.append(f"{label}破10日线")
     index_ma5_down = any(ma_is_down(daily_by_code.get(code), 5) for code in ("sh000001", "sz399001"))
 
     states = []
     for position in config.get("positions", []):
+        rules = dict(config["rules"])
+        rules.update(position.get("rules") or {})
+        index_breaks, index_daily_errors = _strategy_index_status(rules, quotes, daily_by_code)
         quote = (quotes or {}).get(position["code"]) or {}
         name = str(quote.get("name") or position["code"])
         cost = float(position.get("cost_price", 0.0))

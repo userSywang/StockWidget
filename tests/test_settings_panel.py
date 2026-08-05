@@ -284,6 +284,26 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"], [])
         dlg.close()
 
+    def test_strategy_rules_follow_selected_position_and_save_to_position(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [
+                {"code": "sh512000", "cost_price": 1.0, "rules": {"max_loss_pct": 4.0}},
+                {"code": "sh000001", "cost_price": 2.0, "rules": {"max_loss_pct": 8.0}},
+            ],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(1)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 8.0)
+
+        dlg.spin_strategy_loss.setValue(9.0)
+        dlg._save_strategy_position()
+
+        self.assertEqual(win.strategy_alert_config["positions"][1]["rules"]["max_loss_pct"], 9.0)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 4.0)
+        dlg.close()
+
     def test_strategy_rule_controls_do_not_overlap_after_show(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

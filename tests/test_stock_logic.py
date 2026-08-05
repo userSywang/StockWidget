@@ -185,6 +185,22 @@ class StockLogicTests(unittest.TestCase):
         self.assertTrue(states[0]["triggered"])
         self.assertIn("触发锁盈10%", states[0]["status"])
 
+    def test_strategy_position_rules_override_global_rules(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "positions": [{
+                "code": "603259",
+                "cost_price": 100.0,
+                "rules": {"max_loss_enabled": True, "max_loss_pct": 10.0},
+            }],
+        })
+
+        states = evaluate_strategy_alerts(config, {"sh603259": {"price": 94.0}})
+
+        self.assertFalse(states[0]["triggered"])
+        self.assertEqual(config["positions"][0]["rules"]["max_loss_pct"], 10.0)
+
     def test_strategy_daily_request_codes_include_market_indexes(self):
         codes = strategy_daily_request_codes({
             "enabled": True,

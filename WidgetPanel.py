@@ -1190,6 +1190,10 @@ class FloatLabel(QWidget):
                 if code in row_by_code:
                     full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code))
                     meta = dict(sign_by_code.get(code, {}))
+                    strategy_state = strategy_by_code.get(code)
+                    if strategy_state:
+                        meta["strategy"] = True
+                        meta["severity"] = strategy_state.get("severity", "neutral")
                     if code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
                     meta_rows.append(meta)
