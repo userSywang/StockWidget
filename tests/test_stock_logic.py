@@ -9,6 +9,8 @@ from StockLogic import (
     normalize_price_alert,
     normalize_groups,
     normalize_strategy_alert_config,
+    update_strategy_position_state,
+    evaluate_strategy_alerts,
 )
 
 
@@ -158,6 +160,21 @@ class StockLogicTests(unittest.TestCase):
         self.assertTrue(config["notifications"]["remote_push"])
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
+
+    def test_strategy_trailing_profit_locks_to_lower_profit_line(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0, "position_pct": 20.0}],
+        })
+
+        updated, changed = update_strategy_position_state(config, {"sh603259": {"price": 120.0, "name": "药明康德"}})
+        states = evaluate_strategy_alerts(updated, {"sh603259": {"price": 109.0, "name": "药明康德"}})
+
+        self.assertTrue(changed)
+        self.assertEqual(updated["positions"][0]["peak_profit_pct"], 20.0)
+        self.assertEqual(updated["positions"][0]["locked_profit_pct"], 10.0)
+        self.assertTrue(states[0]["triggered"])
+        self.assertIn("触发锁盈10%", states[0]["status"])
 
 
 if __name__ == "__main__":

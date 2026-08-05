@@ -80,6 +80,11 @@ class SimpleTableModel(QAbstractTableModel):
                 c = QColor(self.fg_color)
                 c.setAlpha(0)
                 return c
+            if meta.get("strategy"):
+                if meta.get("severity") == "danger":
+                    return UP_COLOR
+                if meta.get("severity") == "warning":
+                    return QColor("#f0c36a")
 
             if not self.default_color:
                 return self.fg_color

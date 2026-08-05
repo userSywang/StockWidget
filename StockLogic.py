@@ -338,6 +338,8 @@ def normalize_strategy_position(position):
         "cost_price": _bounded_float(position.get("cost_price"), 0.0, 0.0, 99999.999),
         "buy_date": str(position.get("buy_date") or "").strip(),
         "position_pct": _bounded_float(position.get("position_pct"), 0.0, 0.0, 100.0),
+        "peak_profit_pct": _bounded_float(position.get("peak_profit_pct"), 0.0, -100.0, 10000.0),
+        "locked_profit_pct": _bounded_float(position.get("locked_profit_pct"), 0.0, 0.0, 10000.0),
         "note": str(position.get("note") or "").strip(),
     }
 
@@ -397,3 +399,112 @@ def normalize_strategy_alert_config(config):
             "stale_position_days": _bounded_int(source_rules.get("stale_position_days"), default_rules["stale_position_days"], 1, 3650),
         },
     }
+
+
+def strategy_request_codes(config):
+    config = normalize_strategy_alert_config(config)
+    return normalize_codes(position.get("code") for position in config.get("positions", []))
+
+
+def trailing_lock_pct(rules, peak_profit_pct):
+    if not rules.get("trailing_profit_enabled"):
+        return 0.0
+    lock_pct = 0.0
+    for tier in rules.get("trailing_tiers", []):
+        if float(peak_profit_pct) >= float(tier.get("profit_pct", 0.0)):
+            lock_pct = max(lock_pct, float(tier.get("lock_pct", 0.0)))
+    return lock_pct
+
+
+def update_strategy_position_state(config, quotes):
+    config = normalize_strategy_alert_config(config)
+    if not config.get("enabled"):
+        return config, False
+    changed = False
+    rules = config["rules"]
+    positions = []
+    for position in config.get("positions", []):
+        item = dict(position)
+        quote = (quotes or {}).get(item["code"]) or {}
+        cost = float(item.get("cost_price", 0.0))
+        try:
+            price = float(quote.get("price", 0.0))
+        except Exception:
+            price = 0.0
+        if cost > 0 and price > 0:
+            profit_pct = round((price / cost - 1.0) * 100.0, 4)
+            peak_pct = max(float(item.get("peak_profit_pct", 0.0)), profit_pct)
+            lock_pct = max(float(item.get("locked_profit_pct", 0.0)), trailing_lock_pct(rules, peak_pct))
+            if abs(peak_pct - float(item.get("peak_profit_pct", 0.0))) > 0.0001:
+                item["peak_profit_pct"] = round(peak_pct, 4)
+                changed = True
+            if abs(lock_pct - float(item.get("locked_profit_pct", 0.0))) > 0.0001:
+                item["locked_profit_pct"] = round(lock_pct, 4)
+                changed = True
+        positions.append(item)
+    config["positions"] = positions
+    return config, changed
+
+
+def evaluate_strategy_alerts(config, quotes):
+    config = normalize_strategy_alert_config(config)
+    if not config.get("enabled"):
+        return []
+    rules = config["rules"]
+    states = []
+    for position in config.get("positions", []):
+        quote = (quotes or {}).get(position["code"]) or {}
+        name = str(quote.get("name") or position["code"])
+        cost = float(position.get("cost_price", 0.0))
+        try:
+            price = float(quote.get("price", 0.0))
+        except Exception:
+            price = 0.0
+        if cost <= 0 or price <= 0:
+            states.append({
+                "code": position["code"],
+                "name": name,
+                "profit_pct": None,
+                "locked_profit_pct": float(position.get("locked_profit_pct", 0.0)),
+                "triggered": False,
+                "severity": "neutral",
+                "status": "等待价格",
+            })
+            continue
+
+        profit_pct = round((price / cost - 1.0) * 100.0, 4)
+        lock_pct = float(position.get("locked_profit_pct", 0.0))
+        status_parts = []
+        triggered = False
+        severity = "neutral"
+        if rules.get("max_loss_enabled") and profit_pct <= -float(rules.get("max_loss_pct", 0.0)):
+            status_parts.append("触发止损")
+            triggered = True
+            severity = "danger"
+        if lock_pct > 0:
+            if profit_pct <= lock_pct:
+                status_parts.append(f"触发锁盈{lock_pct:.0f}%")
+                triggered = True
+                severity = "danger"
+            else:
+                status_parts.append(f"已锁盈{lock_pct:.0f}%")
+        if rules.get("reduce_half_enabled") and profit_pct >= float(rules.get("reduce_half_profit_pct", 0.0)):
+            status_parts.append("减半仓提醒")
+            triggered = True
+            if severity != "danger":
+                severity = "warning"
+        if rules.get("stock_ma5_break_enabled") or rules.get("index_ma5_break_enabled") or rules.get("index_ma10_break_enabled"):
+            status_parts.append("均线待接入")
+        if not status_parts:
+            status_parts.append("未触发")
+
+        states.append({
+            "code": position["code"],
+            "name": name,
+            "profit_pct": profit_pct,
+            "locked_profit_pct": lock_pct,
+            "triggered": triggered,
+            "severity": severity,
+            "status": "，".join(status_parts),
+        })
+    return states

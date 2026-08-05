@@ -140,10 +140,44 @@ class WidgetPanelTests(unittest.TestCase):
         win.checked_codes = ["sh600000"]
         win.market_amount_visible = True
         win._alert_request_codes = lambda: []
+        win._strategy_request_codes = lambda: []
 
         codes = FloatLabel._refresh_request_codes(win)
 
         self.assertEqual(codes, ["sh600000", "sh000001", "sz399001"])
+
+    def test_refresh_request_codes_include_strategy_positions(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000"]
+        win.market_amount_visible = False
+        win._alert_request_codes = lambda: []
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "512000", "cost_price": 1.0}],
+        }
+
+        codes = FloatLabel._refresh_request_codes(win)
+
+        self.assertEqual(codes, ["sh600000", "sh512000"])
+
+    def test_compose_strategy_rows_shows_triggered_status(self):
+        win = FloatLabel.__new__(FloatLabel)
+
+        rows, meta = FloatLabel._compose_strategy_rows(
+            win,
+            [{
+                "name": "券商ETF",
+                "profit_pct": 9.0,
+                "locked_profit_pct": 10.0,
+                "triggered": True,
+                "severity": "danger",
+                "status": "触发锁盈10%",
+            }],
+        )
+
+        self.assertEqual(rows[0], ["券商ETF", "+9.0%", "+10.0%", "触发锁盈10%"])
+        self.assertTrue(meta[0]["triggered"])
+        self.assertEqual(meta[0]["severity"], "danger")
 
     def test_apply_refresh_result_notifies_when_code_names_are_learned(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -172,6 +206,40 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(win.code_names["sh512000"], "券商ETF")
         self.assertEqual(changes, ["saved"])
+
+    def test_apply_refresh_result_projects_strategy_mode(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        win.panel_display_mode = "strategy"
+        win.alert_rules = []
+        win.price_alerts = []
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 100.0, "position_pct": 20.0}],
+        }
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.code_names = {}
+        win._refresh_again_requested = False
+        changes = []
+        win._on_change = lambda: changes.append("saved")
+        projected = []
+        win._project_strategy_columns = lambda rows, meta: projected.append((rows, meta))
+
+        FloatLabel._apply_refresh_result(
+            win,
+            {},
+            {},
+            {"sh603259": {"name": "药明康德", "price": 120.0}},
+            {},
+        )
+
+        self.assertEqual(projected[0][0][0][0], "药明康德")
+        self.assertEqual(projected[0][0][0][1], "+20.0%")
+        self.assertEqual(projected[0][0][0][2], "+10.0%")
+        self.assertIn("已锁盈10%", projected[0][0][0][3])
+        self.assertIn("saved", changes)
 
     def test_column_width_sources_ignore_message_rows(self):
         rows = [
