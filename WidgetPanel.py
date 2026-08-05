@@ -18,6 +18,7 @@ from StockLogic import (
     evaluate_price_alerts,
     evaluate_strategy_alerts,
     flatten_group_codes,
+    moving_average,
     normalize_alert_rules,
     normalize_groups,
     normalize_codes,
@@ -77,7 +78,7 @@ class FloatLabel(QWidget):
         self.alert_rules        = normalize_alert_rules(cfg.get("alert_rules", []))
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
         self.strategy_alert_config = normalize_strategy_alert_config(cfg.get("strategy_alert_config", {}))
-        self.panel_display_mode = cfg.get("panel_display_mode") if cfg.get("panel_display_mode") in ("quotes", "strategy") else "quotes"
+        self.panel_display_mode = "quotes"
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
@@ -96,7 +97,7 @@ class FloatLabel(QWidget):
         self.groups = normalize_groups(groups_cfg, codes_cfg)
         self.codes = flatten_group_codes(self.groups)
         # 列标题列表（提前定义，供后续旧配置解析使用）
-        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
 
         # 列显示标志（独立属性）
         # 解析旧 flags 配置以做回退
@@ -121,6 +122,12 @@ class FloatLabel(QWidget):
         self.amount_visible = bool(cfg.get("amount_visible", old_flags.get("成交额", False)))
         self.avg_visible = bool(cfg.get("avg_visible", old_flags.get("均价", False)))
         self.kline_visible = bool(cfg.get("kline_visible", old_flags.get("K线", False)))
+        self.ma5_visible = bool(cfg.get("ma5_visible", old_flags.get("MA5", False)))
+        self.ma10_visible = bool(cfg.get("ma10_visible", old_flags.get("MA10", False)))
+        self.ma20_visible = bool(cfg.get("ma20_visible", old_flags.get("MA20", False)))
+        self.strategy_profit_visible = bool(cfg.get("strategy_profit_visible", old_flags.get("持仓盈亏", False)))
+        self.strategy_stop_visible = bool(cfg.get("strategy_stop_visible", old_flags.get("止损线", False)))
+        self.strategy_status_visible = bool(cfg.get("strategy_status_visible", old_flags.get("策略状态", False)))
 
         # 设置自选显示股票（新名 checked_codes）
         checked_codes_cfg = checked_codes_cfg or self.codes
@@ -234,7 +241,6 @@ class FloatLabel(QWidget):
             "alert_rules": self.alert_rules,
             "price_alerts": self.price_alerts,
             "strategy_alert_config": self.strategy_alert_config,
-            "panel_display_mode": self.panel_display_mode,
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
@@ -250,6 +256,12 @@ class FloatLabel(QWidget):
             "amount_visible": bool(getattr(self, 'amount_visible', False)),
             "avg_visible": bool(getattr(self, 'avg_visible', False)),
             "kline_visible": bool(getattr(self, 'kline_visible', False)),
+            "ma5_visible": bool(getattr(self, 'ma5_visible', False)),
+            "ma10_visible": bool(getattr(self, 'ma10_visible', False)),
+            "ma20_visible": bool(getattr(self, 'ma20_visible', False)),
+            "strategy_profit_visible": bool(getattr(self, 'strategy_profit_visible', False)),
+            "strategy_stop_visible": bool(getattr(self, 'strategy_stop_visible', False)),
+            "strategy_status_visible": bool(getattr(self, 'strategy_status_visible', False)),
             "short_code": self.short_code,
             "name_length": self.name_length,
             "b1s1_price": (getattr(self, 'b1s1_display', 'qty') == 'price'),
@@ -315,6 +327,18 @@ class FloatLabel(QWidget):
                 return bool(getattr(self, 'avg_visible', False))
             if header == "K线":
                 return bool(getattr(self, 'kline_visible', False))
+            if header == "MA5":
+                return bool(getattr(self, 'ma5_visible', False))
+            if header == "MA10":
+                return bool(getattr(self, 'ma10_visible', False))
+            if header == "MA20":
+                return bool(getattr(self, 'ma20_visible', False))
+            if header == "持仓盈亏":
+                return bool(getattr(self, 'strategy_profit_visible', False))
+            if header == "止损线":
+                return bool(getattr(self, 'strategy_stop_visible', False))
+            if header == "策略状态":
+                return bool(getattr(self, 'strategy_status_visible', False))
         except Exception:
             pass
         return False
@@ -939,6 +963,15 @@ class FloatLabel(QWidget):
             codes.extend(strategy_daily_request_codes(config))
         return normalize_codes(codes)
 
+    def _daily_request_codes(self):
+        codes = []
+        if any(getattr(self, attr, False) for attr in ("ma5_visible", "ma10_visible", "ma20_visible")):
+            codes.extend(getattr(self, "checked_codes", []))
+        config = getattr(self, "strategy_alert_config", {})
+        if normalize_strategy_alert_config(config).get("enabled"):
+            codes.extend(strategy_daily_request_codes(config))
+        return normalize_codes(codes)
+
     def _refresh_request_codes(self):
         return normalize_codes(
             list(getattr(self, "checked_codes", []))
@@ -1127,19 +1160,25 @@ class FloatLabel(QWidget):
     def _get_refresh_data(self, request_codes):
         row_by_code, sign_by_code, quote_by_code = self._get_price(request_codes)
         daily_by_code = {}
-        config = getattr(self, "strategy_alert_config", {})
-        if normalize_strategy_alert_config(config).get("enabled"):
+        daily_codes = self._daily_request_codes()
+        if daily_codes:
             try:
-                daily_by_code = self._get_daily_klines(strategy_daily_request_codes(config), limit=20)
+                daily_by_code = self._get_daily_klines(daily_codes, limit=20)
             except Exception:
                 daily_by_code = {}
         return row_by_code, sign_by_code, quote_by_code, daily_by_code
 
-    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None):
+    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None, daily_by_code=None, strategy_states=None):
         full_rows, meta_rows = [], []
         checked = set(getattr(self, "checked_codes", []))
         alert_rows_added = False
         price_alerts_by_code = price_alerts_by_code or {}
+        daily_by_code = daily_by_code or {}
+        strategy_by_code = {
+            state.get("code"): state
+            for state in (strategy_states or [])
+            if isinstance(state, dict) and state.get("code")
+        }
 
         for group in getattr(self, "groups", []):
             group_codes = [c for c in group.get("codes", []) if c in checked]
@@ -1149,7 +1188,7 @@ class FloatLabel(QWidget):
             meta_rows.append({"row_type": "group", "text": str(group.get("name") or "分组")})
             for code in group_codes:
                 if code in row_by_code:
-                    full_rows.append(row_by_code[code])
+                    full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code))
                     meta = dict(sign_by_code.get(code, {}))
                     if code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
@@ -1186,6 +1225,38 @@ class FloatLabel(QWidget):
             meta_rows.append({"row_type": "warning", "text": text})
 
         return full_rows, meta_rows
+
+    def _display_row_with_indicators(self, row, code, daily_by_code=None, strategy_by_code=None):
+        result = list(row or [])
+        if len(result) < len(self.ALL_HEADERS):
+            result.extend(["-"] * (len(self.ALL_HEADERS) - len(result)))
+        daily_rows = (daily_by_code or {}).get(code)
+        ma_values = {
+            "MA5": moving_average(daily_rows, 5),
+            "MA10": moving_average(daily_rows, 10),
+            "MA20": moving_average(daily_rows, 20),
+        }
+        for header, value in ma_values.items():
+            if header in self.ALL_HEADERS:
+                result[self.ALL_HEADERS.index(header)] = self._format_strategy_price(value)
+
+        state = (strategy_by_code or {}).get(code) or {}
+        strategy_enabled = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {})).get("enabled")
+        if strategy_enabled and state:
+            profit = state.get("profit_pct")
+            values = {
+                "持仓盈亏": "-" if profit is None else f"{float(profit):+.1f}%",
+                "止损线": self._format_strategy_price(state.get("stop_price")),
+                "策略状态": str(state.get("status") or "-"),
+            }
+            for header, value in values.items():
+                if header in self.ALL_HEADERS:
+                    result[self.ALL_HEADERS.index(header)] = value
+        else:
+            for header in ("持仓盈亏", "止损线", "策略状态"):
+                if header in self.ALL_HEADERS:
+                    result[self.ALL_HEADERS.index(header)] = "-"
+        return result
 
     def _compose_strategy_rows(self, strategy_states):
         rows, meta = [], []
@@ -1420,16 +1491,17 @@ class FloatLabel(QWidget):
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
-        if getattr(self, "panel_display_mode", "quotes") == "strategy":
+        config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
+        if config.get("enabled"):
             updated_config, strategy_changed = update_strategy_position_state(self.strategy_alert_config, quote_by_code)
             if strategy_changed:
                 self.strategy_alert_config = updated_config
             strategy_states = evaluate_strategy_alerts(self.strategy_alert_config, quote_by_code, daily_by_code or {})
             self._send_strategy_pushes(strategy_states)
-            full_rows, sign = self._compose_strategy_rows(strategy_states)
         else:
             strategy_changed = False
-            full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code)
+            strategy_states = []
+        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code, daily_by_code, strategy_states)
         self._latest_quotes = quote_by_code
         learned_names = False
         for code, quote in (quote_by_code or {}).items():
@@ -1444,10 +1516,7 @@ class FloatLabel(QWidget):
             self._clear_error()
         except Exception:
             pass
-        if getattr(self, "panel_display_mode", "quotes") == "strategy":
-            self._project_strategy_columns(full_rows, sign)
-        else:
-            self._project_columns(full_rows, sign)
+        self._project_columns(full_rows, sign)
         if getattr(self, "_refresh_again_requested", False):
             self._refresh_again_requested = False
             QTimer.singleShot(0, self._refresh_from_function)
@@ -1495,13 +1564,7 @@ class FloatLabel(QWidget):
         self._refresh_from_function()
 
     def set_panel_display_mode(self, mode):
-        if mode not in ("quotes", "strategy"):
-            mode = "quotes"
-        if getattr(self, "panel_display_mode", "quotes") == mode:
-            return
-        self.panel_display_mode = mode
-        self._notify_change()
-        self._refresh_from_function()
+        self.panel_display_mode = "quotes"
 
     def set_warning(self, visible: bool, text: str):
         self.warning_visible = bool(visible)
@@ -1557,6 +1620,18 @@ class FloatLabel(QWidget):
                 prev = bool(getattr(self, 'avg_visible', False)); self.avg_visible = checked
             elif header == "K线":
                 prev = bool(getattr(self, 'kline_visible', False)); self.kline_visible = checked
+            elif header == "MA5":
+                prev = bool(getattr(self, 'ma5_visible', False)); self.ma5_visible = checked
+            elif header == "MA10":
+                prev = bool(getattr(self, 'ma10_visible', False)); self.ma10_visible = checked
+            elif header == "MA20":
+                prev = bool(getattr(self, 'ma20_visible', False)); self.ma20_visible = checked
+            elif header == "持仓盈亏":
+                prev = bool(getattr(self, 'strategy_profit_visible', False)); self.strategy_profit_visible = checked
+            elif header == "止损线":
+                prev = bool(getattr(self, 'strategy_stop_visible', False)); self.strategy_stop_visible = checked
+            elif header == "策略状态":
+                prev = bool(getattr(self, 'strategy_status_visible', False)); self.strategy_status_visible = checked
         except Exception:
             prev = None
 
@@ -1665,17 +1740,6 @@ class FloatLabel(QWidget):
     # ----- 交互 -----
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        sub_mode = QMenu("显示模式", menu)
-        act_quotes = QAction("行情模式", sub_mode, checkable=True)
-        act_quotes.setChecked(getattr(self, "panel_display_mode", "quotes") == "quotes")
-        act_quotes.triggered.connect(partial(self.set_panel_display_mode, "quotes"))
-        sub_mode.addAction(act_quotes)
-        act_strategy = QAction("策略模式", sub_mode, checkable=True)
-        act_strategy.setChecked(getattr(self, "panel_display_mode", "quotes") == "strategy")
-        act_strategy.triggered.connect(partial(self.set_panel_display_mode, "strategy"))
-        sub_mode.addAction(act_strategy)
-        menu.addMenu(sub_mode)
-
         sub_cols = QMenu("显示指标", menu)
         for name in self.ALL_HEADERS:
             if name == "卖一":

@@ -207,6 +207,18 @@ class SettingsDialog(QDialog):
             gl_flag_other.addWidget(cb, i-11, 0)
         gl_flags.addWidget(g_flag_other, 2, 0)
 
+        g_flag_strategy = QGroupBox("均线/策略")
+        gl_flag_strategy = QGridLayout(g_flag_strategy)
+        gl_flag_strategy.setHorizontalSpacing(6)
+        gl_flag_strategy.setVerticalSpacing(6)
+        for i, header in enumerate(cb_texts[12:]):
+            cb = QCheckBox(header)
+            cb.setChecked(self.win.header_is_visible(header))
+            cb.stateChanged.connect(partial(self._on_cb_changed, header))
+            self.cbs.append(cb)
+            gl_flag_strategy.addWidget(cb, i // 2, i % 2)
+        gl_flags.addWidget(g_flag_strategy, 2, 1)
+
         data_settings.addWidget(g_flags)
 
         self.tabs.addTab(tab_1, "显示数据")

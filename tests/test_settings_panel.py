@@ -14,7 +14,7 @@ class FakeWindow:
         self.groups = [{"name": "默认", "codes": ["sh000001"]}]
         self.codes = ["sh000001"]
         self.checked_codes = ["sh000001"]
-        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
         self.refresh_seconds = 2
         self.short_code = False
         self.name_length = 0
@@ -92,6 +92,14 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertEqual(group.childCount(), 2)
         self.assertEqual(group.child(1).data(0, dlg._pending_role()), True)
+        dlg.close()
+
+    def test_display_data_page_includes_ma_and_strategy_columns(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        labels = {cb.text() for cb in dlg.cbs}
+
+        self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"}.issubset(labels))
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):

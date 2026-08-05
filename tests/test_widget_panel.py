@@ -8,6 +8,10 @@ from PySide6.QtWidgets import QApplication, QHeaderView
 from WidgetPanel import FloatLabel
 
 
+BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+STRATEGY_HEADERS = BASE_HEADERS + ["MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
+
+
 class WidgetPanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -359,7 +363,7 @@ class WidgetPanelTests(unittest.TestCase):
 
     def test_apply_refresh_result_notifies_when_code_names_are_learned(self):
         win = FloatLabel.__new__(FloatLabel)
-        win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+        win.ALL_HEADERS = BASE_HEADERS
         win.groups = [{"name": "默认", "codes": ["sh512000"]}]
         win.checked_codes = ["sh512000"]
         win.alert_rules = []
@@ -385,63 +389,67 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win.code_names["sh512000"], "券商ETF")
         self.assertEqual(changes, ["saved"])
 
-    def test_apply_refresh_result_projects_strategy_mode(self):
+    def test_compose_display_rows_adds_ma_and_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)
-        win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
-        win.panel_display_mode = "strategy"
-        win.alert_rules = []
-        win.price_alerts = []
-        win.strategy_alert_config = {
-            "enabled": True,
-            "positions": [{"code": "sh603259", "cost_price": 100.0, "position_pct": 20.0}],
-        }
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.strategy_alert_config = {"enabled": True}
+        win.checked_codes = ["sh603259"]
         win.warning_visible = False
         win.warning_text = ""
         win.market_amount_visible = False
-        win.code_names = {}
-        win._refresh_again_requested = False
-        changes = []
-        win._on_change = lambda: changes.append("saved")
-        projected = []
-        win._project_strategy_columns = lambda rows, meta: projected.append((rows, meta))
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+        daily_rows = [{"close": float(v)} for v in range(1, 21)]
+        strategy_states = [{
+            "code": "sh603259",
+            "profit_pct": 12.0,
+            "stop_price": 110.0,
+            "status": "已锁盈10%",
+        }]
 
-        FloatLabel._apply_refresh_result(
+        rows, _meta = FloatLabel._compose_display_rows(
             win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
             {},
-            {},
-            {"sh603259": {"name": "药明康德", "price": 120.0}},
-            {},
+            {"sh603259": {"price": 112.0}},
+            {"sh603259": daily_rows},
+            strategy_states,
         )
 
-        self.assertEqual(projected[0][0][0][0], "药明康德")
-        self.assertEqual(projected[0][0][0][1], "盈亏 +20.0%")
-        self.assertEqual(len(projected[0][0][0]), 4)
-        self.assertEqual(projected[0][0][1][1], "MA5 -")
-        self.assertIn("已锁盈10%", projected[0][0][0][3])
-        self.assertIn("saved", changes)
+        stock_row = rows[1]
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("MA5")], "18.00")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("MA10")], "15.50")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("MA20")], "10.50")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("持仓盈亏")], "+12.0%")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("止损线")], "110.00")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10%")
 
-    def test_project_strategy_columns_uses_compact_headers(self):
+    def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)
-        win.model = type("FakeModel", (), {
-            "set_align_right_cols": lambda self, cols: setattr(self, "align_cols", cols),
-            "set_rows_headers": lambda self, rows, headers, meta=None: (
-                setattr(self, "rows", rows),
-                setattr(self, "headers", headers),
-                setattr(self, "meta", meta),
-            ),
-            "set_color_scheme": lambda *_args: None,
-        })()
-        win.default_color = False
-        win.fg = None
-        win.k_column_visible_index = None
-        win.name_column_visible_index = None
-        win.table = type("FakeTable", (), {"clearSpans": lambda self: None})()
-        win._fit_to_contents = lambda: None
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
 
-        FloatLabel._project_strategy_columns(win, [["药明康德", "盈亏 -1.3%", "止损 141.98", "未触发"]], [])
+        rows, _meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 112.0}},
+            {"sh603259": [{"error": "日线接口不可用"}]},
+            [],
+        )
 
-        self.assertEqual(win.model.headers, ["名称", "盈亏/MA5", "止损/MA10", "状态/MA20"])
-        self.assertEqual(win.model.align_cols, [])
+        stock_row = rows[1]
+        for header in ("MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"):
+            self.assertEqual(stock_row[STRATEGY_HEADERS.index(header)], "-")
 
     def test_strategy_push_payload_uses_wecom_markdown(self):
         win = FloatLabel.__new__(FloatLabel)
