@@ -969,40 +969,79 @@ class FloatLabel(QWidget):
         market = "1" if code.startswith("sh") else "0"
         return f"{market}.{code[2:]}"
 
-    def _get_daily_klines(self, codes, limit=20):
-        daily_by_code = {}
+    def _parse_tencent_daily_payload(self, code, payload):
+        data = ((payload or {}).get("data") or {}).get(code) or {}
+        klines = data.get("qfqday") or data.get("day") or []
+        rows = []
+        for parts in klines:
+            if not isinstance(parts, (list, tuple)) or len(parts) < 6:
+                continue
+            try:
+                rows.append({
+                    "date": str(parts[0]),
+                    "open": float(parts[1]),
+                    "close": float(parts[2]),
+                    "high": float(parts[3]),
+                    "low": float(parts[4]),
+                    "volume": float(parts[5]),
+                    "amount": float(parts[6]) if len(parts) > 6 else 0.0,
+                })
+            except Exception:
+                continue
+        return rows
+
+    def _get_tencent_daily_klines(self, code, limit=20):
+        getter = getattr(getattr(self, "_http", None), "get", requests.get)
+        url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},day,,,{int(limit)},qfq"
+        response = getter(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        return self._parse_tencent_daily_payload(code, response.json())
+
+    def _get_eastmoney_daily_klines(self, code, limit=20):
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
         headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
-        for code in normalize_codes(codes):
-            secid = self._eastmoney_secid(code)
-            if not secid:
+        secid = self._eastmoney_secid(code)
+        if not secid:
+            return []
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
+            "&fields2=f51,f52,f53,f54,f55,f56,f57"
+            f"&klt=101&fqt=1&lmt={int(limit)}&end=20500101"
+        )
+        response = getter(url, headers=headers, timeout=5)
+        payload = response.json()
+        klines = (((payload or {}).get("data") or {}).get("klines") or [])
+        rows = []
+        for raw in klines:
+            parts = str(raw).split(",")
+            if len(parts) < 6:
                 continue
-            url = (
-                "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-                f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
-                "&fields2=f51,f52,f53,f54,f55,f56,f57"
-                f"&klt=101&fqt=1&lmt={int(limit)}&end=20500101"
-            )
-            response = getter(url, headers=headers, timeout=5)
-            payload = response.json()
-            klines = (((payload or {}).get("data") or {}).get("klines") or [])
-            rows = []
-            for raw in klines:
-                parts = str(raw).split(",")
-                if len(parts) < 6:
-                    continue
+            try:
+                rows.append({
+                    "date": parts[0],
+                    "open": float(parts[1]),
+                    "close": float(parts[2]),
+                    "high": float(parts[3]),
+                    "low": float(parts[4]),
+                    "volume": float(parts[5]),
+                    "amount": float(parts[6]) if len(parts) > 6 else 0.0,
+                })
+            except Exception:
+                continue
+        return rows
+
+    def _get_daily_klines(self, codes, limit=20):
+        daily_by_code = {}
+        for code in normalize_codes(codes):
+            try:
+                rows = self._get_tencent_daily_klines(code, limit)
+            except Exception:
+                rows = []
+            if not rows:
                 try:
-                    rows.append({
-                        "date": parts[0],
-                        "open": float(parts[1]),
-                        "close": float(parts[2]),
-                        "high": float(parts[3]),
-                        "low": float(parts[4]),
-                        "volume": float(parts[5]),
-                        "amount": float(parts[6]) if len(parts) > 6 else 0.0,
-                    })
+                    rows = self._get_eastmoney_daily_klines(code, limit)
                 except Exception:
-                    continue
+                    rows = []
             if rows:
                 daily_by_code[code] = rows
         return daily_by_code
