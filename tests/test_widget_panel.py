@@ -351,7 +351,7 @@ class WidgetPanelTests(unittest.TestCase):
             }],
         )
 
-        self.assertEqual(rows[0], ["券商ETF", "+9.0%", "1.10", "1.05", "1.03", "1.01", "开:止损/个股MA5 | 触发锁盈10%"])
+        self.assertEqual(rows[0], ["券商ETF", "+9.0%", "止1.10", "5/10/20:1.05/1.03/1.01", "触发锁盈10%"])
         self.assertTrue(meta[0]["triggered"])
         self.assertEqual(meta[0]["severity"], "danger")
 
@@ -413,9 +413,32 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(projected[0][0][0][0], "药明康德")
         self.assertEqual(projected[0][0][0][1], "+20.0%")
-        self.assertEqual(len(projected[0][0][0]), 7)
-        self.assertIn("已锁盈10%", projected[0][0][0][6])
+        self.assertEqual(len(projected[0][0][0]), 5)
+        self.assertIn("已锁盈10%", projected[0][0][0][4])
         self.assertIn("saved", changes)
+
+    def test_project_strategy_columns_uses_compact_headers(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.model = type("FakeModel", (), {
+            "set_align_right_cols": lambda self, cols: setattr(self, "align_cols", cols),
+            "set_rows_headers": lambda self, rows, headers, meta=None: (
+                setattr(self, "rows", rows),
+                setattr(self, "headers", headers),
+                setattr(self, "meta", meta),
+            ),
+            "set_color_scheme": lambda *_args: None,
+        })()
+        win.default_color = False
+        win.fg = None
+        win.k_column_visible_index = None
+        win.name_column_visible_index = None
+        win.table = type("FakeTable", (), {"clearSpans": lambda self: None})()
+        win._fit_to_contents = lambda: None
+
+        FloatLabel._project_strategy_columns(win, [["药明康德", "-1.3%", "止141.98", "5/10/20:134.25/129.79/127.15", "未触发"]], [])
+
+        self.assertEqual(win.model.headers, ["名称", "盈亏", "止损", "均线", "状态"])
+        self.assertEqual(win.model.align_cols, [1, 2])
 
     def test_strategy_push_payload_uses_wecom_markdown(self):
         win = FloatLabel.__new__(FloatLabel)
