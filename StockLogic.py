@@ -454,6 +454,12 @@ def ma_is_down(daily_rows, days):
     return current < previous
 
 
+def daily_error_text(daily_rows):
+    if isinstance(daily_rows, dict):
+        return str(daily_rows.get("error") or "").strip()
+    return ""
+
+
 def trailing_lock_pct(rules, peak_profit_pct):
     if not rules.get("trailing_profit_enabled"):
         return 0.0
@@ -501,8 +507,13 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
     rules = config["rules"]
     daily_by_code = daily_by_code or {}
     index_breaks = []
+    index_daily_errors = []
     if rules.get("index_ma5_break_enabled"):
         for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+            error_text = daily_error_text(daily_by_code.get(index_code))
+            if error_text:
+                index_daily_errors.append(f"{label}{error_text}")
+                continue
             index_quote = (quotes or {}).get(index_code) or {}
             try:
                 index_price = float(index_quote.get("price", 0.0))
@@ -513,6 +524,11 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 index_breaks.append(f"{label}破5日线")
     if rules.get("index_ma10_break_enabled"):
         for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+            error_text = daily_error_text(daily_by_code.get(index_code))
+            if error_text:
+                if f"{label}{error_text}" not in index_daily_errors:
+                    index_daily_errors.append(f"{label}{error_text}")
+                continue
             index_quote = (quotes or {}).get(index_code) or {}
             try:
                 index_price = float(index_quote.get("price", 0.0))
@@ -566,8 +582,12 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             if severity != "danger":
                 severity = "warning"
         if rules.get("stock_ma5_break_enabled"):
-            ma5 = moving_average(daily_by_code.get(position["code"]), 5)
-            if ma5 is None:
+            daily_rows = daily_by_code.get(position["code"])
+            error_text = daily_error_text(daily_rows)
+            ma5 = moving_average(daily_rows, 5)
+            if error_text:
+                status_parts.append(error_text)
+            elif ma5 is None:
                 status_parts.append("个股日线不足")
             elif price < ma5:
                 status_parts.append("个股破5日线")
@@ -577,6 +597,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             status_parts.append("大盘" + "/".join(index_breaks))
             triggered = True
             severity = "danger"
+        elif index_daily_errors:
+            status_parts.append("大盘" + "/".join(index_daily_errors))
         if rules.get("block_heavy_position_on_index_ma5_down") and index_ma5_down:
             status_parts.append("大盘5日线向下")
         if not status_parts:

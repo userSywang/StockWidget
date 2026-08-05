@@ -1034,17 +1034,22 @@ class FloatLabel(QWidget):
     def _get_daily_klines(self, codes, limit=20):
         daily_by_code = {}
         for code in normalize_codes(codes):
+            errors = []
             try:
                 rows = self._get_tencent_daily_klines(code, limit)
-            except Exception:
+            except Exception as exc:
+                errors.append(f"腾讯:{type(exc).__name__}")
                 rows = []
             if not rows:
                 try:
                     rows = self._get_eastmoney_daily_klines(code, limit)
-                except Exception:
+                except Exception as exc:
+                    errors.append(f"东财:{type(exc).__name__}")
                     rows = []
             if rows:
                 daily_by_code[code] = rows
+            else:
+                daily_by_code[code] = {"error": "日线接口不可用" if errors else "日线数据为空"}
         return daily_by_code
 
     def _get_refresh_data(self, request_codes):

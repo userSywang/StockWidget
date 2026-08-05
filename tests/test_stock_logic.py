@@ -222,6 +222,28 @@ class StockLogicTests(unittest.TestCase):
         self.assertIn("上证破5日线", states[0]["status"])
         self.assertIn("深成破10日线", states[0]["status"])
 
+    def test_strategy_alerts_report_daily_source_unavailable(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+            "rules": {
+                "stock_ma5_break_enabled": True,
+                "index_ma5_break_enabled": True,
+            },
+        })
+        quotes = {
+            "sh603259": {"price": 101.0, "name": "药明康德"},
+            "sh000001": {"price": 3000.0},
+        }
+
+        states = evaluate_strategy_alerts(config, quotes, {
+            "sh603259": {"error": "日线接口不可用"},
+            "sh000001": {"error": "日线接口不可用"},
+        })
+
+        self.assertIn("日线接口不可用", states[0]["status"])
+        self.assertIn("大盘上证日线接口不可用", states[0]["status"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -228,6 +228,15 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(daily["sh000001"][0]["date"], "2026-08-01")
         self.assertEqual(daily["sh000001"][1]["close"], 10.5)
 
+    def test_get_daily_klines_marks_source_unavailable(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._get_tencent_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("blocked"))
+        win._get_eastmoney_daily_klines = lambda *_args: (_ for _ in ()).throw(Exception("blocked"))
+
+        daily = FloatLabel._get_daily_klines(win, ["sh603259"], limit=20)
+
+        self.assertEqual(daily["sh603259"]["error"], "日线接口不可用")
+
     def test_compose_strategy_rows_shows_triggered_status(self):
         win = FloatLabel.__new__(FloatLabel)
 
