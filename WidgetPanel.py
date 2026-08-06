@@ -1347,13 +1347,20 @@ class FloatLabel(QWidget):
         profit = state.get("profit_pct")
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
         lock_pct = float(state.get("locked_profit_pct", 0.0))
-        lock_text = "成本线" if lock_pct <= 0 else f"+{lock_pct:.1f}%"
+        stop_price = state.get("stop_price")
+        if stop_price is None:
+            lock_text = "成本线"
+            stop_text = "-"
+        else:
+            lock_text = f"{float(stop_price):.2f}（锁盈+{lock_pct:.1f}%）"
+            stop_text = f"{float(stop_price):.2f}"
         return (
             f"## StockWidget 策略提醒\n"
             f">标的：{state.get('name') or state.get('code')}\n"
             f">代码：{state.get('code')}\n"
             f">盈亏：{profit_text}\n"
             f">止盈线：{lock_text}\n"
+            f">止盈价：{stop_text}\n"
             f">状态：{state.get('status', '')}"
         )
 

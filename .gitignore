@@ -2,5 +2,6 @@
 __pycache__/
 *.py[cod]
 dist/
+dist_strategy_alerts/
 build/
 *.spec

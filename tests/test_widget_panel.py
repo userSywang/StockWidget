@@ -461,6 +461,21 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(payload, {"msgtype": "markdown", "markdown": {"content": "测试内容"}})
 
+    def test_strategy_push_text_includes_stop_price_and_raised_status(self):
+        win = FloatLabel.__new__(FloatLabel)
+        text = FloatLabel._strategy_push_text_for_state(win, {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": 20.0,
+            "locked_profit_pct": 10.0,
+            "stop_price": 110.0,
+            "status": "上调止盈线至110.00",
+        })
+
+        self.assertIn("止盈线：110.00（锁盈+10.0%）", text)
+        self.assertIn("止盈价：110.00", text)
+        self.assertIn("上调止盈线至110.00", text)
+
     def test_strategy_push_payload_uses_custom_json(self):
         win = FloatLabel.__new__(FloatLabel)
         win.strategy_alert_config = {

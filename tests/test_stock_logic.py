@@ -290,6 +290,45 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(states[0]["ma20"], 10.5)
         self.assertEqual(states[0]["enabled_rules"], ["止损", "个股MA5", "大盘MA5", "移动止盈"])
 
+    def test_strategy_alert_reports_raised_stop_line_and_price(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+        })
+        updated, changed = update_strategy_position_state(config, {"sh603259": {"price": 120.0}})
+        states = evaluate_strategy_alerts(updated, {"sh603259": {"price": 115.0}})
+
+        self.assertTrue(changed)
+        self.assertTrue(states[0]["lock_raised"])
+        self.assertEqual(states[0]["stop_price"], 110.0)
+        self.assertIn("上调止盈线至110.00", states[0]["status"])
+
+    def test_stock_and_index_ma5_conditions_report_clearance(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+            "rules": {
+                "stock_ma5_break_enabled": True,
+                "index_ma5_break_enabled": True,
+                "index_ma10_break_enabled": False,
+            },
+        })
+        daily = {
+            "sh603259": [{"close": value} for value in [100, 101, 102, 103, 104]],
+            "sh000001": [{"close": value} for value in [3000, 3010, 3020, 3030, 3040]],
+            "sz399001": [{"close": value} for value in [9000, 9010, 9020, 9030, 9040]],
+        }
+        states = evaluate_strategy_alerts(config, {
+            "sh603259": {"price": 99.0},
+            "sh000001": {"price": 3000.0},
+            "sz399001": {"price": 8800.0},
+        }, daily)
+
+        self.assertTrue(states[0]["triggered"])
+        self.assertIn("个股破5日线清仓", states[0]["status"])
+        self.assertIn("大盘", states[0]["status"])
+        self.assertIn("清仓", states[0]["status"])
+
     def test_strategy_alerts_report_daily_source_unavailable(self):
         config = normalize_strategy_alert_config({
             "enabled": True,

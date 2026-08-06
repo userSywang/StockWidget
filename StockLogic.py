@@ -344,6 +344,7 @@ def normalize_strategy_position(position):
         "position_pct": _bounded_float(position.get("position_pct"), 0.0, 0.0, 100.0),
         "peak_profit_pct": _bounded_float(position.get("peak_profit_pct"), 0.0, -100.0, 10000.0),
         "locked_profit_pct": _bounded_float(position.get("locked_profit_pct"), 0.0, 0.0, 10000.0),
+        "lock_raised": bool(position.get("lock_raised", False)),
         "note": str(position.get("note") or "").strip(),
         "rules": dict(position_rules) if position_rules is not None else {},
     }
@@ -602,6 +603,7 @@ def update_strategy_position_state(config, quotes):
     positions = []
     for position in config.get("positions", []):
         item = dict(position)
+        item["lock_raised"] = False
         position_rules = strategy_rules_for_position(config, item)
         quote = (quotes or {}).get(item["code"]) or {}
         cost = float(item.get("cost_price", 0.0))
@@ -618,6 +620,7 @@ def update_strategy_position_state(config, quotes):
                 changed = True
             if abs(lock_pct - float(item.get("locked_profit_pct", 0.0))) > 0.0001:
                 item["locked_profit_pct"] = round(lock_pct, 4)
+                item["lock_raised"] = True
                 changed = True
         positions.append(item)
     config["positions"] = positions
@@ -678,6 +681,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "name": name,
                 "profit_pct": None,
                 "locked_profit_pct": lock_pct,
+                "lock_raised": bool(position.get("lock_raised", False)),
                 "stop_price": strategy_stop_price(cost, rules, lock_pct),
                 "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
                 "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
@@ -698,8 +702,11 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             triggered = True
             severity = "danger"
         if lock_pct > 0:
+            stop_price = strategy_stop_price(cost, rules, lock_pct)
+            if position.get("lock_raised") and stop_price is not None:
+                status_parts.append(f"上调止盈线至{stop_price:.2f}")
             if profit_pct <= lock_pct:
-                status_parts.append(f"触发锁盈{lock_pct:.0f}%")
+                status_parts.append(f"触发锁盈{lock_pct:.0f}%（止盈价{stop_price:.2f}）" if stop_price is not None else f"触发锁盈{lock_pct:.0f}%")
                 triggered = True
                 severity = "danger"
             else:
@@ -716,11 +723,11 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             elif stock_ma5 is None:
                 status_parts.append("个股日线不足")
             elif price < stock_ma5:
-                status_parts.append("个股破5日线")
+                status_parts.append("个股破5日线清仓")
                 triggered = True
                 severity = "danger"
         if index_breaks:
-            status_parts.append("大盘" + "/".join(index_breaks))
+            status_parts.append("大盘" + "/".join(index_breaks) + "清仓")
             triggered = True
             severity = "danger"
         elif index_daily_errors:
@@ -735,6 +742,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "name": name,
             "profit_pct": profit_pct,
             "locked_profit_pct": lock_pct,
+            "lock_raised": bool(position.get("lock_raised", False)),
             "stop_price": strategy_stop_price(cost, rules, lock_pct),
             "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
             "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
