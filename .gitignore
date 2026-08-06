@@ -4,6 +4,8 @@ __pycache__/
 dist/
 dist_strategy_alerts/
 dist_strategy_layout/
+dist_strategy_restore/
 strategy_page_*.png
+*.json.bak
 build/
 *.spec

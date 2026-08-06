@@ -28,6 +28,13 @@ def load_config():
 def save_config(cfg: dict):
     if not os.path.exists(CONFIG_DIR):
         os.makedirs(CONFIG_DIR, exist_ok=True)
+    if os.path.exists(CONFIG_FILE):
+        backup_file = CONFIG_FILE + ".bak"
+        try:
+            import shutil
+            shutil.copy2(CONFIG_FILE, backup_file)
+        except Exception:
+            pass
     tmp = CONFIG_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)

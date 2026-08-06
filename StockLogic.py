@@ -410,12 +410,16 @@ def normalize_strategy_alert_config(config):
     normalized_rules = _normalize_strategy_rules(source_rules, default_rules)
     positions = []
     seen_codes = set()
-    for item in config.get("positions", []) if isinstance(config.get("positions"), list) else []:
+    raw_positions = config.get("positions", []) if isinstance(config.get("positions"), list) else []
+    for item in raw_positions:
         position = normalize_strategy_position(item)
         if not position or position["code"] in seen_codes:
             continue
         seen_codes.add(position["code"])
         positions.append(position)
+    # Do not silently erase user data when an older/unknown position format is encountered.
+    if raw_positions and not positions:
+        positions = [dict(item) for item in raw_positions if isinstance(item, dict)]
 
     profiles = []
     raw_profiles = config.get("strategy_profiles")

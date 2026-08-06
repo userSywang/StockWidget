@@ -170,6 +170,15 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
 
+    def test_strategy_config_does_not_drop_unknown_position_records(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "legacy-code", "cost_price": 10.0}],
+        })
+
+        self.assertEqual(len(config["positions"]), 1)
+        self.assertEqual(config["positions"][0]["code"], "legacy-code")
+
     def test_strategy_trailing_profit_locks_to_lower_profit_line(self):
         config = normalize_strategy_alert_config({
             "enabled": True,
