@@ -452,6 +452,10 @@ class SettingsDialog(QDialog):
         self.spin_strategy_position_pct.setDecimals(1)
         self.spin_strategy_position_pct.setSuffix("%")
         self.edit_strategy_note = QLineEdit()
+        self.cmb_strategy_profile = QComboBox()
+        self.cmb_strategy_profile.setMinimumWidth(180)
+        self.btn_strategy_profile_clone = QPushButton("复制规则组")
+        self.btn_strategy_profile_clone.setFixedWidth(90)
         form_strategy_position.addWidget(QLabel("代码："), 0, 0)
         form_strategy_position.addWidget(self.edit_strategy_code, 0, 1)
         form_strategy_position.addWidget(QLabel("买入价："), 0, 2)
@@ -462,6 +466,9 @@ class SettingsDialog(QDialog):
         form_strategy_position.addWidget(self.spin_strategy_position_pct, 1, 3)
         form_strategy_position.addWidget(QLabel("备注："), 2, 0)
         form_strategy_position.addWidget(self.edit_strategy_note, 2, 1, 1, 3)
+        form_strategy_position.addWidget(QLabel("规则组："), 3, 0)
+        form_strategy_position.addWidget(self.cmb_strategy_profile, 3, 1, 1, 2)
+        form_strategy_position.addWidget(self.btn_strategy_profile_clone, 3, 3)
         lay_strategy_positions.addLayout(form_strategy_position, 1)
         strategy_settings.addWidget(g_strategy_positions)
 
@@ -749,6 +756,8 @@ class SettingsDialog(QDialog):
         self.edit_strategy_webhook.editingFinished.connect(self._on_strategy_config_changed)
         self.btn_strategy_push_test.clicked.connect(self._send_strategy_push_test)
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
+        self.cmb_strategy_profile.currentIndexChanged.connect(self._on_strategy_profile_selected)
+        self.btn_strategy_profile_clone.clicked.connect(self._clone_strategy_profile)
         self.btn_strategy_add.clicked.connect(self._add_strategy_position)
         self.btn_strategy_del.clicked.connect(self._del_strategy_position)
         self.btn_strategy_save.clicked.connect(self._save_strategy_position)
@@ -1325,6 +1334,7 @@ class SettingsDialog(QDialog):
                 item = QListWidgetItem(self._format_strategy_position(position))
                 item.setData(Qt.UserRole, position)
                 self.list_strategy_positions.addItem(item)
+            self._load_strategy_profile_options()
             self.list_strategy_positions.blockSignals(False)
             if self.list_strategy_positions.count() > 0:
                 self.list_strategy_positions.setCurrentRow(max(0, min(current_row, self.list_strategy_positions.count() - 1)))
@@ -1346,10 +1356,36 @@ class SettingsDialog(QDialog):
         self.edit_strategy_buy_date.clear()
         self.spin_strategy_position_pct.setValue(0.0)
         self.edit_strategy_note.clear()
+        self.cmb_strategy_profile.clear()
+
+    def _load_strategy_profile_options(self, selected_id=""):
+        self.cmb_strategy_profile.blockSignals(True)
+        try:
+            self.cmb_strategy_profile.clear()
+            for profile in self._strategy_config.get("strategy_profiles", []):
+                self.cmb_strategy_profile.addItem(profile.get("name", profile.get("id", "")), profile.get("id"))
+            if selected_id:
+                index = self.cmb_strategy_profile.findData(selected_id)
+                if index >= 0:
+                    self.cmb_strategy_profile.setCurrentIndex(index)
+        finally:
+            self.cmb_strategy_profile.blockSignals(False)
+
+    def _current_strategy_profile(self):
+        profile_id = self.cmb_strategy_profile.currentData()
+        for profile in getattr(self, "_strategy_config", {}).get("strategy_profiles", []):
+            if profile.get("id") == profile_id:
+                return profile
+        return None
 
     def _current_strategy_rules(self):
         row = self._current_strategy_position_row()
         positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        profile = self._current_strategy_profile()
+        if profile:
+            rules = dict(self._strategy_config.get("rules", {}))
+            rules.update(profile.get("rules") or {})
+            return rules
         if 0 <= row < len(positions) and isinstance(positions[row].get("rules"), dict) and positions[row].get("rules"):
             rules = dict(self._strategy_config.get("rules", {}))
             rules.update(positions[row].get("rules", {}))
@@ -1390,8 +1426,9 @@ class SettingsDialog(QDialog):
             self.edit_strategy_buy_date.setText(position.get("buy_date", ""))
             self.spin_strategy_position_pct.setValue(float(position.get("position_pct", 0.0)))
             self.edit_strategy_note.setText(position.get("note", ""))
-            rules = dict(self._strategy_config.get("rules", {}))
-            rules.update(position.get("rules") or {})
+            profile_id = position.get("strategy_id") or "default"
+            self._load_strategy_profile_options(profile_id)
+            rules = self._current_strategy_rules()
             self._load_strategy_rules(rules)
         finally:
             self._loading_strategy_editor = False
@@ -1421,14 +1458,22 @@ class SettingsDialog(QDialog):
     def _collect_strategy_config_from_editor(self):
         rules = self._collect_strategy_rules_from_editor()
         positions = list(getattr(self, "_strategy_config", {}).get("positions", []))
+        profiles = [dict(profile) for profile in getattr(self, "_strategy_config", {}).get("strategy_profiles", [])]
         row = self._current_strategy_position_row()
         if 0 <= row < len(positions):
             position = dict(positions[row])
-            position["rules"] = rules
+            profile_id = self.cmb_strategy_profile.currentData() or position.get("strategy_id") or "default"
+            position["strategy_id"] = profile_id
+            position["rules"] = {}
             positions[row] = position
+            for profile in profiles:
+                if profile.get("id") == profile_id:
+                    profile["rules"] = rules
+                    break
         return normalize_strategy_alert_config({
             "enabled": self.chk_strategy_enabled.isChecked(),
             "positions": positions,
+            "strategy_profiles": profiles,
             "notifications": {
                 "desktop_popup": self.chk_strategy_notify_desktop.isChecked(),
                 "panel_highlight": self.chk_strategy_notify_panel.isChecked(),
@@ -1445,6 +1490,46 @@ class SettingsDialog(QDialog):
         self._strategy_config = self._collect_strategy_config_from_editor()
         self._refresh_strategy_preview()
         self.win.set_strategy_alert_config(self._strategy_config)
+
+    def _on_strategy_profile_selected(self, *_args):
+        if getattr(self, "_loading_strategy_editor", False):
+            return
+        row = self._current_strategy_position_row()
+        profile_id = self.cmb_strategy_profile.currentData()
+        if row < 0 or not profile_id:
+            return
+        self._strategy_config["positions"][row]["strategy_id"] = profile_id
+        self._strategy_config["positions"][row]["rules"] = {}
+        self._loading_strategy_editor = True
+        try:
+            self._load_strategy_rules(self._current_strategy_rules())
+        finally:
+            self._loading_strategy_editor = False
+        self._refresh_strategy_preview()
+
+    def _clone_strategy_profile(self):
+        source = self._current_strategy_profile()
+        if not source:
+            return
+        existing_ids = {profile.get("id") for profile in self._strategy_config.get("strategy_profiles", [])}
+        number = 1
+        profile_id = f"custom:{number}"
+        while profile_id in existing_ids:
+            number += 1
+            profile_id = f"custom:{number}"
+        profile = {
+            "id": profile_id,
+            "name": f"自定义规则组 {number}",
+            "rules": dict(source.get("rules") or {}),
+        }
+        self._strategy_config["strategy_profiles"].append(profile)
+        row = self._current_strategy_position_row()
+        if row >= 0:
+            self._strategy_config["positions"][row]["strategy_id"] = profile_id
+            self._strategy_config["positions"][row]["rules"] = {}
+        self._load_strategy_profile_options(profile_id)
+        self._load_strategy_rules(profile["rules"])
+        self._refresh_strategy_preview()
 
     def _save_strategy_position(self):
         if self._current_strategy_position_row() < 0:
@@ -1512,6 +1597,7 @@ class SettingsDialog(QDialog):
             return
         position = normalize_strategy_position({
             "code": self.edit_strategy_code.text(),
+            "strategy_id": self.cmb_strategy_profile.currentData() or self._strategy_config["positions"][row].get("strategy_id", "default"),
             "cost_price": self.spin_strategy_cost.value(),
             "buy_date": self.edit_strategy_buy_date.text(),
             "position_pct": self.spin_strategy_position_pct.value(),
@@ -1532,10 +1618,12 @@ class SettingsDialog(QDialog):
         default_code = self.win.codes[0] if getattr(self.win, "codes", []) else "sh000001"
         config["positions"].append({
             "code": default_code,
+            "strategy_id": "default",
             "cost_price": 0.0,
             "buy_date": "",
             "position_pct": 0.0,
             "note": "",
+            "rules": {},
         })
         self.win.set_strategy_alert_config(config)
         self._strategy_config = config

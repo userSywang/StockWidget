@@ -300,8 +300,11 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.spin_strategy_loss.setValue(9.0)
         dlg._save_strategy_position()
 
-        self.assertEqual(win.strategy_alert_config["positions"][1]["rules"]["max_loss_pct"], 9.0)
-        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 4.0)
+        profile_id = win.strategy_alert_config["positions"][1]["strategy_id"]
+        profiles = {profile["id"]: profile for profile in win.strategy_alert_config["strategy_profiles"]}
+        self.assertEqual(profiles[profile_id]["rules"]["max_loss_pct"], 9.0)
+        first_profile_id = win.strategy_alert_config["positions"][0]["strategy_id"]
+        self.assertEqual(profiles[first_profile_id]["rules"]["max_loss_pct"], 4.0)
         dlg.close()
 
     def test_strategy_rule_controls_do_not_overlap_after_show(self):

@@ -201,6 +201,28 @@ class StockLogicTests(unittest.TestCase):
         self.assertFalse(states[0]["triggered"])
         self.assertEqual(config["positions"][0]["rules"]["max_loss_pct"], 10.0)
 
+    def test_strategy_profiles_bind_different_rules_to_different_positions(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "strategy_profiles": [
+                {"id": "steady", "name": "稳健", "rules": {"max_loss_pct": 10.0}},
+                {"id": "tight", "name": "严格", "rules": {"max_loss_pct": 2.0}},
+            ],
+            "positions": [
+                {"code": "603259", "cost_price": 100.0, "strategy_id": "steady"},
+                {"code": "512000", "cost_price": 100.0, "strategy_id": "tight"},
+            ],
+        })
+
+        states = evaluate_strategy_alerts(config, {
+            "sh603259": {"price": 94.0},
+            "sh512000": {"price": 94.0},
+        })
+
+        self.assertFalse(states[0]["triggered"])
+        self.assertTrue(states[1]["triggered"])
+
     def test_strategy_daily_request_codes_include_market_indexes(self):
         codes = strategy_daily_request_codes({
             "enabled": True,

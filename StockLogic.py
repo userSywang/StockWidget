@@ -338,6 +338,7 @@ def normalize_strategy_position(position):
     position_rules = position.get("rules") if isinstance(position.get("rules"), dict) else None
     return {
         "code": code,
+        "strategy_id": str(position.get("strategy_id") or position.get("profile_id") or "").strip(),
         "cost_price": _bounded_float(position.get("cost_price"), 0.0, 0.0, 99999.999),
         "buy_date": str(position.get("buy_date") or "").strip(),
         "position_pct": _bounded_float(position.get("position_pct"), 0.0, 0.0, 100.0),
@@ -348,6 +349,56 @@ def normalize_strategy_position(position):
     }
 
 
+def _normalize_strategy_rules(source_rules, fallback=None):
+    default_rules = fallback or DEFAULT_STRATEGY_ALERT_CONFIG["rules"]
+    source_rules = source_rules if isinstance(source_rules, dict) else {}
+    source_tiers = source_rules.get("trailing_tiers")
+    if not isinstance(source_tiers, list):
+        source_tiers = default_rules.get("trailing_tiers", [])
+    tiers = []
+    for tier in source_tiers:
+        if not isinstance(tier, dict):
+            continue
+        tiers.append({
+            "profit_pct": _bounded_float(tier.get("profit_pct"), 0.0, 0.0, 1000.0),
+            "lock_pct": _bounded_float(tier.get("lock_pct"), 0.0, 0.0, 1000.0),
+        })
+    if not tiers:
+        tiers = list(default_rules.get("trailing_tiers", []))
+    return {
+        "max_loss_enabled": bool(source_rules.get("max_loss_enabled", default_rules["max_loss_enabled"])),
+        "max_loss_pct": _bounded_float(source_rules.get("max_loss_pct"), default_rules["max_loss_pct"], 0.0, 100.0),
+        "stock_ma5_break_enabled": bool(source_rules.get("stock_ma5_break_enabled", default_rules["stock_ma5_break_enabled"])),
+        "index_ma5_break_enabled": bool(source_rules.get("index_ma5_break_enabled", default_rules["index_ma5_break_enabled"])),
+        "index_ma10_break_enabled": bool(source_rules.get("index_ma10_break_enabled", default_rules["index_ma10_break_enabled"])),
+        "trailing_profit_enabled": bool(source_rules.get("trailing_profit_enabled", default_rules["trailing_profit_enabled"])),
+        "trailing_tiers": tiers,
+        "skip_raise_on_volume_drop": bool(source_rules.get("skip_raise_on_volume_drop", default_rules["skip_raise_on_volume_drop"])),
+        "reduce_half_enabled": bool(source_rules.get("reduce_half_enabled", default_rules["reduce_half_enabled"])),
+        "reduce_half_profit_pct": _bounded_float(source_rules.get("reduce_half_profit_pct"), default_rules["reduce_half_profit_pct"], 0.0, 1000.0),
+        "max_position_pct": _bounded_float(source_rules.get("max_position_pct"), default_rules["max_position_pct"], 0.0, 100.0),
+        "block_heavy_position_on_index_ma5_down": bool(source_rules.get("block_heavy_position_on_index_ma5_down", default_rules["block_heavy_position_on_index_ma5_down"])),
+        "stale_position_enabled": bool(source_rules.get("stale_position_enabled", default_rules["stale_position_enabled"])),
+        "stale_position_days": _bounded_int(source_rules.get("stale_position_days"), default_rules["stale_position_days"], 1, 3650),
+    }
+
+
+def strategy_rules_for_position(config, position):
+    config = normalize_strategy_alert_config(config)
+    base_rules = config["rules"]
+    strategy_id = str((position or {}).get("strategy_id") or "").strip()
+    profile_rules = None
+    for profile in config.get("strategy_profiles", []):
+        if profile.get("id") == strategy_id:
+            profile_rules = profile.get("rules")
+            break
+    rules = dict(base_rules)
+    rules.update(profile_rules or {})
+    # Legacy per-position rules remain as a migration override.
+    rules.update((position or {}).get("rules") or {})
+    return _normalize_strategy_rules(rules, base_rules)
+
+
 def normalize_strategy_alert_config(config):
     if not isinstance(config, dict):
         config = {}
@@ -355,6 +406,7 @@ def normalize_strategy_alert_config(config):
     default_notifications = DEFAULT_STRATEGY_ALERT_CONFIG["notifications"]
     source_rules = config.get("rules") if isinstance(config.get("rules"), dict) else {}
     source_notifications = config.get("notifications") if isinstance(config.get("notifications"), dict) else {}
+    normalized_rules = _normalize_strategy_rules(source_rules, default_rules)
     positions = []
     seen_codes = set()
     for item in config.get("positions", []) if isinstance(config.get("positions"), list) else []:
@@ -364,23 +416,51 @@ def normalize_strategy_alert_config(config):
         seen_codes.add(position["code"])
         positions.append(position)
 
-    tiers = []
-    source_tiers = source_rules.get("trailing_tiers")
-    if not isinstance(source_tiers, list):
-        source_tiers = default_rules["trailing_tiers"]
-    for tier in source_tiers:
-        if not isinstance(tier, dict):
+    profiles = []
+    raw_profiles = config.get("strategy_profiles")
+    if isinstance(raw_profiles, dict):
+        raw_profiles = [dict(value, id=key) for key, value in raw_profiles.items() if isinstance(value, dict)]
+    if not isinstance(raw_profiles, list):
+        raw_profiles = []
+    seen_profile_ids = set()
+    for raw_profile in raw_profiles:
+        if not isinstance(raw_profile, dict):
             continue
-        tiers.append({
-            "profit_pct": _bounded_float(tier.get("profit_pct"), 0.0, 0.0, 1000.0),
-            "lock_pct": _bounded_float(tier.get("lock_pct"), 0.0, 0.0, 1000.0),
+        profile_id = str(raw_profile.get("id") or raw_profile.get("name") or "").strip()
+        if not profile_id or profile_id in seen_profile_ids:
+            continue
+        seen_profile_ids.add(profile_id)
+        profiles.append({
+            "id": profile_id,
+            "name": str(raw_profile.get("name") or profile_id).strip(),
+            "rules": _normalize_strategy_rules(raw_profile.get("rules"), normalized_rules),
         })
-    if not tiers:
-        tiers = list(default_rules["trailing_tiers"])
+
+    if not profiles:
+        profiles.append({"id": "default", "name": "默认策略", "rules": dict(normalized_rules)})
+    profile_ids = {profile["id"] for profile in profiles}
+    migrated_positions = []
+    for position in positions:
+        item = dict(position)
+        if not item.get("strategy_id"):
+            if item.get("rules"):
+                profile_id = f"stock:{item['code']}"
+                if profile_id not in profile_ids:
+                    profiles.append({
+                        "id": profile_id,
+                        "name": f"{item['code']} 专属策略",
+                        "rules": _normalize_strategy_rules(item.get("rules"), normalized_rules),
+                    })
+                    profile_ids.add(profile_id)
+                item["strategy_id"] = profile_id
+            else:
+                item["strategy_id"] = "default"
+        migrated_positions.append(item)
 
     return {
         "enabled": bool(config.get("enabled", DEFAULT_STRATEGY_ALERT_CONFIG["enabled"])),
-        "positions": positions,
+        "positions": migrated_positions,
+        "strategy_profiles": profiles,
         "notifications": {
             "desktop_popup": bool(source_notifications.get("desktop_popup", default_notifications["desktop_popup"])),
             "panel_highlight": bool(source_notifications.get("panel_highlight", default_notifications["panel_highlight"])),
@@ -388,22 +468,7 @@ def normalize_strategy_alert_config(config):
             "remote_channel": source_notifications.get("remote_channel") if source_notifications.get("remote_channel") in ("wecom", "custom") else default_notifications["remote_channel"],
             "webhook_url": str(source_notifications.get("webhook_url") or "").strip(),
         },
-        "rules": {
-            "max_loss_enabled": bool(source_rules.get("max_loss_enabled", default_rules["max_loss_enabled"])),
-            "max_loss_pct": _bounded_float(source_rules.get("max_loss_pct"), default_rules["max_loss_pct"], 0.0, 100.0),
-            "stock_ma5_break_enabled": bool(source_rules.get("stock_ma5_break_enabled", default_rules["stock_ma5_break_enabled"])),
-            "index_ma5_break_enabled": bool(source_rules.get("index_ma5_break_enabled", default_rules["index_ma5_break_enabled"])),
-            "index_ma10_break_enabled": bool(source_rules.get("index_ma10_break_enabled", default_rules["index_ma10_break_enabled"])),
-            "trailing_profit_enabled": bool(source_rules.get("trailing_profit_enabled", default_rules["trailing_profit_enabled"])),
-            "trailing_tiers": tiers,
-            "skip_raise_on_volume_drop": bool(source_rules.get("skip_raise_on_volume_drop", default_rules["skip_raise_on_volume_drop"])),
-            "reduce_half_enabled": bool(source_rules.get("reduce_half_enabled", default_rules["reduce_half_enabled"])),
-            "reduce_half_profit_pct": _bounded_float(source_rules.get("reduce_half_profit_pct"), default_rules["reduce_half_profit_pct"], 0.0, 1000.0),
-            "max_position_pct": _bounded_float(source_rules.get("max_position_pct"), default_rules["max_position_pct"], 0.0, 100.0),
-            "block_heavy_position_on_index_ma5_down": bool(source_rules.get("block_heavy_position_on_index_ma5_down", default_rules["block_heavy_position_on_index_ma5_down"])),
-            "stale_position_enabled": bool(source_rules.get("stale_position_enabled", default_rules["stale_position_enabled"])),
-            "stale_position_days": _bounded_int(source_rules.get("stale_position_days"), default_rules["stale_position_days"], 1, 3650),
-        },
+        "rules": normalized_rules,
     }
 
 
@@ -417,9 +482,7 @@ def strategy_daily_request_codes(config):
     codes = strategy_request_codes(config)
     rules_list = [config.get("rules", {})]
     for position in config.get("positions", []):
-        merged = dict(config.get("rules", {}))
-        merged.update(position.get("rules") or {})
-        rules_list.append(merged)
+        rules_list.append(strategy_rules_for_position(config, position))
     if any(
         rules.get("index_ma5_break_enabled")
         or rules.get("index_ma10_break_enabled")
@@ -539,8 +602,7 @@ def update_strategy_position_state(config, quotes):
     positions = []
     for position in config.get("positions", []):
         item = dict(position)
-        position_rules = dict(rules)
-        position_rules.update(item.get("rules") or {})
+        position_rules = strategy_rules_for_position(config, item)
         quote = (quotes or {}).get(item["code"]) or {}
         cost = float(item.get("cost_price", 0.0))
         try:
@@ -596,8 +658,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
 
     states = []
     for position in config.get("positions", []):
-        rules = dict(config["rules"])
-        rules.update(position.get("rules") or {})
+        rules = strategy_rules_for_position(config, position)
         index_breaks, index_daily_errors = _strategy_index_status(rules, quotes, daily_by_code)
         quote = (quotes or {}).get(position["code"]) or {}
         name = str(quote.get("name") or position["code"])
