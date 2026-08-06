@@ -3,5 +3,7 @@ __pycache__/
 *.py[cod]
 dist/
 dist_strategy_alerts/
+dist_strategy_layout/
+strategy_page_*.png
 build/
 *.spec

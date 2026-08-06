@@ -361,6 +361,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(webhook_rect.width(), 220)
         dlg.close()
 
+    def test_strategy_page_sections_stay_inside_scroll_viewport(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 100.0}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
+        dlg.show()
+        self.app.processEvents()
+
+        viewport_rect = dlg.tabs.currentWidget().rect().translated(dlg.tabs.currentWidget().mapToGlobal(QPoint(0, 0)))
+        for widget in (dlg.strategy_position_detail, dlg.strategy_rules_group, dlg.strategy_notify_group):
+            rect = widget.rect().translated(widget.mapToGlobal(QPoint(0, 0)))
+            self.assertLessEqual(rect.right(), viewport_rect.right())
+            self.assertGreaterEqual(rect.left(), viewport_rect.left())
+        dlg.close()
+
     def test_data_source_editor_updates_custom_http_config(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

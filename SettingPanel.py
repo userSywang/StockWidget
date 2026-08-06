@@ -416,7 +416,7 @@ class SettingsDialog(QDialog):
 
         g_strategy_positions = QGroupBox("持仓风控")
         g_strategy_positions.setContentsMargins(3,12,3,6)
-        lay_strategy_positions = QHBoxLayout(g_strategy_positions)
+        lay_strategy_positions = QVBoxLayout(g_strategy_positions)
         lay_strategy_positions.setSpacing(6)
 
         strategy_left = QVBoxLayout()
@@ -471,7 +471,9 @@ class SettingsDialog(QDialog):
         form_strategy_position.addWidget(self.btn_strategy_profile_clone, 3, 3)
         self.strategy_position_detail = QWidget()
         self.strategy_position_detail.setLayout(form_strategy_position)
-        lay_strategy_positions.addWidget(self.strategy_position_detail, 1)
+        form_strategy_position.setColumnStretch(1, 1)
+        form_strategy_position.setColumnStretch(3, 1)
+        lay_strategy_positions.addWidget(self.strategy_position_detail)
         strategy_settings.addWidget(g_strategy_positions)
 
         g_strategy_rules = QGroupBox("策略规则（当前持仓）")
