@@ -307,10 +307,29 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(profiles[first_profile_id]["rules"]["max_loss_pct"], 4.0)
         dlg.close()
 
+    def test_strategy_rules_are_hidden_until_a_position_is_selected(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh512000", "cost_price": 1.0}],
+        }
+        dlg = SettingsDialog(win, None)
+        self.assertTrue(dlg.strategy_rules_group.isHidden())
+
+        dlg.list_strategy_positions.setCurrentRow(0)
+        self.assertFalse(dlg.strategy_rules_group.isHidden())
+        self.assertIn("sh512000", dlg.lbl_strategy_scope.text())
+        dlg.close()
+
     def test_strategy_rule_controls_do_not_overlap_after_show(self):
         win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh512000", "cost_price": 1.0}],
+        }
         dlg = SettingsDialog(win, None)
         dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
         dlg.show()
         self.app.processEvents()
 

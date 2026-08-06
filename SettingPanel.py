@@ -469,10 +469,13 @@ class SettingsDialog(QDialog):
         form_strategy_position.addWidget(QLabel("规则组："), 3, 0)
         form_strategy_position.addWidget(self.cmb_strategy_profile, 3, 1, 1, 2)
         form_strategy_position.addWidget(self.btn_strategy_profile_clone, 3, 3)
-        lay_strategy_positions.addLayout(form_strategy_position, 1)
+        self.strategy_position_detail = QWidget()
+        self.strategy_position_detail.setLayout(form_strategy_position)
+        lay_strategy_positions.addWidget(self.strategy_position_detail, 1)
         strategy_settings.addWidget(g_strategy_positions)
 
         g_strategy_rules = QGroupBox("策略规则（当前持仓）")
+        self.strategy_rules_group = g_strategy_rules
         g_strategy_rules.setContentsMargins(3,12,3,6)
         g_strategy_rules.setMinimumHeight(275)
         rules = QGridLayout(g_strategy_rules)
@@ -537,9 +540,13 @@ class SettingsDialog(QDialog):
         rules.addWidget(self.chk_strategy_stale, 11, 0)
         rules.addWidget(self.spin_strategy_stale_days, 11, 1)
         rules.addWidget(QLabel("天不上涨提醒卖出"), 11, 2, 1, 2)
+        self.lbl_strategy_scope = QLabel("请先选择持仓")
+        self.lbl_strategy_scope.setStyleSheet("color: #666666;")
+        strategy_settings.addWidget(self.lbl_strategy_scope)
         strategy_settings.addWidget(g_strategy_rules)
 
         g_strategy_notify = QGroupBox("提醒方式")
+        self.strategy_notify_group = g_strategy_notify
         g_strategy_notify.setContentsMargins(3,12,3,6)
         notify = QGridLayout(g_strategy_notify)
         notify.setHorizontalSpacing(6)
@@ -573,6 +580,7 @@ class SettingsDialog(QDialog):
         strategy_settings.addStretch(1)
 
         self._loading_strategy_editor = False
+        self._set_strategy_selection_visible(False)
         self._load_strategy_config()
         tab_strategy.setWidget(tab_strategy_content)
         self.tabs.addTab(tab_strategy, "策略")
@@ -1296,7 +1304,7 @@ class SettingsDialog(QDialog):
         date_part = f" {date}" if date else ""
         return f"{code} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
 
-    def _load_strategy_config(self, current_row=0):
+    def _load_strategy_config(self, current_row=None):
         self._strategy_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
         rules = self._strategy_config["rules"]
         notifications = self._strategy_config["notifications"]
@@ -1337,8 +1345,11 @@ class SettingsDialog(QDialog):
             self._load_strategy_profile_options()
             self.list_strategy_positions.blockSignals(False)
             if self.list_strategy_positions.count() > 0:
-                self.list_strategy_positions.setCurrentRow(max(0, min(current_row, self.list_strategy_positions.count() - 1)))
-                self._on_strategy_position_selected(self.list_strategy_positions.currentRow())
+                if current_row is not None:
+                    self.list_strategy_positions.setCurrentRow(max(0, min(current_row, self.list_strategy_positions.count() - 1)))
+                else:
+                    self.list_strategy_positions.setCurrentRow(-1)
+                    self._on_strategy_position_selected(-1)
             else:
                 self._clear_strategy_position_editor()
         finally:
@@ -1357,6 +1368,14 @@ class SettingsDialog(QDialog):
         self.spin_strategy_position_pct.setValue(0.0)
         self.edit_strategy_note.clear()
         self.cmb_strategy_profile.clear()
+
+    def _set_strategy_selection_visible(self, visible):
+        visible = bool(visible)
+        self.strategy_position_detail.setVisible(visible)
+        self.strategy_rules_group.setVisible(visible)
+        self.lbl_strategy_scope.setVisible(visible)
+        if not visible:
+            self.lbl_strategy_scope.setText("请先选择持仓")
 
     def _load_strategy_profile_options(self, selected_id=""):
         self.cmb_strategy_profile.blockSignals(True)
@@ -1416,8 +1435,12 @@ class SettingsDialog(QDialog):
     def _on_strategy_position_selected(self, row: int):
         positions = getattr(self, "_strategy_config", {}).get("positions", [])
         if row < 0 or row >= len(positions):
+            self._open_strategy_position = False
+            self._set_strategy_selection_visible(False)
             self._clear_strategy_position_editor()
             return
+        self._open_strategy_position = True
+        self._set_strategy_selection_visible(True)
         position = normalize_strategy_position(positions[row]) or {}
         self._loading_strategy_editor = True
         try:
@@ -1430,6 +1453,10 @@ class SettingsDialog(QDialog):
             self._load_strategy_profile_options(profile_id)
             rules = self._current_strategy_rules()
             self._load_strategy_rules(rules)
+            profile = self._current_strategy_profile() or {}
+            self.lbl_strategy_scope.setText(
+                f"当前股票：{position.get('code', '')}    策略：{profile.get('name') or profile.get('id') or '未绑定'}"
+            )
         finally:
             self._loading_strategy_editor = False
         self._refresh_strategy_preview()
@@ -1541,6 +1568,10 @@ class SettingsDialog(QDialog):
 
     def _refresh_strategy_preview(self):
         if not hasattr(self, "list_strategy_preview"):
+            return
+        if self._current_strategy_position_row() < 0:
+            self.list_strategy_preview.clear()
+            self.list_strategy_preview.addItem(QListWidgetItem("请先选择持仓查看对应策略"))
             return
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
         rules = self._current_strategy_rules()
