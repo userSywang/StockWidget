@@ -274,8 +274,8 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(win.strategy_alert_config["notifications"]["remote_push"])
         self.assertEqual(win.strategy_alert_config["notifications"]["remote_channel"], "wecom")
         self.assertEqual(win.strategy_alert_config["notifications"]["webhook_url"], "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test")
-        self.assertEqual(win.strategy_alert_config["rules"]["max_loss_pct"], 6.0)
-        self.assertEqual(win.strategy_alert_config["rules"]["stale_position_days"], 10)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 6.0)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["stale_position_days"], 10)
         preview = [dlg.list_strategy_preview.item(i).text() for i in range(dlg.list_strategy_preview.count())]
         self.assertTrue(any("桌面弹窗" in row and "远程推送" in row for row in preview))
         self.assertTrue(any("浮亏达到 6.0%" in row for row in preview))
@@ -300,11 +300,39 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.spin_strategy_loss.setValue(9.0)
         dlg._save_strategy_position()
 
-        profile_id = win.strategy_alert_config["positions"][1]["strategy_id"]
-        profiles = {profile["id"]: profile for profile in win.strategy_alert_config["strategy_profiles"]}
-        self.assertEqual(profiles[profile_id]["rules"]["max_loss_pct"], 9.0)
-        first_profile_id = win.strategy_alert_config["positions"][0]["strategy_id"]
-        self.assertEqual(profiles[first_profile_id]["rules"]["max_loss_pct"], 4.0)
+        self.assertEqual(win.strategy_alert_config["positions"][1]["rules"]["max_loss_pct"], 9.0)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 4.0)
+        dlg.close()
+
+    def test_strategy_rule_edits_do_not_change_other_default_positions(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [
+                {"code": "sh603259", "cost_price": 100.0, "strategy_id": "default"},
+                {"code": "sh600584", "cost_price": 100.0, "strategy_id": "default"},
+            ],
+        }
+        dlg = SettingsDialog(win, None)
+
+        dlg.list_strategy_positions.setCurrentRow(0)
+        dlg.spin_strategy_loss.setValue(10.0)
+        dlg._save_strategy_position()
+
+        dlg.list_strategy_positions.setCurrentRow(1)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 5.0)
+        dlg.spin_strategy_loss.setValue(5.0)
+        dlg._save_strategy_position()
+
+        positions = {item["code"]: item for item in win.strategy_alert_config["positions"]}
+        self.assertEqual(positions["sh603259"]["rules"]["max_loss_pct"], 10.0)
+        self.assertEqual(positions["sh600584"]["rules"]["max_loss_pct"], 5.0)
+        self.assertEqual(win.strategy_alert_config["rules"]["max_loss_pct"], 5.0)
+
+        dlg.list_strategy_positions.setCurrentRow(0)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 10.0)
+        dlg.list_strategy_positions.setCurrentRow(1)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 5.0)
         dlg.close()
 
     def test_strategy_rules_are_hidden_until_a_position_is_selected(self):

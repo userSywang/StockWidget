@@ -1422,16 +1422,14 @@ class SettingsDialog(QDialog):
     def _current_strategy_rules(self):
         row = self._current_strategy_position_row()
         positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        base_rules = dict(self._strategy_config.get("rules", {}))
         profile = self._current_strategy_profile()
+        rules = dict(base_rules)
         if profile:
-            rules = dict(self._strategy_config.get("rules", {}))
             rules.update(profile.get("rules") or {})
-            return rules
         if 0 <= row < len(positions) and isinstance(positions[row].get("rules"), dict) and positions[row].get("rules"):
-            rules = dict(self._strategy_config.get("rules", {}))
             rules.update(positions[row].get("rules", {}))
-            return rules
-        return dict(getattr(self, "_strategy_config", {}).get("rules", {}))
+        return rules
 
     def _load_strategy_rules(self, rules):
         rules = rules or {}
@@ -1505,7 +1503,7 @@ class SettingsDialog(QDialog):
         }
 
     def _collect_strategy_config_from_editor(self):
-        rules = self._collect_strategy_rules_from_editor()
+        current_rules = self._collect_strategy_rules_from_editor()
         positions = list(getattr(self, "_strategy_config", {}).get("positions", []))
         profiles = [dict(profile) for profile in getattr(self, "_strategy_config", {}).get("strategy_profiles", [])]
         row = self._current_strategy_position_row()
@@ -1513,12 +1511,8 @@ class SettingsDialog(QDialog):
             position = dict(positions[row])
             profile_id = self.cmb_strategy_profile.currentData() or position.get("strategy_id") or "default"
             position["strategy_id"] = profile_id
-            position["rules"] = {}
+            position["rules"] = current_rules
             positions[row] = position
-            for profile in profiles:
-                if profile.get("id") == profile_id:
-                    profile["rules"] = rules
-                    break
         return normalize_strategy_alert_config({
             "enabled": self.chk_strategy_enabled.isChecked(),
             "positions": positions,
@@ -1530,7 +1524,7 @@ class SettingsDialog(QDialog):
                 "remote_channel": self.cmb_strategy_remote_channel.currentData() or "wecom",
                 "webhook_url": self.edit_strategy_webhook.text().strip(),
             },
-            "rules": rules,
+            "rules": getattr(self, "_strategy_config", {}).get("rules", {}),
         })
 
     def _on_strategy_config_changed(self, *_args):
