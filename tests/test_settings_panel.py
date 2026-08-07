@@ -399,6 +399,39 @@ class SettingsPanelTests(unittest.TestCase):
             self.assertGreaterEqual(rect.left(), viewport_rect.left())
         dlg.close()
 
+    def test_strategy_position_and_tier_fields_are_not_clipped(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 149.448, "buy_date": "2026-08-05", "position_pct": 33.0}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
+        dlg.show()
+        self.app.processEvents()
+
+        viewport_rect = dlg.tabs.currentWidget().rect().translated(dlg.tabs.currentWidget().mapToGlobal(QPoint(0, 0)))
+        clipped_fields = [
+            dlg.edit_strategy_code,
+            dlg.spin_strategy_cost,
+            dlg.edit_strategy_buy_date,
+            dlg.spin_strategy_position_pct,
+            dlg.cmb_strategy_profile,
+            dlg.btn_strategy_profile_clone,
+            *dlg.spin_strategy_tier_profit,
+            *dlg.spin_strategy_tier_lock,
+        ]
+        for widget in clipped_fields:
+            rect = widget.rect().translated(widget.mapToGlobal(QPoint(0, 0)))
+            self.assertLessEqual(rect.right(), viewport_rect.right(), f"{widget} is clipped on the right")
+
+        for profit, lock in zip(dlg.spin_strategy_tier_profit, dlg.spin_strategy_tier_lock):
+            profit_rect = profit.rect().translated(profit.mapToGlobal(QPoint(0, 0)))
+            lock_rect = lock.rect().translated(lock.mapToGlobal(QPoint(0, 0)))
+            self.assertLess(lock_rect.left() - profit_rect.right(), 40)
+        dlg.close()
+
     def test_data_source_editor_updates_custom_http_config(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
