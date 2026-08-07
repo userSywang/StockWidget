@@ -5,6 +5,8 @@ dist/
 dist_strategy_alerts/
 dist_strategy_layout/
 dist_strategy_restore/
+dist_strategy_compact/
+strategy_layout_*.png
 strategy_page_*.png
 *.json.bak
 build/

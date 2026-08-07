@@ -342,6 +342,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.size().height(), 660)
         dlg.close()
 
+    def test_strategy_tier_controls_are_compact_and_visible(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 100.0}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
+        dlg.show()
+        self.app.processEvents()
+
+        for profit, lock in zip(dlg.spin_strategy_tier_profit, dlg.spin_strategy_tier_lock):
+            self.assertLessEqual(profit.width(), 80)
+            self.assertLessEqual(lock.width(), 80)
+            self.assertTrue(dlg.strategy_rules_group.rect().contains(profit.geometry()))
+            self.assertTrue(dlg.strategy_rules_group.rect().contains(lock.geometry()))
+        dlg.close()
+
     def test_strategy_notify_webhook_controls_are_visible_and_not_overlapped(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
