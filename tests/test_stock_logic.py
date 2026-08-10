@@ -178,6 +178,19 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(config["rule_schema_version"], 1)
         self.assertTrue(any(rule["id"] == "max_loss" for rule in config["action_rules"]))
 
+    def test_strategy_alert_config_includes_turtle_template(self):
+        config = normalize_strategy_alert_config({})
+
+        profiles = {profile["id"]: profile for profile in config["strategy_profiles"]}
+
+        self.assertIn("turtle:classic", profiles)
+        self.assertEqual(profiles["turtle:classic"]["strategy_type"], "turtle")
+        turtle_rules = {rule["id"]: rule for rule in profiles["turtle:classic"]["action_rules"]}
+        self.assertEqual(turtle_rules["turtle_entry_20d"]["condition"]["threshold"]["period"], 20)
+        self.assertEqual(turtle_rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 2.0)
+        self.assertEqual(turtle_rules["turtle_pyramid_0_5atr"]["condition"]["threshold"]["multiple"], 0.5)
+        self.assertEqual(turtle_rules["turtle_exit_10d"]["condition"]["threshold"]["period"], 10)
+
     def test_strategy_alert_config_normalizes_push_cooldown(self):
         config = normalize_strategy_alert_config({
             "notifications": {"push_cooldown_minutes": "5"},
@@ -251,6 +264,18 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertEqual(first_rules["max_loss"]["condition"]["threshold"]["value"], -10.0)
         self.assertEqual(second_rules["max_loss"]["condition"]["threshold"]["value"], -5.0)
+
+    def test_strategy_action_rules_for_position_use_turtle_profile_actions(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0, "strategy_id": "turtle:classic"}],
+        })
+
+        rules = {rule["id"]: rule for rule in strategy_action_rules_for_position(config, config["positions"][0])}
+
+        self.assertIn("turtle_entry_20d", rules)
+        self.assertIn("turtle_atr_stop", rules)
+        self.assertNotIn("max_loss", rules)
 
     def test_strategy_trailing_profit_locks_to_lower_profit_line(self):
         config = normalize_strategy_alert_config({

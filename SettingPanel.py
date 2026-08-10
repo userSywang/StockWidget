@@ -2787,7 +2787,11 @@ class SettingsDialog(QDialog):
         positions = self._strategy_config.get("positions", [])
         for profile in profiles:
             ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
-            rule_count = len([k for k, v in profile.get("rules", {}).items() if v])
+            action_rules = profile.get("action_rules") if isinstance(profile.get("action_rules"), list) else []
+            if action_rules:
+                rule_count = len([rule for rule in action_rules if isinstance(rule, dict) and rule.get("enabled", True)])
+            else:
+                rule_count = len([k for k, v in profile.get("rules", {}).items() if v])
             item = QListWidgetItem(f"{profile.get('name', '未命名')} ({rule_count}条/{ref_count}只)")
             item.setData(Qt.UserRole, profile.get("id"))
             self.list_strategy_templates.addItem(item)

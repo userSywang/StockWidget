@@ -40,6 +40,85 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
 
 STRATEGY_ACTION_RULE_SCHEMA_VERSION = 1
 
+
+def default_turtle_action_rules():
+    return [
+        _action_rule(
+            "turtle_entry_20d",
+            "20日新高突破买入提醒",
+            True,
+            {
+                "metric": "stock_price",
+                "operator": ">",
+                "threshold": {"type": "donchian_high", "period": 20},
+            },
+            {"type": "entry_signal", "reason": "donchian_breakout"},
+            "turtle",
+        ),
+        _action_rule(
+            "turtle_atr_stop",
+            "2ATR止损提醒",
+            True,
+            {
+                "metric": "stock_price",
+                "operator": "<=",
+                "threshold": {"type": "atr_offset", "basis": "entry_price", "multiple": 2.0, "direction": "down"},
+            },
+            {"type": "clear_position", "reason": "atr_stop"},
+            "turtle",
+        ),
+        _action_rule(
+            "turtle_pyramid_0_5atr",
+            "0.5ATR浮盈加仓提醒",
+            True,
+            {
+                "metric": "stock_price",
+                "operator": ">=",
+                "threshold": {"type": "atr_offset", "basis": "last_entry_price", "multiple": 0.5, "direction": "up"},
+            },
+            {"type": "add_position", "max_units": 4, "reason": "pyramid_on_profit"},
+            "turtle",
+        ),
+        _action_rule(
+            "turtle_exit_10d",
+            "10日低点离场提醒",
+            True,
+            {
+                "metric": "stock_price",
+                "operator": "<",
+                "threshold": {"type": "donchian_low", "period": 10},
+            },
+            {"type": "clear_position", "reason": "donchian_exit"},
+            "turtle",
+        ),
+    ]
+
+
+def default_strategy_profiles(normalized_rules=None):
+    rules = dict(normalized_rules or DEFAULT_STRATEGY_ALERT_CONFIG["rules"])
+    turtle_rules = _normalize_strategy_rules({
+        "max_loss_enabled": False,
+        "stock_ma5_break_enabled": False,
+        "index_ma5_break_enabled": False,
+        "index_ma10_break_enabled": False,
+        "trailing_profit_enabled": False,
+        "reduce_half_enabled": False,
+        "max_position_pct": 20.0,
+        "block_heavy_position_on_index_ma5_down": False,
+        "stale_position_enabled": False,
+    }, rules)
+    return [
+        {"id": "default", "name": "默认策略", "desc": "百分比止损、均线风控、阶梯移动止盈。", "strategy_type": "legacy", "rules": rules},
+        {
+            "id": "turtle:classic",
+            "name": "海龟策略模板",
+            "desc": "20日新高突破、2ATR止损、0.5ATR浮盈加仓、10日低点离场。当前作为动作提醒模板，不自动交易。",
+            "strategy_type": "turtle",
+            "rules": turtle_rules,
+            "action_rules": default_turtle_action_rules(),
+        },
+    ]
+
 _RE_FULL = re.compile(r"^(sh|sz|bj|bk|gn|sw)\d+$")
 _RE_6 = re.compile(r"^\d{6}$")
 
@@ -547,6 +626,21 @@ def strategy_action_rules_from_rules(rules, source="legacy"):
 
 
 def strategy_action_rules_for_position(config, position):
+    config = normalize_strategy_alert_config(config)
+    strategy_id = str((position or {}).get("strategy_id") or "").strip()
+    for profile in config.get("strategy_profiles", []):
+        if profile.get("id") != strategy_id:
+            continue
+        action_rules = profile.get("action_rules") if isinstance(profile.get("action_rules"), list) else []
+        if action_rules:
+            resolved = []
+            for rule in action_rules:
+                if not isinstance(rule, dict):
+                    continue
+                item = dict(rule)
+                item["source"] = "resolved"
+                resolved.append(item)
+            return resolved
     return strategy_action_rules_from_rules(strategy_rules_for_position(config, position), "resolved")
 
 
@@ -601,14 +695,25 @@ def normalize_strategy_alert_config(config):
         if not profile_id or profile_id in seen_profile_ids:
             continue
         seen_profile_ids.add(profile_id)
+        profile_action_rules = raw_profile.get("action_rules") if isinstance(raw_profile.get("action_rules"), list) else []
         profiles.append({
             "id": profile_id,
             "name": str(raw_profile.get("name") or profile_id).strip(),
+            "desc": str(raw_profile.get("desc") or "").strip(),
+            "strategy_type": str(raw_profile.get("strategy_type") or "legacy").strip() or "legacy",
             "rules": _normalize_strategy_rules(raw_profile.get("rules"), normalized_rules),
+            "action_rules": [dict(rule) for rule in profile_action_rules if isinstance(rule, dict)],
         })
 
     if not profiles:
         profiles.append({"id": "default", "name": "默认策略", "rules": dict(normalized_rules)})
+    builtin_profiles = default_strategy_profiles(normalized_rules)
+    profile_ids = {profile["id"] for profile in profiles}
+    for builtin in builtin_profiles:
+        if builtin["id"] not in profile_ids:
+            profiles.append(builtin)
+            profile_ids.add(builtin["id"])
+
     profile_ids = {profile["id"] for profile in profiles}
     migrated_positions = []
     for position in positions:

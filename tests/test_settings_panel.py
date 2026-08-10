@@ -453,6 +453,20 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 4.0)
         dlg.close()
 
+    def test_strategy_library_shows_builtin_turtle_template(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        items = [
+            (dlg.list_strategy_templates.item(i).data(Qt.UserRole), dlg.list_strategy_templates.item(i).text())
+            for i in range(dlg.list_strategy_templates.count())
+        ]
+        turtle_items = [text for profile_id, text in items if profile_id == "turtle:classic"]
+
+        self.assertEqual(len(turtle_items), 1)
+        self.assertIn("4条", turtle_items[0])
+        dlg.close()
+
     def test_strategy_rule_edits_do_not_change_other_default_positions(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259", "sh600584"]}]
