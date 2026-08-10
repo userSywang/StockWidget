@@ -8,6 +8,9 @@ dist_strategy_restore/
 dist_strategy_compact/
 strategy_layout_*.png
 strategy_page_*.png
+strategy_tab_*.png
+strategy_condition_builder.png
 *.json.bak
+*.py.bak
 build/
 *.spec

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -23,6 +23,8 @@ from StockLogic import (
     normalize_price_alerts,
     normalize_strategy_alert_config,
     normalize_strategy_position,
+    strategy_rules_for_position,
+    strategy_stop_price,
 )
 
 class SettingsDialog(QDialog):
@@ -408,35 +410,48 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(tab_alert, "提醒")
 
         # ---- 第四页：策略 ----
-        tab_strategy = QScrollArea()
-        tab_strategy.setWidgetResizable(True)
-        tab_strategy.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        tab_strategy_content = QWidget()
-        strategy_settings = QVBoxLayout(tab_strategy_content)
-        strategy_settings.setContentsMargins(4, 4, 4, 4)
-        strategy_settings.setSpacing(4)
+        tab_strategy = QWidget()
+        strategy_main_layout = QVBoxLayout(tab_strategy)
+        strategy_main_layout.setContentsMargins(4, 4, 4, 4)
+        strategy_main_layout.setSpacing(4)
 
-        g_strategy_positions = QGroupBox("持仓风控")
-        g_strategy_positions.setContentsMargins(3,12,3,6)
+        self.strategy_subtabs = QTabWidget()
+        self.strategy_subtabs.setStyleSheet("QTabWidget::pane { border: 1px solid #c0c0c0; background: #f0f0f0; }")
+        strategy_main_layout.addWidget(self.strategy_subtabs)
+
+        # ===== 子Tab 1: 持仓策略 =====
+        tab_position_strategy = QScrollArea()
+        tab_position_strategy.setWidgetResizable(True)
+        tab_position_strategy.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        tab_position_strategy_content = QWidget()
+        position_strategy_layout = QVBoxLayout(tab_position_strategy_content)
+        position_strategy_layout.setContentsMargins(4, 4, 4, 4)
+        position_strategy_layout.setSpacing(4)
+
+        # 持仓列表 GroupBox
+        g_strategy_positions = QGroupBox("持仓列表")
+        g_strategy_positions.setContentsMargins(6,14,6,8)
         lay_strategy_positions = QVBoxLayout(g_strategy_positions)
-        lay_strategy_positions.setSpacing(6)
+        lay_strategy_positions.setSpacing(8)
 
         strategy_left = QVBoxLayout()
         self.chk_strategy_enabled = QCheckBox("启用策略提醒")
         strategy_left.addWidget(self.chk_strategy_enabled)
         self.list_strategy_positions = QListWidget()
-        self.list_strategy_positions.setFixedSize(170, 72)
+        self.list_strategy_positions.setMinimumSize(400, 100)
         strategy_left.addWidget(self.list_strategy_positions)
         strategy_btns = QHBoxLayout()
+        strategy_btns.setSpacing(6)
         self.btn_strategy_add = QPushButton("添加持仓")
         self.btn_strategy_del = QPushButton("删除持仓")
         self.btn_strategy_save = QPushButton("保存当前持仓")
-        self.btn_strategy_add.setFixedWidth(76)
-        self.btn_strategy_del.setFixedWidth(76)
-        self.btn_strategy_save.setFixedWidth(100)
+        self.btn_strategy_add.setFixedWidth(90)
+        self.btn_strategy_del.setFixedWidth(90)
+        self.btn_strategy_save.setFixedWidth(110)
         strategy_btns.addWidget(self.btn_strategy_add)
         strategy_btns.addWidget(self.btn_strategy_del)
         strategy_btns.addWidget(self.btn_strategy_save)
+        strategy_btns.addStretch(1)
         strategy_left.addLayout(strategy_btns)
         lay_strategy_positions.addLayout(strategy_left)
 
@@ -472,7 +487,7 @@ class SettingsDialog(QDialog):
         form_strategy_position.addWidget(self.spin_strategy_position_pct, 1, 3)
         form_strategy_position.addWidget(QLabel("备注："), 2, 0)
         form_strategy_position.addWidget(self.edit_strategy_note, 2, 1, 1, 3)
-        form_strategy_position.addWidget(QLabel("规则组："), 3, 0)
+        form_strategy_position.addWidget(QLabel("策略模板："), 3, 0)
         form_strategy_position.addWidget(self.cmb_strategy_profile, 3, 1, 1, 2)
         form_strategy_position.addWidget(self.btn_strategy_profile_clone, 3, 3)
         self.strategy_position_detail = QWidget()
@@ -480,15 +495,45 @@ class SettingsDialog(QDialog):
         form_strategy_position.setColumnStretch(1, 1)
         form_strategy_position.setColumnStretch(3, 1)
         lay_strategy_positions.addWidget(self.strategy_position_detail)
-        strategy_settings.addWidget(g_strategy_positions)
+        position_strategy_layout.addWidget(g_strategy_positions)
 
-        g_strategy_rules = QGroupBox("策略规则（当前持仓）")
-        self.strategy_rules_group = g_strategy_rules
-        g_strategy_rules.setContentsMargins(3,12,3,6)
-        g_strategy_rules.setMinimumHeight(275)
-        rules = QGridLayout(g_strategy_rules)
-        rules.setHorizontalSpacing(3)
-        rules.setVerticalSpacing(3)
+        # 策略配置 GroupBox（重构：模板引用 + 参数覆盖）
+        g_strategy_config = QGroupBox("策略配置")
+        self.strategy_config_group = g_strategy_config
+        self.strategy_rules_group = g_strategy_config
+        g_strategy_config.setContentsMargins(6,14,6,8)
+        g_strategy_config.setMinimumHeight(450)
+        config_layout = QVBoxLayout(g_strategy_config)
+        config_layout.setSpacing(8)
+
+        # 操作按钮（放在参数列表上方，确保可见）
+        params_action_layout = QHBoxLayout()
+        params_action_layout.setSpacing(6)
+        self.btn_strategy_template_reset = QPushButton("恢复默认")
+        self.btn_strategy_template_reset.setFixedWidth(90)
+        self.btn_strategy_params_edit = QPushButton("编辑参数")
+        self.btn_strategy_params_edit.setFixedWidth(90)
+        self.btn_strategy_params_save = QPushButton("保存参数")
+        self.btn_strategy_params_save.setFixedWidth(90)
+        self.btn_strategy_params_save.setVisible(False)
+        params_action_layout.addWidget(self.btn_strategy_template_reset)
+        params_action_layout.addWidget(self.btn_strategy_params_edit)
+        params_action_layout.addWidget(self.btn_strategy_params_save)
+        params_action_layout.addStretch(1)
+        config_layout.addLayout(params_action_layout)
+
+        # 参数覆盖状态列表（直接显示，无需模板引用文本）
+        self.list_strategy_params = QListWidget()
+        self.list_strategy_params.setFixedHeight(320)
+        config_layout.addWidget(self.list_strategy_params)
+
+        # 参数编辑区（默认隐藏，点击编辑后显示）
+        self.strategy_params_editor = QWidget()
+        params_editor_layout = QVBoxLayout(self.strategy_params_editor)
+        params_editor_layout.setContentsMargins(0, 0, 0, 0)
+        params_editor_layout.setSpacing(4)
+
+        # 保留原有策略规则控件，但重新组织到分组中
         self.chk_strategy_loss = QCheckBox("浮亏达到")
         self.spin_strategy_loss = QDoubleSpinBox()
         self.spin_strategy_loss.setRange(0.0, 100.0)
@@ -529,19 +574,24 @@ class SettingsDialog(QDialog):
         self.spin_strategy_stale_days = QSpinBox()
         self.spin_strategy_stale_days.setRange(1, 3650)
 
-        rules.addWidget(self.chk_strategy_loss, 0, 0)
-        rules.addWidget(self.spin_strategy_loss, 0, 1)
-        rules.addWidget(QLabel("提醒清仓"), 0, 2)
-        rules.addWidget(self.chk_strategy_stock_ma5, 1, 0, 1, 3)
-        rules.addWidget(self.chk_strategy_index_ma5, 2, 0, 1, 3)
-        rules.addWidget(self.chk_strategy_index_ma10, 3, 0, 1, 3)
-        rules.addWidget(self.chk_strategy_trailing, 4, 0, 1, 3)
-        for i, (profit, lock) in enumerate(zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock), start=5):
+        # 组织参数编辑控件到GroupBox中
+        g_profit_rules = QGroupBox("止盈策略")
+        profit_layout = QGridLayout(g_profit_rules)
+        profit_layout.setHorizontalSpacing(6)
+        profit_layout.setVerticalSpacing(4)
+        profit_layout.addWidget(self.chk_strategy_loss, 0, 0)
+        profit_layout.addWidget(self.spin_strategy_loss, 0, 1)
+        profit_layout.addWidget(QLabel("提醒清仓"), 0, 2)
+        profit_layout.addWidget(self.chk_strategy_reduce_half, 1, 0)
+        profit_layout.addWidget(self.spin_strategy_reduce_half, 1, 1)
+        profit_layout.addWidget(QLabel("提醒减半仓"), 1, 2)
+        profit_layout.addWidget(self.chk_strategy_trailing, 2, 0, 1, 3)
+        for i, (profit, lock) in enumerate(zip(self.spin_strategy_tier_profit, self.spin_strategy_tier_lock), start=3):
             tier_row = QWidget()
             tier_lay = QHBoxLayout(tier_row)
             tier_lay.setContentsMargins(0, 0, 0, 0)
             tier_lay.setSpacing(4)
-            tier_label = QLabel(f"盈利{i - 4}档")
+            tier_label = QLabel(f"盈利{i - 2}档")
             tier_label.setFixedWidth(58)
             lock_label = QLabel("锁")
             lock_label.setFixedWidth(22)
@@ -551,25 +601,42 @@ class SettingsDialog(QDialog):
             tier_lay.addWidget(lock)
             tier_lay.addStretch(1)
             self.strategy_tier_rows.append(tier_row)
-            rules.addWidget(tier_row, i, 0, 1, 4)
-        rules.addWidget(self.chk_strategy_skip_volume_drop, 8, 0, 1, 4)
-        rules.addWidget(self.chk_strategy_reduce_half, 9, 0)
-        rules.addWidget(self.spin_strategy_reduce_half, 9, 1)
-        rules.addWidget(QLabel("提醒减半仓"), 9, 2)
-        rules.addWidget(QLabel("单票仓位上限："), 10, 0)
-        rules.addWidget(self.spin_strategy_max_position, 10, 1)
-        rules.addWidget(self.chk_strategy_block_heavy, 10, 2, 1, 2)
-        rules.addWidget(self.chk_strategy_stale, 11, 0)
-        rules.addWidget(self.spin_strategy_stale_days, 11, 1)
-        rules.addWidget(QLabel("天不上涨提醒卖出"), 11, 2, 1, 2)
+            profit_layout.addWidget(tier_row, i, 0, 1, 4)
+
+        g_loss_rules = QGroupBox("止损/风控策略")
+        loss_layout = QVBoxLayout(g_loss_rules)
+        loss_layout.setSpacing(4)
+        loss_layout.addWidget(self.chk_strategy_stock_ma5)
+        loss_layout.addWidget(self.chk_strategy_index_ma5)
+        loss_layout.addWidget(self.chk_strategy_index_ma10)
+        loss_layout.addWidget(self.chk_strategy_skip_volume_drop)
+
+        g_position_rules = QGroupBox("仓位风控")
+        position_layout = QGridLayout(g_position_rules)
+        position_layout.setHorizontalSpacing(6)
+        position_layout.setVerticalSpacing(4)
+        position_layout.addWidget(QLabel("单票仓位上限："), 0, 0)
+        position_layout.addWidget(self.spin_strategy_max_position, 0, 1)
+        position_layout.addWidget(self.chk_strategy_block_heavy, 0, 2, 1, 2)
+        position_layout.addWidget(self.chk_strategy_stale, 1, 0)
+        position_layout.addWidget(self.spin_strategy_stale_days, 1, 1)
+        position_layout.addWidget(QLabel("天不上涨提醒卖出"), 1, 2, 1, 2)
+
+        params_editor_layout.addWidget(g_profit_rules)
+        params_editor_layout.addWidget(g_loss_rules)
+        params_editor_layout.addWidget(g_position_rules)
+        self.strategy_params_editor.setVisible(False)
+        config_layout.addWidget(self.strategy_params_editor)
+
         self.lbl_strategy_scope = QLabel("请先选择持仓")
         self.lbl_strategy_scope.setStyleSheet("color: #666666;")
-        strategy_settings.addWidget(self.lbl_strategy_scope)
-        strategy_settings.addWidget(g_strategy_rules)
+        position_strategy_layout.addWidget(self.lbl_strategy_scope)
+        position_strategy_layout.addWidget(g_strategy_config)
 
+        # 提醒方式 GroupBox（保留）
         g_strategy_notify = QGroupBox("提醒方式")
         self.strategy_notify_group = g_strategy_notify
-        g_strategy_notify.setContentsMargins(3,12,3,6)
+        g_strategy_notify.setContentsMargins(6,14,6,8)
         notify = QGridLayout(g_strategy_notify)
         notify.setHorizontalSpacing(6)
         notify.setVerticalSpacing(6)
@@ -598,13 +665,235 @@ class SettingsDialog(QDialog):
         notify.addWidget(self.btn_strategy_push_test, 3, 1, Qt.AlignLeft)
         notify.addWidget(QLabel("提醒预览："), 4, 0, Qt.AlignTop)
         notify.addWidget(self.list_strategy_preview, 4, 1, 1, 3)
-        strategy_settings.addWidget(g_strategy_notify)
-        strategy_settings.addStretch(1)
+        position_strategy_layout.addWidget(g_strategy_notify)
+        position_strategy_layout.addStretch(1)
+
+        tab_position_strategy.setWidget(tab_position_strategy_content)
+        self.strategy_subtabs.addTab(tab_position_strategy, "持仓策略")
+
+        # ===== 子Tab 2: 策略库 =====
+        tab_strategy_library = QWidget()
+        strategy_library_layout = QVBoxLayout(tab_strategy_library)
+        strategy_library_layout.setContentsMargins(4, 4, 4, 4)
+        strategy_library_layout.setSpacing(4)
+
+        # 模板列表 + 模板编辑
+        library_splitter = QHBoxLayout()
+        library_splitter.setSpacing(6)
+
+        # 左侧：模板列表
+        g_template_list = QGroupBox("模板列表")
+        g_template_list.setContentsMargins(6,14,6,8)
+        template_list_layout = QVBoxLayout(g_template_list)
+        template_list_layout.setSpacing(4)
+        self.btn_template_new = QPushButton("+ 新建模板")
+        self.btn_template_new.setFixedWidth(90)
+        template_list_layout.addWidget(self.btn_template_new)
+        self.list_strategy_templates = QListWidget()
+        self.list_strategy_templates.setFixedWidth(200)
+        template_list_layout.addWidget(self.list_strategy_templates)
+        library_splitter.addWidget(g_template_list)
+
+        # 右侧：模板编辑
+        g_template_edit = QGroupBox("模板编辑")
+        g_template_edit.setContentsMargins(6,14,6,8)
+        template_edit_layout = QVBoxLayout(g_template_edit)
+        template_edit_layout.setSpacing(6)
+
+        # 模板基本信息
+        form_template_info = QGridLayout()
+        form_template_info.setHorizontalSpacing(6)
+        form_template_info.setVerticalSpacing(4)
+        self.edit_template_name = QLineEdit()
+        self.edit_template_name.setPlaceholderText("模板名称")
+        self.edit_template_desc = QLineEdit()
+        self.edit_template_desc.setPlaceholderText("模板描述")
+        form_template_info.addWidget(QLabel("模板名称："), 0, 0)
+        form_template_info.addWidget(self.edit_template_name, 0, 1)
+        form_template_info.addWidget(QLabel("模板描述："), 1, 0)
+        form_template_info.addWidget(self.edit_template_desc, 1, 1)
+        template_edit_layout.addLayout(form_template_info)
+
+        self.lbl_template_ref_count = QLabel("被引用：0 只股票")
+        self.lbl_template_ref_count.setStyleSheet("color: #666666;")
+        template_edit_layout.addWidget(self.lbl_template_ref_count)
+
+        # 规则编辑区（放在滚动区域中）
+        rules_scroll = QScrollArea()
+        rules_scroll.setWidgetResizable(True)
+        rules_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rules_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        rules_scroll_content = QWidget()
+        template_rules_layout = QVBoxLayout(rules_scroll_content)
+        template_rules_layout.setSpacing(4)
+        template_rules_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 止盈策略
+        g_template_profit = QGroupBox("止盈策略")
+        template_profit_layout = QGridLayout(g_template_profit)
+        template_profit_layout.setHorizontalSpacing(6)
+        template_profit_layout.setVerticalSpacing(4)
+        self.chk_template_loss = QCheckBox("浮亏达到")
+        self.spin_template_loss = QDoubleSpinBox()
+        self.spin_template_loss.setRange(0.0, 100.0)
+        self.spin_template_loss.setDecimals(1)
+        self.spin_template_loss.setSuffix("%")
+        template_profit_layout.addWidget(self.chk_template_loss, 0, 0)
+        template_profit_layout.addWidget(self.spin_template_loss, 0, 1)
+        template_profit_layout.addWidget(QLabel("提醒清仓"), 0, 2)
+        self.chk_template_reduce_half = QCheckBox("盈利达到")
+        self.spin_template_reduce_half = QDoubleSpinBox()
+        self.spin_template_reduce_half.setRange(0.0, 1000.0)
+        self.spin_template_reduce_half.setDecimals(1)
+        self.spin_template_reduce_half.setSuffix("%")
+        template_profit_layout.addWidget(self.chk_template_reduce_half, 1, 0)
+        template_profit_layout.addWidget(self.spin_template_reduce_half, 1, 1)
+        template_profit_layout.addWidget(QLabel("提醒减半仓"), 1, 2)
+        self.chk_template_trailing = QCheckBox("阶梯移动止盈")
+        template_profit_layout.addWidget(self.chk_template_trailing, 2, 0, 1, 3)
+        self.spin_template_tier_profit = []
+        self.spin_template_tier_lock = []
+        for i in range(3):
+            p = QDoubleSpinBox()
+            p.setRange(0.0, 1000.0)
+            p.setDecimals(1)
+            p.setSuffix("%")
+            p.setFixedWidth(72)
+            l = QDoubleSpinBox()
+            l.setRange(0.0, 1000.0)
+            l.setDecimals(1)
+            l.setSuffix("%")
+            l.setFixedWidth(72)
+            self.spin_template_tier_profit.append(p)
+            self.spin_template_tier_lock.append(l)
+            tier_row = QWidget()
+            tier_lay = QHBoxLayout(tier_row)
+            tier_lay.setContentsMargins(0, 0, 0, 0)
+            tier_lay.setSpacing(4)
+            tier_label = QLabel(f"盈利{i + 1}档")
+            tier_label.setFixedWidth(58)
+            lock_label = QLabel("锁")
+            lock_label.setFixedWidth(22)
+            tier_lay.addWidget(tier_label)
+            tier_lay.addWidget(p)
+            tier_lay.addWidget(lock_label)
+            tier_lay.addWidget(l)
+            tier_lay.addStretch(1)
+            template_profit_layout.addWidget(tier_row, 3 + i, 0, 1, 4)
+
+        # 止损/风控策略
+        g_template_loss = QGroupBox("止损/风控策略")
+        template_loss_layout = QVBoxLayout(g_template_loss)
+        template_loss_layout.setSpacing(4)
+        self.chk_template_stock_ma5 = QCheckBox("个股破5日线提醒卖出")
+        self.chk_template_index_ma5 = QCheckBox("大盘破5日线提醒全仓卖出")
+        self.chk_template_index_ma10 = QCheckBox("大盘破10日线提醒全仓卖出")
+        self.chk_template_skip_volume_drop = QCheckBox("放量大跌当日不提升止盈线")
+        template_loss_layout.addWidget(self.chk_template_stock_ma5)
+        template_loss_layout.addWidget(self.chk_template_index_ma5)
+        template_loss_layout.addWidget(self.chk_template_index_ma10)
+        template_loss_layout.addWidget(self.chk_template_skip_volume_drop)
+
+        # 仓位风控
+        g_template_position = QGroupBox("仓位风控")
+        template_position_layout = QGridLayout(g_template_position)
+        template_position_layout.setHorizontalSpacing(6)
+        template_position_layout.setVerticalSpacing(4)
+        self.spin_template_max_position = QDoubleSpinBox()
+        self.spin_template_max_position.setRange(0.0, 100.0)
+        self.spin_template_max_position.setDecimals(1)
+        self.spin_template_max_position.setSuffix("%")
+        self.chk_template_block_heavy = QCheckBox("大盘5日线向下禁止新开重仓")
+        self.chk_template_stale = QCheckBox("持仓满")
+        self.spin_template_stale_days = QSpinBox()
+        self.spin_template_stale_days.setRange(1, 3650)
+        template_position_layout.addWidget(QLabel("单票仓位上限："), 0, 0)
+        template_position_layout.addWidget(self.spin_template_max_position, 0, 1)
+        template_position_layout.addWidget(self.chk_template_block_heavy, 0, 2, 1, 2)
+        template_position_layout.addWidget(self.chk_template_stale, 1, 0)
+        template_position_layout.addWidget(self.spin_template_stale_days, 1, 1)
+        template_position_layout.addWidget(QLabel("天不上涨提醒卖出"), 1, 2, 1, 2)
+
+        template_rules_layout.addWidget(g_template_profit)
+        template_rules_layout.addWidget(g_template_loss)
+        template_rules_layout.addWidget(g_template_position)
+        rules_scroll.setWidget(rules_scroll_content)
+        template_edit_layout.addWidget(rules_scroll)
+
+        # 操作按钮
+        template_btn_layout = QHBoxLayout()
+        template_btn_layout.setSpacing(6)
+        self.btn_template_save = QPushButton("保存模板")
+        self.btn_template_save.setFixedWidth(90)
+        self.btn_template_copy = QPushButton("复制模板")
+        self.btn_template_copy.setFixedWidth(90)
+        self.btn_template_delete = QPushButton("删除模板")
+        self.btn_template_delete.setFixedWidth(90)
+        template_btn_layout.addWidget(self.btn_template_save)
+        template_btn_layout.addWidget(self.btn_template_copy)
+        template_btn_layout.addWidget(self.btn_template_delete)
+        template_btn_layout.addStretch(1)
+        template_edit_layout.addLayout(template_btn_layout)
+
+        library_splitter.addWidget(g_template_edit)
+        strategy_library_layout.addLayout(library_splitter)
+
+        # 条件构建器
+        g_condition_builder = QGroupBox("条件构建器（自定义规则）")
+        g_condition_builder.setContentsMargins(6,14,6,8)
+        condition_layout = QVBoxLayout(g_condition_builder)
+        condition_layout.setSpacing(6)
+
+        # 条件列表
+        self.list_condition_rules = QListWidget()
+        self.list_condition_rules.setFixedHeight(100)
+        condition_layout.addWidget(self.list_condition_rules)
+
+        # 条件编辑区
+        condition_edit_layout = QHBoxLayout()
+        condition_edit_layout.setSpacing(4)
+        self.cmb_condition_indicator = QComboBox()
+        self.cmb_condition_indicator.addItems(["收盘价", "5日均线", "10日均线", "成交量", "涨跌幅"])
+        self.cmb_condition_operator = QComboBox()
+        self.cmb_condition_operator.addItems(["大于", "小于", "大于等于", "小于等于", "突破", "跌破"])
+        self.edit_condition_threshold = QLineEdit()
+        self.edit_condition_threshold.setPlaceholderText("阈值")
+        self.edit_condition_threshold.setFixedWidth(80)
+        self.cmb_condition_action = QComboBox()
+        self.cmb_condition_action.addItems(["提醒清仓", "提醒减半仓", "提醒卖出", "禁止新开仓"])
+        self.btn_condition_add = QPushButton("+ 添加")
+        self.btn_condition_add.setFixedWidth(70)
+        condition_edit_layout.addWidget(self.cmb_condition_indicator)
+        condition_edit_layout.addWidget(self.cmb_condition_operator)
+        condition_edit_layout.addWidget(self.edit_condition_threshold)
+        condition_edit_layout.addWidget(self.cmb_condition_action)
+        condition_edit_layout.addWidget(self.btn_condition_add)
+        condition_edit_layout.addStretch(1)
+        condition_layout.addLayout(condition_edit_layout)
+
+        # 逻辑连接
+        logic_layout = QHBoxLayout()
+        logic_layout.setSpacing(4)
+        logic_layout.addWidget(QLabel("逻辑连接："))
+        self.radio_logic_and = QRadioButton("且")
+        self.radio_logic_or = QRadioButton("或")
+        self.radio_logic_and.setChecked(True)
+        logic_layout.addWidget(self.radio_logic_and)
+        logic_layout.addWidget(self.radio_logic_or)
+        logic_layout.addStretch(1)
+        condition_layout.addLayout(logic_layout)
+
+        lbl_condition_hint = QLabel("多条条件之间支持\"且/或\"逻辑组合，输出序列化为YAML")
+        lbl_condition_hint.setStyleSheet("color: #666666;")
+        condition_layout.addWidget(lbl_condition_hint)
+        strategy_library_layout.addWidget(g_condition_builder)
+        strategy_library_layout.addStretch(1)
+
+        self.strategy_subtabs.addTab(tab_strategy_library, "策略库")
 
         self._loading_strategy_editor = False
         self._set_strategy_selection_visible(False)
         self._load_strategy_config()
-        tab_strategy.setWidget(tab_strategy_content)
         self.tabs.addTab(tab_strategy, "策略")
 
         # ---- 第四页 ----
@@ -817,6 +1106,38 @@ class SettingsDialog(QDialog):
             *self.spin_strategy_tier_lock,
         ):
             spin.valueChanged.connect(self._on_strategy_config_changed)
+        self.btn_strategy_params_edit.clicked.connect(self._on_strategy_params_edit)
+        self.btn_strategy_params_save.clicked.connect(self._on_strategy_params_save)
+        self.btn_strategy_template_reset.clicked.connect(self._on_strategy_template_reset)
+        self.list_strategy_templates.currentRowChanged.connect(self._on_strategy_template_selected)
+        self.btn_template_new.clicked.connect(self._on_template_new)
+        self.btn_template_save.clicked.connect(self._on_template_save)
+        self.btn_template_copy.clicked.connect(self._on_template_copy)
+        self.btn_template_delete.clicked.connect(self._on_template_delete)
+        self.btn_condition_add.clicked.connect(self._on_condition_add)
+        self.list_condition_rules.itemDoubleClicked.connect(self._on_condition_remove)
+        # 模板规则控件信号连接
+        for checkbox in (
+            self.chk_template_loss,
+            self.chk_template_stock_ma5,
+            self.chk_template_index_ma5,
+            self.chk_template_index_ma10,
+            self.chk_template_trailing,
+            self.chk_template_skip_volume_drop,
+            self.chk_template_reduce_half,
+            self.chk_template_block_heavy,
+            self.chk_template_stale,
+        ):
+            checkbox.toggled.connect(self._on_template_rules_changed)
+        for spin in (
+            self.spin_template_loss,
+            self.spin_template_reduce_half,
+            self.spin_template_max_position,
+            self.spin_template_stale_days,
+            *self.spin_template_tier_profit,
+            *self.spin_template_tier_lock,
+        ):
+            spin.valueChanged.connect(self._on_template_rules_changed)
         self.chk_warning_visible.toggled.connect(self._on_warning_changed)
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
@@ -1377,6 +1698,8 @@ class SettingsDialog(QDialog):
         finally:
             self._loading_strategy_editor = False
         self._refresh_strategy_preview()
+        self._refresh_strategy_template_list()
+        self._refresh_strategy_params_list()
 
     def _current_strategy_position_row(self):
         row = self.list_strategy_positions.currentRow()
@@ -1394,7 +1717,7 @@ class SettingsDialog(QDialog):
     def _set_strategy_selection_visible(self, visible):
         visible = bool(visible)
         self.strategy_position_detail.setVisible(visible)
-        self.strategy_rules_group.setVisible(visible)
+        self.strategy_config_group.setVisible(visible)
         self.lbl_strategy_scope.setVisible(visible)
         if not visible:
             self.lbl_strategy_scope.setText("请先选择持仓")
@@ -1480,6 +1803,7 @@ class SettingsDialog(QDialog):
         finally:
             self._loading_strategy_editor = False
         self._refresh_strategy_preview()
+        self._refresh_strategy_params_list()
 
     def _collect_strategy_rules_from_editor(self):
         return {
@@ -1548,6 +1872,7 @@ class SettingsDialog(QDialog):
             self._load_strategy_rules(self._current_strategy_rules())
         finally:
             self._loading_strategy_editor = False
+        self._mark_pending_apply_alert(self._strategy_config["positions"][row].get("code", ""))
         self._refresh_strategy_preview()
 
     def _clone_strategy_profile(self):
@@ -1570,17 +1895,177 @@ class SettingsDialog(QDialog):
         if row >= 0:
             self._strategy_config["positions"][row]["strategy_id"] = profile_id
             self._strategy_config["positions"][row]["rules"] = {}
+            self._mark_pending_apply_alert(self._strategy_config["positions"][row].get("code", ""))
         self._load_strategy_profile_options(profile_id)
         self._load_strategy_rules(profile["rules"])
         self._refresh_strategy_preview()
 
     def _save_strategy_position(self):
-        if self._current_strategy_position_row() < 0:
+        row = self._current_strategy_position_row()
+        if row < 0:
             return
+        # 保存前快照，用于检测条件/模板变化
+        position = self._strategy_config["positions"][row]
+        code = position.get("code", "")
+        old_rules = dict(position.get("rules", {}))
+        old_profile_id = position.get("strategy_id", "default")
+        was_first_apply = self._consume_pending_apply_alert(code)
+
         self._on_strategy_position_editor_changed()
         self._on_strategy_config_changed()
+
+        new_position = self._strategy_config["positions"][row]
+        new_rules = new_position.get("rules", {})
+        new_profile_id = new_position.get("strategy_id", "default")
+
+        profile_changed = old_profile_id != new_profile_id
+        if was_first_apply or profile_changed:
+            # 第一次套用策略 或 切换模板：提醒止损线
+            self._send_strategy_apply_alert(new_position, new_profile_id)
+        elif old_rules != new_rules:
+            # 仅覆盖参数变更：提醒具体变化
+            self._send_strategy_change_alert(new_position, old_rules, new_rules, old_profile_id, new_profile_id)
+
         self.btn_strategy_save.setText("已保存")
         QTimer.singleShot(1200, lambda: self.btn_strategy_save.setText("保存当前持仓"))
+
+    # ---- 策略套用 / 止损线提醒辅助 ----
+
+    def _mark_pending_apply_alert(self, code):
+        codes = getattr(self, "_pending_apply_alert_codes", None)
+        if codes is None:
+            codes = set()
+            self._pending_apply_alert_codes = codes
+        if code:
+            codes.add(code)
+
+    def _consume_pending_apply_alert(self, code):
+        codes = getattr(self, "_pending_apply_alert_codes", None)
+        if not codes or not code:
+            return False
+        if code in codes:
+            codes.discard(code)
+            return True
+        return False
+
+    def _send_strategy_apply_alert(self, position, profile_id):
+        """股票套用/切换策略时，发送止损线提醒"""
+        code = position.get("code", "")
+        cost = float(position.get("cost_price") or 0.0)
+        if cost <= 0:
+            return
+        rules = strategy_rules_for_position(self._strategy_config, position)
+        stop_price = strategy_stop_price(cost, rules, 0.0)
+        if stop_price is None:
+            return
+        max_loss_pct = float(rules.get("max_loss_pct", 0.0))
+        profile = self._get_profile_by_id(profile_id)
+        profile_name = profile.get("name", profile_id) if profile else profile_id
+        alert_text = (
+            f"## StockWidget 策略套用提醒\n"
+            f">标的：{code}\n"
+            f">策略模板：{profile_name}\n"
+            f">成本价：{cost:.2f}\n"
+            f">止损线：{stop_price:.2f}（止损 -{max_loss_pct:.1f}%）"
+        )
+        self._send_desktop_alert(alert_text)
+
+    def _send_strategy_change_alert(self, position, old_rules, new_rules, old_profile_id, new_profile_id):
+        """发送策略条件修改提醒"""
+        code = position.get("code", "")
+        changes = []
+        
+        # 检测模板变化
+        if old_profile_id != new_profile_id:
+            old_profile = self._get_profile_by_id(old_profile_id)
+            new_profile = self._get_profile_by_id(new_profile_id)
+            old_name = old_profile.get("name", old_profile_id) if old_profile else old_profile_id
+            new_name = new_profile.get("name", new_profile_id) if new_profile else new_profile_id
+            changes.append(f"策略模板：{old_name} → {new_name}")
+        
+        # 检测规则变化
+        if old_rules != new_rules:
+            rule_changes = self._compare_rules(old_rules, new_rules)
+            changes.extend(rule_changes)
+
+        # 若涉及止损，附上当前止损价
+        if (old_rules.get("max_loss_enabled") or new_rules.get("max_loss_enabled")) and changes:
+            cost = float(position.get("cost_price") or 0.0)
+            if cost > 0:
+                resolved = strategy_rules_for_position(self._strategy_config, position)
+                stop = strategy_stop_price(cost, resolved, 0.0)
+                if stop is not None:
+                    changes.append(f"当前止损线：{stop:.2f}")
+
+        if changes:
+            change_text = "\n".join(f"• {c}" for c in changes)
+            alert_text = f"## StockWidget 策略修改提醒\n>标的：{code}\n>修改内容：\n{change_text}"
+            self._send_desktop_alert(alert_text)
+
+    def _get_profile_by_id(self, profile_id):
+        """根据ID获取策略模板"""
+        for profile in self._strategy_config.get("strategy_profiles", []):
+            if profile.get("id") == profile_id:
+                return profile
+        return None
+
+    def _compare_rules(self, old_rules, new_rules):
+        """比较规则变化并生成提醒文本"""
+        changes = []
+        
+        # 止盈相关
+        if old_rules.get("max_loss_enabled") != new_rules.get("max_loss_enabled"):
+            status = "启用" if new_rules.get("max_loss_enabled") else "禁用"
+            changes.append(f"浮亏清仓提醒：{status}")
+        elif old_rules.get("max_loss_pct") != new_rules.get("max_loss_pct"):
+            changes.append(f"浮亏清仓阈值：{old_rules.get('max_loss_pct', 0):.1f}% → {new_rules.get('max_loss_pct', 0):.1f}%")
+        
+        if old_rules.get("reduce_half_enabled") != new_rules.get("reduce_half_enabled"):
+            status = "启用" if new_rules.get("reduce_half_enabled") else "禁用"
+            changes.append(f"盈利减半提醒：{status}")
+        elif old_rules.get("reduce_half_profit_pct") != new_rules.get("reduce_half_profit_pct"):
+            changes.append(f"盈利减半阈值：{old_rules.get('reduce_half_profit_pct', 0):.1f}% → {new_rules.get('reduce_half_profit_pct', 0):.1f}%")
+        
+        if old_rules.get("trailing_profit_enabled") != new_rules.get("trailing_profit_enabled"):
+            status = "启用" if new_rules.get("trailing_profit_enabled") else "禁用"
+            changes.append(f"阶梯移动止盈：{status}")
+        
+        # 止损相关
+        if old_rules.get("stock_ma5_break_enabled") != new_rules.get("stock_ma5_break_enabled"):
+            status = "启用" if new_rules.get("stock_ma5_break_enabled") else "禁用"
+            changes.append(f"个股破5日线止损：{status}")
+        
+        if old_rules.get("index_ma5_break_enabled") != new_rules.get("index_ma5_break_enabled"):
+            status = "启用" if new_rules.get("index_ma5_break_enabled") else "禁用"
+            changes.append(f"大盘破5日线风控：{status}")
+        
+        if old_rules.get("index_ma10_break_enabled") != new_rules.get("index_ma10_break_enabled"):
+            status = "启用" if new_rules.get("index_ma10_break_enabled") else "禁用"
+            changes.append(f"大盘破10日线风控：{status}")
+        
+        # 仓位相关
+        if old_rules.get("max_position_pct") != new_rules.get("max_position_pct"):
+            changes.append(f"单票仓位上限：{old_rules.get('max_position_pct', 0):.1f}% → {new_rules.get('max_position_pct', 0):.1f}%")
+        
+        if old_rules.get("stale_position_enabled") != new_rules.get("stale_position_enabled"):
+            status = "启用" if new_rules.get("stale_position_enabled") else "禁用"
+            changes.append(f"持仓时间提醒：{status}")
+        elif old_rules.get("stale_position_days") != new_rules.get("stale_position_days"):
+            changes.append(f"持仓时间提醒：{old_rules.get('stale_position_days', 0)}天 → {new_rules.get('stale_position_days', 0)}天")
+        
+        return changes
+
+    def _send_desktop_alert(self, text):
+        """发送桌面提醒"""
+        notifications = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))["notifications"]
+        if notifications.get("desktop_popup"):
+            # 调用主窗口的提醒功能
+            if hasattr(self.win, "show_desktop_alert"):
+                self.win.show_desktop_alert(text)
+        if notifications.get("remote_push"):
+            # 发送远程推送
+            if hasattr(self.win, "_send_strategy_push_text"):
+                self.win._send_strategy_push_text(text)
 
     def _refresh_strategy_preview(self):
         if not hasattr(self, "list_strategy_preview"):
@@ -1675,6 +2160,8 @@ class SettingsDialog(QDialog):
         self.win.set_strategy_alert_config(config)
         self._strategy_config = config
         self._load_strategy_config(len(config["positions"]) - 1)
+        # 新持仓首次保存时提醒止损线
+        self._mark_pending_apply_alert(default_code)
 
     def _del_strategy_position(self):
         row = self._current_strategy_position_row()
@@ -1686,6 +2173,238 @@ class SettingsDialog(QDialog):
         self.win.set_strategy_alert_config(config)
         self._strategy_config = config
         self._load_strategy_config(max(0, row - 1))
+
+    def _on_strategy_params_edit(self):
+        self.list_strategy_params.setVisible(False)
+        self.strategy_params_editor.setVisible(True)
+        self.btn_strategy_params_edit.setVisible(False)
+        self.btn_strategy_params_save.setVisible(True)
+
+    def _on_strategy_params_save(self):
+        self.strategy_params_editor.setVisible(False)
+        self.list_strategy_params.setVisible(True)
+        self.btn_strategy_params_edit.setVisible(True)
+        self.btn_strategy_params_save.setVisible(False)
+        self._on_strategy_config_changed()
+        self._refresh_strategy_params_list()
+
+    def _on_strategy_template_reset(self):
+        row = self._current_strategy_position_row()
+        if row < 0:
+            return
+        self._strategy_config["positions"][row]["rules"] = {}
+        self._on_strategy_config_changed()
+        self._load_strategy_rules(self._current_strategy_rules())
+        self._refresh_strategy_params_list()
+
+    def _on_strategy_template_selected(self, row: int):
+        profiles = getattr(self, "_strategy_config", {}).get("strategy_profiles", [])
+        if row < 0 or row >= len(profiles):
+            self.edit_template_name.clear()
+            self.edit_template_desc.clear()
+            self.lbl_template_ref_count.setText("被引用：0 只股票")
+            self._load_template_rules_to_editor({})
+            return
+        profile = profiles[row]
+        self.edit_template_name.setText(profile.get('name', ''))
+        self.edit_template_desc.setText(profile.get('desc', ''))
+        positions = getattr(self, "_strategy_config", {}).get("positions", [])
+        ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
+        self.lbl_template_ref_count.setText(f"被引用：{ref_count} 只股票")
+        self._load_template_rules_to_editor(profile.get("rules", {}))
+
+    def _on_template_new(self):
+        profiles = self._strategy_config.get("strategy_profiles", [])
+        existing_ids = {p.get("id") for p in profiles}
+        number = 1
+        profile_id = f"template:{number}"
+        while profile_id in existing_ids:
+            number += 1
+            profile_id = f"template:{number}"
+        new_profile = {
+            "id": profile_id,
+            "name": f"新建模板 {number}",
+            "desc": "",
+            "rules": dict(self._strategy_config.get("rules", {})),
+        }
+        profiles.append(new_profile)
+        self._strategy_config["strategy_profiles"] = profiles
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._refresh_strategy_template_list()
+        self._refresh_strategy_params_list()
+
+    def _on_template_save(self):
+        row = self.list_strategy_templates.currentRow()
+        profiles = self._strategy_config.get("strategy_profiles", [])
+        if row < 0 or row >= len(profiles):
+            return
+        profile = profiles[row]
+        profile["name"] = self.edit_template_name.text().strip() or profile.get("name", "未命名")
+        profile["desc"] = self.edit_template_desc.text().strip()
+        profile["rules"] = self._collect_template_rules_from_editor()
+        self._strategy_config["strategy_profiles"] = profiles
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._refresh_strategy_template_list()
+        self.list_strategy_templates.setCurrentRow(row)
+        self.btn_template_save.setText("已保存")
+        QTimer.singleShot(1200, lambda: self.btn_template_save.setText("保存模板"))
+
+    def _on_template_rules_changed(self, *_args):
+        # 模板规则编辑区内容变化时，可以实时预览或标记为未保存
+        pass
+
+    def _collect_template_rules_from_editor(self):
+        return {
+            "max_loss_enabled": self.chk_template_loss.isChecked(),
+            "max_loss_pct": self.spin_template_loss.value(),
+            "stock_ma5_break_enabled": self.chk_template_stock_ma5.isChecked(),
+            "index_ma5_break_enabled": self.chk_template_index_ma5.isChecked(),
+            "index_ma10_break_enabled": self.chk_template_index_ma10.isChecked(),
+            "trailing_profit_enabled": self.chk_template_trailing.isChecked(),
+            "trailing_tiers": [
+                {"profit_pct": profit.value(), "lock_pct": lock.value()}
+                for profit, lock in zip(self.spin_template_tier_profit, self.spin_template_tier_lock)
+            ],
+            "skip_raise_on_volume_drop": self.chk_template_skip_volume_drop.isChecked(),
+            "reduce_half_enabled": self.chk_template_reduce_half.isChecked(),
+            "reduce_half_profit_pct": self.spin_template_reduce_half.value(),
+            "max_position_pct": self.spin_template_max_position.value(),
+            "block_heavy_position_on_index_ma5_down": self.chk_template_block_heavy.isChecked(),
+            "stale_position_enabled": self.chk_template_stale.isChecked(),
+            "stale_position_days": self.spin_template_stale_days.value(),
+        }
+
+    def _load_template_rules_to_editor(self, rules):
+        rules = rules or {}
+        self.chk_template_loss.setChecked(bool(rules.get("max_loss_enabled")))
+        self.spin_template_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
+        self.chk_template_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
+        self.chk_template_index_ma5.setChecked(bool(rules.get("index_ma5_break_enabled")))
+        self.chk_template_index_ma10.setChecked(bool(rules.get("index_ma10_break_enabled")))
+        self.chk_template_trailing.setChecked(bool(rules.get("trailing_profit_enabled")))
+        tiers = rules.get("trailing_tiers", [])
+        for i, (profit, lock) in enumerate(zip(self.spin_template_tier_profit, self.spin_template_tier_lock)):
+            tier = tiers[i] if i < len(tiers) else {}
+            profit.setValue(float(tier.get("profit_pct", 0.0)))
+            lock.setValue(float(tier.get("lock_pct", 0.0)))
+        self.chk_template_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
+        self.chk_template_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
+        self.spin_template_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
+        self.spin_template_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
+        self.chk_template_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
+        self.chk_template_stale.setChecked(bool(rules.get("stale_position_enabled")))
+        self.spin_template_stale_days.setValue(int(rules.get("stale_position_days", 12)))
+
+    def _on_template_copy(self):
+        row = self.list_strategy_templates.currentRow()
+        profiles = self._strategy_config.get("strategy_profiles", [])
+        if row < 0 or row >= len(profiles):
+            return
+        source = profiles[row]
+        existing_ids = {p.get("id") for p in profiles}
+        number = 1
+        profile_id = f"template:{number}"
+        while profile_id in existing_ids:
+            number += 1
+            profile_id = f"template:{number}"
+        new_profile = {
+            "id": profile_id,
+            "name": f"{source.get('name', '模板')} 副本",
+            "desc": source.get("desc", ""),
+            "rules": dict(source.get("rules", {})),
+        }
+        profiles.append(new_profile)
+        self._strategy_config["strategy_profiles"] = profiles
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._refresh_strategy_template_list()
+
+    def _on_template_delete(self):
+        row = self.list_strategy_templates.currentRow()
+        profiles = self._strategy_config.get("strategy_profiles", [])
+        if row < 0 or row >= len(profiles):
+            return
+        profile = profiles[row]
+        if profile.get("id") == "default":
+            return
+        # 检查是否有持仓引用该模板
+        positions = self._strategy_config.get("positions", [])
+        ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
+        if ref_count > 0:
+            return
+        profiles.pop(row)
+        self._strategy_config["strategy_profiles"] = profiles
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._refresh_strategy_template_list()
+
+    def _on_condition_add(self):
+        indicator = self.cmb_condition_indicator.currentText()
+        operator = self.cmb_condition_operator.currentText()
+        threshold = self.edit_condition_threshold.text().strip()
+        action = self.cmb_condition_action.currentText()
+        logic = "且" if self.radio_logic_and.isChecked() else "或"
+        if not threshold:
+            return
+        condition_text = f"[{logic}] {indicator} {operator} {threshold} → {action}"
+        self.list_condition_rules.addItem(condition_text)
+        self.edit_condition_threshold.clear()
+
+    def _on_condition_remove(self, item):
+        row = self.list_condition_rules.row(item)
+        self.list_condition_rules.takeItem(row)
+
+    def _refresh_strategy_params_list(self):
+        self.list_strategy_params.clear()
+        row = self._current_strategy_position_row()
+        if row < 0:
+            self.list_strategy_params.addItem("请先选择持仓")
+            return
+        rules = self._current_strategy_rules()
+        base_rules = self._strategy_config.get("rules", {})
+        profile = self._current_strategy_profile()
+        profile_rules = profile.get("rules", {}) if profile else {}
+        position_rules = self._strategy_config["positions"][row].get("rules", {})
+
+        def param_status(key, current_value, default_value):
+            if key in position_rules:
+                return "已覆盖"
+            elif key in profile_rules:
+                return "继承模板"
+            else:
+                return "继承默认"
+
+        params = [
+            ("浮亏清仓阈值", f"{rules.get('max_loss_pct', 0):.1f}%", param_status("max_loss_pct", rules.get("max_loss_pct"), base_rules.get("max_loss_pct"))),
+            ("盈利减半阈值", f"{rules.get('reduce_half_profit_pct', 0):.1f}%", param_status("reduce_half_profit_pct", rules.get("reduce_half_profit_pct"), base_rules.get("reduce_half_profit_pct"))),
+            ("个股破线止损", "启用" if rules.get("stock_ma5_break_enabled") else "禁用", param_status("stock_ma5_break_enabled", rules.get("stock_ma5_break_enabled"), base_rules.get("stock_ma5_break_enabled"))),
+            ("大盘5日线风控", "启用" if rules.get("index_ma5_break_enabled") else "禁用", param_status("index_ma5_break_enabled", rules.get("index_ma5_break_enabled"), base_rules.get("index_ma5_break_enabled"))),
+            ("大盘10日线风控", "启用" if rules.get("index_ma10_break_enabled") else "禁用", param_status("index_ma10_break_enabled", rules.get("index_ma10_break_enabled"), base_rules.get("index_ma10_break_enabled"))),
+            ("放量保护", "启用" if rules.get("skip_raise_on_volume_drop") else "禁用", param_status("skip_raise_on_volume_drop", rules.get("skip_raise_on_volume_drop"), base_rules.get("skip_raise_on_volume_drop"))),
+            ("单票仓位上限", f"{rules.get('max_position_pct', 0):.1f}%", param_status("max_position_pct", rules.get("max_position_pct"), base_rules.get("max_position_pct"))),
+            ("持仓时间提醒", f"{rules.get('stale_position_days', 0)}天", param_status("stale_position_days", rules.get("stale_position_days"), base_rules.get("stale_position_days"))),
+        ]
+        for name, value, status in params:
+            item = QListWidgetItem(f"{name}：{value}  [{status}]")
+            if status == "已覆盖":
+                item.setForeground(QColor("#d97706"))
+            elif status == "继承模板":
+                item.setForeground(QColor("#2563eb"))
+            else:
+                item.setForeground(QColor("#6b7280"))
+            self.list_strategy_params.addItem(item)
+
+    def _refresh_strategy_template_list(self):
+        self.list_strategy_templates.clear()
+        profiles = self._strategy_config.get("strategy_profiles", [])
+        positions = self._strategy_config.get("positions", [])
+        for profile in profiles:
+            ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
+            rule_count = len([k for k, v in profile.get("rules", {}).items() if v])
+            item = QListWidgetItem(f"{profile.get('name', '未命名')} ({rule_count}条/{ref_count}只)")
+            item.setData(Qt.UserRole, profile.get("id"))
+            self.list_strategy_templates.addItem(item)
+        if self.list_strategy_templates.count() > 0:
+            self.list_strategy_templates.setCurrentRow(0)
+            self._on_strategy_template_selected(0)
 
     def _send_strategy_push_test(self):
         self._on_strategy_config_changed()

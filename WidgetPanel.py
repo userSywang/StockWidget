@@ -1348,17 +1348,20 @@ class FloatLabel(QWidget):
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
         lock_pct = float(state.get("locked_profit_pct", 0.0))
         stop_price = state.get("stop_price")
+        stop_loss_price = state.get("stop_loss_price")
         if stop_price is None:
             lock_text = "成本线"
             stop_text = "-"
         else:
             lock_text = f"{float(stop_price):.2f}（锁盈+{lock_pct:.1f}%）"
             stop_text = f"{float(stop_price):.2f}"
+        stop_loss_text = "-" if stop_loss_price is None else f"{float(stop_loss_price):.2f}"
         return (
             f"## StockWidget 策略提醒\n"
             f">标的：{state.get('name') or state.get('code')}\n"
             f">代码：{state.get('code')}\n"
             f">盈亏：{profit_text}\n"
+            f">止损线：{stop_loss_text}\n"
             f">止盈线：{lock_text}\n"
             f">止盈价：{stop_text}\n"
             f">状态：{state.get('status', '')}"
@@ -1366,7 +1369,9 @@ class FloatLabel(QWidget):
 
     def _send_strategy_pushes(self, strategy_states):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
-        if not notifications.get("remote_push") or not notifications.get("webhook_url"):
+        desktop = notifications.get("desktop_popup")
+        remote = notifications.get("remote_push") and bool(notifications.get("webhook_url"))
+        if not desktop and not remote:
             return
         sent_keys = getattr(self, "_strategy_push_sent_keys", set())
         for state in strategy_states or []:
@@ -1375,12 +1380,57 @@ class FloatLabel(QWidget):
             key = f"{state.get('code')}|{state.get('status')}"
             if key in sent_keys:
                 continue
-            try:
-                if self._send_strategy_push_text(self._strategy_push_text_for_state(state)):
-                    sent_keys.add(key)
-            except Exception:
-                continue
+            pushed = False
+            if remote:
+                try:
+                    if self._send_strategy_push_text(self._strategy_push_text_for_state(state)):
+                        pushed = True
+                except Exception:
+                    pass
+            if desktop:
+                try:
+                    self.show_desktop_alert(self._strategy_push_text_for_state(state))
+                    pushed = True
+                except Exception:
+                    pass
+            if pushed:
+                sent_keys.add(key)
         self._strategy_push_sent_keys = sent_keys
+
+    def _ensure_alert_toast(self):
+        toast = getattr(self, "_alert_toast", None)
+        if toast is not None:
+            return toast
+        toast = QLabel(self)
+        toast.setObjectName("alert_toast")
+        toast.setMinimumWidth(260)
+        toast.setMaximumWidth(360)
+        toast.setWordWrap(True)
+        toast.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        toast.setStyleSheet(
+            "QLabel#alert_toast{background:#1f2937;color:#f9fafb;border:1px solid #60a5fa;"
+            "border-radius:8px;padding:12px 14px;font-size:13px;}"
+        )
+        toast.hide()
+        self._alert_toast = toast
+        self._alert_toast_timer = QTimer(self)
+        self._alert_toast_timer.timeout.connect(toast.hide)
+        return toast
+
+    def show_desktop_alert(self, text):
+        notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
+        if not notifications.get("desktop_popup"):
+            return
+        plain = text.replace("## ", "").replace("> ", "  ")
+        toast = self._ensure_alert_toast()
+        toast.setText(plain)
+        toast.adjustSize()
+        geo = self.geometry()
+        x = geo.x() + max(0, geo.width() - toast.width() - 16)
+        y = geo.y() + max(0, geo.height() - toast.height() - 16)
+        toast.move(x, y)
+        toast.show()
+        self._alert_toast_timer.start(6000)
 
     def send_strategy_push_test(self):
         self._send_strategy_push_text("## StockWidget 测试推送\n>策略远程推送已配置")

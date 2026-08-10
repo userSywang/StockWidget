@@ -358,15 +358,22 @@ class SettingsPanelTests(unittest.TestCase):
         dlg = SettingsDialog(win, None)
         dlg.tabs.setCurrentIndex(4)
         dlg.list_strategy_positions.setCurrentRow(0)
+        dlg._on_strategy_params_edit()
         dlg.show()
         self.app.processEvents()
 
-        loss_rect = dlg.chk_strategy_loss.geometry()
-        stock_ma5_rect = dlg.chk_strategy_stock_ma5.geometry()
-        trailing_rect = dlg.chk_strategy_trailing.geometry()
-
-        self.assertGreater(stock_ma5_rect.top(), loss_rect.bottom())
-        self.assertGreater(trailing_rect.top(), stock_ma5_rect.bottom())
+        widgets = [dlg.chk_strategy_loss, dlg.chk_strategy_stock_ma5, dlg.chk_strategy_trailing]
+        rects = [
+            widget.rect().translated(widget.mapToGlobal(widget.rect().topLeft()))
+            for widget in widgets
+        ]
+        for widget, rect in zip(widgets, rects):
+            self.assertTrue(widget.isVisible())
+            self.assertGreater(rect.width(), 0)
+            self.assertGreater(rect.height(), 0)
+        for index, rect in enumerate(rects):
+            for other in rects[index + 1:]:
+                self.assertFalse(rect.intersects(other))
         self.assertGreaterEqual(dlg.size().height(), 660)
         dlg.close()
 
@@ -379,14 +386,17 @@ class SettingsPanelTests(unittest.TestCase):
         dlg = SettingsDialog(win, None)
         dlg.tabs.setCurrentIndex(4)
         dlg.list_strategy_positions.setCurrentRow(0)
+        dlg._on_strategy_params_edit()
         dlg.show()
         self.app.processEvents()
 
         for profit, lock in zip(dlg.spin_strategy_tier_profit, dlg.spin_strategy_tier_lock):
             self.assertLessEqual(profit.width(), 80)
             self.assertLessEqual(lock.width(), 80)
-            self.assertTrue(dlg.strategy_rules_group.rect().contains(profit.geometry()))
-            self.assertTrue(dlg.strategy_rules_group.rect().contains(lock.geometry()))
+            profit_rect = profit.rect().translated(profit.mapTo(dlg.strategy_config_group, profit.rect().topLeft()))
+            lock_rect = lock.rect().translated(lock.mapTo(dlg.strategy_config_group, lock.rect().topLeft()))
+            self.assertTrue(dlg.strategy_config_group.rect().contains(profit_rect))
+            self.assertTrue(dlg.strategy_config_group.rect().contains(lock_rect))
         dlg.close()
 
     def test_strategy_notify_webhook_controls_are_visible_and_not_overlapped(self):
