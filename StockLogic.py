@@ -5,6 +5,7 @@ DEFAULT_GROUP_NAME = "默认"
 DEFAULT_WARNING_TEXT = "谨慎交易，信号只是辅助，仓位和纪律优先。"
 DEFAULT_STRATEGY_ALERT_CONFIG = {
     "enabled": False,
+    "rule_schema_version": 1,
     "positions": [],
     "notifications": {
         "desktop_popup": True,
@@ -36,6 +37,8 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "stale_position_days": 12,
     },
 }
+
+STRATEGY_ACTION_RULE_SCHEMA_VERSION = 1
 
 _RE_FULL = re.compile(r"^(sh|sz|bj|bk|gn|sw)\d+$")
 _RE_6 = re.compile(r"^\d{6}$")
@@ -401,6 +404,152 @@ def _normalize_strategy_rules(source_rules, fallback=None):
     }
 
 
+def _action_rule(rule_id, name, enabled, condition, action, source="legacy"):
+    return {
+        "id": rule_id,
+        "schema_version": STRATEGY_ACTION_RULE_SCHEMA_VERSION,
+        "source": source,
+        "name": name,
+        "enabled": bool(enabled),
+        "condition": condition,
+        "action": action,
+    }
+
+
+def strategy_action_rules_from_rules(rules, source="legacy"):
+    """Convert current strategy settings into stable action-rule records.
+
+    This is a compatibility layer: existing evaluation still uses legacy fields,
+    while new strategy types can be added as action rules without changing the
+    saved position/profile model again.
+    """
+    rules = _normalize_strategy_rules(rules)
+    return [
+        _action_rule(
+            "max_loss",
+            "浮亏清仓",
+            rules.get("max_loss_enabled"),
+            {
+                "metric": "profit_pct",
+                "operator": "<=",
+                "threshold": {"type": "percent", "value": -float(rules.get("max_loss_pct", 0.0))},
+            },
+            {"type": "clear_position", "reason": "max_loss"},
+            source,
+        ),
+        _action_rule(
+            "stock_ma5_break",
+            "个股5日线清仓",
+            rules.get("stock_ma5_break_enabled"),
+            {
+                "metric": "stock_price",
+                "operator": "<",
+                "threshold": {"type": "moving_average", "scope": "stock", "period": 5},
+            },
+            {"type": "clear_position", "reason": "stock_ma_break"},
+            source,
+        ),
+        _action_rule(
+            "index_ma5_break",
+            "大盘5日线清仓",
+            rules.get("index_ma5_break_enabled"),
+            {
+                "metric": "index_price",
+                "operator": "<",
+                "threshold": {"type": "moving_average", "scope": "index", "period": 5},
+            },
+            {"type": "clear_position", "reason": "index_ma_break"},
+            source,
+        ),
+        _action_rule(
+            "index_ma10_break",
+            "大盘10日线清仓",
+            rules.get("index_ma10_break_enabled"),
+            {
+                "metric": "index_price",
+                "operator": "<",
+                "threshold": {"type": "moving_average", "scope": "index", "period": 10},
+            },
+            {"type": "clear_position", "reason": "index_ma_break"},
+            source,
+        ),
+        _action_rule(
+            "trailing_profit",
+            "阶梯移动止盈",
+            rules.get("trailing_profit_enabled"),
+            {
+                "metric": "peak_profit_pct",
+                "operator": ">=",
+                "threshold": {
+                    "type": "tiered_percent",
+                    "tiers": [
+                        {
+                            "trigger_pct": float(tier.get("profit_pct", 0.0)),
+                            "lock_pct": float(tier.get("lock_pct", 0.0)),
+                        }
+                        for tier in rules.get("trailing_tiers", [])
+                    ],
+                    "skip_raise_on_volume_drop": bool(rules.get("skip_raise_on_volume_drop")),
+                },
+            },
+            {"type": "update_stop_line", "line": "take_profit"},
+            source,
+        ),
+        _action_rule(
+            "reduce_half",
+            "盈利减半仓",
+            rules.get("reduce_half_enabled"),
+            {
+                "metric": "profit_pct",
+                "operator": ">=",
+                "threshold": {"type": "percent", "value": float(rules.get("reduce_half_profit_pct", 0.0))},
+            },
+            {"type": "reduce_position", "ratio": 0.5, "reason": "profit_target"},
+            source,
+        ),
+        _action_rule(
+            "position_cap",
+            "单票仓位上限",
+            True,
+            {
+                "metric": "position_pct",
+                "operator": "<=",
+                "threshold": {"type": "percent", "value": float(rules.get("max_position_pct", 0.0))},
+            },
+            {"type": "limit_position", "reason": "position_cap"},
+            source,
+        ),
+        _action_rule(
+            "block_heavy_on_index_ma5_down",
+            "大盘5日线向下禁开重仓",
+            rules.get("block_heavy_position_on_index_ma5_down"),
+            {
+                "metric": "index_ma_trend",
+                "operator": "is",
+                "threshold": {"type": "trend", "scope": "index", "period": 5, "value": "down"},
+            },
+            {"type": "block_open", "reason": "index_ma_down"},
+            source,
+        ),
+        _action_rule(
+            "stale_position",
+            "持仓天数清仓",
+            rules.get("stale_position_enabled"),
+            {
+                "metric": "holding_days",
+                "operator": ">=",
+                "threshold": {"type": "days", "value": int(rules.get("stale_position_days", 0))},
+            },
+            {"type": "clear_position", "reason": "stale_position"},
+            source,
+        ),
+    ]
+
+
+def strategy_action_rules_for_position(config, position):
+    return strategy_action_rules_from_rules(strategy_rules_for_position(config, position), "resolved")
+
+
 def strategy_rules_for_position(config, position):
     config = normalize_strategy_alert_config(config)
     base_rules = config["rules"]
@@ -481,6 +630,8 @@ def normalize_strategy_alert_config(config):
 
     return {
         "enabled": bool(config.get("enabled", DEFAULT_STRATEGY_ALERT_CONFIG["enabled"])),
+        "rule_schema_version": STRATEGY_ACTION_RULE_SCHEMA_VERSION,
+        "action_rules": strategy_action_rules_from_rules(normalized_rules),
         "positions": migrated_positions,
         "strategy_profiles": profiles,
         "notifications": {

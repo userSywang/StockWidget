@@ -9,6 +9,8 @@ from StockLogic import (
     normalize_price_alert,
     normalize_groups,
     normalize_strategy_alert_config,
+    strategy_action_rules_for_position,
+    strategy_action_rules_from_rules,
     strategy_daily_request_codes,
     update_strategy_position_state,
     evaluate_strategy_alerts,
@@ -172,6 +174,8 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(config["notifications"]["push_cooldown_minutes"], 30)
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
+        self.assertEqual(config["rule_schema_version"], 1)
+        self.assertTrue(any(rule["id"] == "max_loss" for rule in config["action_rules"]))
 
     def test_strategy_alert_config_normalizes_push_cooldown(self):
         config = normalize_strategy_alert_config({
@@ -195,6 +199,57 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertEqual(len(config["positions"]), 1)
         self.assertEqual(config["positions"][0]["code"], "legacy-code")
+
+    def test_strategy_action_rules_convert_legacy_rules(self):
+        rules = strategy_action_rules_from_rules({
+            "max_loss_enabled": True,
+            "max_loss_pct": 7.5,
+            "stock_ma5_break_enabled": True,
+            "index_ma5_break_enabled": False,
+            "trailing_profit_enabled": True,
+            "trailing_tiers": [
+                {"profit_pct": 20, "lock_pct": 10},
+                {"profit_pct": 40, "lock_pct": 30},
+            ],
+            "reduce_half_enabled": True,
+            "reduce_half_profit_pct": 45,
+            "max_position_pct": 20,
+            "stale_position_enabled": True,
+            "stale_position_days": 12,
+        })
+
+        by_id = {rule["id"]: rule for rule in rules}
+        self.assertEqual(by_id["max_loss"]["condition"]["threshold"]["value"], -7.5)
+        self.assertEqual(by_id["stock_ma5_break"]["condition"]["threshold"]["period"], 5)
+        self.assertFalse(by_id["index_ma5_break"]["enabled"])
+        self.assertEqual(by_id["trailing_profit"]["condition"]["threshold"]["tiers"][1]["lock_pct"], 30.0)
+        self.assertEqual(by_id["reduce_half"]["action"]["type"], "reduce_position")
+        self.assertEqual(by_id["position_cap"]["condition"]["threshold"]["value"], 20.0)
+        self.assertEqual(by_id["stale_position"]["condition"]["threshold"]["value"], 12)
+
+    def test_strategy_action_rules_for_position_use_resolved_position_rules(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "positions": [
+                {
+                    "code": "603259",
+                    "cost_price": 100.0,
+                    "rules": {"max_loss_enabled": True, "max_loss_pct": 10.0},
+                },
+                {
+                    "code": "600584",
+                    "cost_price": 100.0,
+                    "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+                },
+            ],
+        })
+
+        first_rules = {rule["id"]: rule for rule in strategy_action_rules_for_position(config, config["positions"][0])}
+        second_rules = {rule["id"]: rule for rule in strategy_action_rules_for_position(config, config["positions"][1])}
+
+        self.assertEqual(first_rules["max_loss"]["condition"]["threshold"]["value"], -10.0)
+        self.assertEqual(second_rules["max_loss"]["condition"]["threshold"]["value"], -5.0)
 
     def test_strategy_trailing_profit_locks_to_lower_profit_line(self):
         config = normalize_strategy_alert_config({
