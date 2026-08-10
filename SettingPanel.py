@@ -870,7 +870,21 @@ class SettingsDialog(QDialog):
         template_rules_layout.addWidget(g_template_loss)
         template_rules_layout.addWidget(g_template_position)
         rules_scroll.setWidget(rules_scroll_content)
+        self.template_rules_scroll = rules_scroll
         template_edit_layout.addWidget(rules_scroll)
+
+        self.template_action_group = QGroupBox("动作规则")
+        template_action_layout = QVBoxLayout(self.template_action_group)
+        template_action_layout.setContentsMargins(6, 14, 6, 6)
+        template_action_layout.setSpacing(4)
+        self.lbl_template_action_hint = QLabel("该模板使用动作规则展示，参数计算后续由策略引擎统一处理。")
+        self.lbl_template_action_hint.setStyleSheet("color: #666666;")
+        self.list_template_action_rules = QListWidget()
+        self.list_template_action_rules.setMinimumHeight(160)
+        template_action_layout.addWidget(self.lbl_template_action_hint)
+        template_action_layout.addWidget(self.list_template_action_rules)
+        self.template_action_group.setVisible(False)
+        template_edit_layout.addWidget(self.template_action_group)
 
         # 操作按钮
         template_btn_layout = QHBoxLayout()
@@ -2593,6 +2607,9 @@ class SettingsDialog(QDialog):
             self.edit_template_desc.clear()
             self.lbl_template_ref_count.setText("被引用：0 只股票")
             self._load_template_rules_to_editor({})
+            self._load_template_action_rules([])
+            self.template_rules_scroll.setVisible(True)
+            self.template_action_group.setVisible(False)
             return
         profile = profiles[row]
         self.edit_template_name.setText(profile.get('name', ''))
@@ -2600,7 +2617,16 @@ class SettingsDialog(QDialog):
         positions = getattr(self, "_strategy_config", {}).get("positions", [])
         ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
         self.lbl_template_ref_count.setText(f"被引用：{ref_count} 只股票")
-        self._load_template_rules_to_editor(profile.get("rules", {}))
+        action_rules = profile.get("action_rules") if isinstance(profile.get("action_rules"), list) else []
+        if action_rules:
+            self.template_rules_scroll.setVisible(False)
+            self.template_action_group.setVisible(True)
+            self._load_template_action_rules(action_rules)
+        else:
+            self.template_rules_scroll.setVisible(True)
+            self.template_action_group.setVisible(False)
+            self._load_template_action_rules([])
+            self._load_template_rules_to_editor(profile.get("rules", {}))
 
     def _on_template_new(self):
         profiles = self._strategy_config.get("strategy_profiles", [])
@@ -2683,6 +2709,31 @@ class SettingsDialog(QDialog):
         self.chk_template_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
         self.chk_template_stale.setChecked(bool(rules.get("stale_position_enabled")))
         self.spin_template_stale_days.setValue(int(rules.get("stale_position_days", 12)))
+
+    def _format_template_action_rule(self, rule):
+        condition = rule.get("condition") if isinstance(rule.get("condition"), dict) else {}
+        threshold = condition.get("threshold") if isinstance(condition.get("threshold"), dict) else {}
+        action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+        name = str(rule.get("name") or rule.get("id") or "动作规则")
+        action_type = str(action.get("type") or "-")
+        threshold_type = str(threshold.get("type") or "")
+        if threshold_type == "donchian_high":
+            detail = f"{int(threshold.get('period', 0))}日新高"
+        elif threshold_type == "donchian_low":
+            detail = f"{int(threshold.get('period', 0))}日低点"
+        elif threshold_type == "atr_offset":
+            detail = f"{float(threshold.get('multiple', 0.0)):.1f}ATR"
+        else:
+            detail = threshold_type or "-"
+        return f"{name}  |  条件：{detail}  |  动作：{action_type}"
+
+    def _load_template_action_rules(self, action_rules):
+        self.list_template_action_rules.clear()
+        for rule in action_rules or []:
+            if isinstance(rule, dict) and rule.get("enabled", True):
+                self.list_template_action_rules.addItem(QListWidgetItem(self._format_template_action_rule(rule)))
+        if self.list_template_action_rules.count() == 0:
+            self.list_template_action_rules.addItem(QListWidgetItem("暂无动作规则"))
 
     def _on_template_copy(self):
         row = self.list_strategy_templates.currentRow()

@@ -462,9 +462,17 @@ class SettingsPanelTests(unittest.TestCase):
             for i in range(dlg.list_strategy_templates.count())
         ]
         turtle_items = [text for profile_id, text in items if profile_id == "turtle:classic"]
+        turtle_row = next(i for i, (profile_id, _text) in enumerate(items) if profile_id == "turtle:classic")
 
         self.assertEqual(len(turtle_items), 1)
         self.assertIn("4条", turtle_items[0])
+        dlg.list_strategy_templates.setCurrentRow(turtle_row)
+        self.assertTrue(dlg.template_rules_scroll.isHidden())
+        self.assertFalse(dlg.template_action_group.isHidden())
+        action_rows = [dlg.list_template_action_rules.item(i).text() for i in range(dlg.list_template_action_rules.count())]
+        self.assertEqual(len(action_rows), 4)
+        self.assertTrue(any("20日新高" in row for row in action_rows))
+        self.assertTrue(any("2.0ATR" in row for row in action_rows))
         dlg.close()
 
     def test_strategy_rule_edits_do_not_change_other_default_positions(self):
