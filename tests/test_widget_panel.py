@@ -602,6 +602,43 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
 
+    def test_strategy_pushes_raised_stop_line_state(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_push_sent_keys = set()
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+        states = [{
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": 20.0,
+            "locked_profit_pct": 10.0,
+            "stop_price": 110.0,
+            "take_profit_price": 110.0,
+            "triggered": True,
+            "severity": "warning",
+            "status": "上调止盈线至110.00",
+        }]
+
+        FloatLabel._send_strategy_pushes(win, states)
+
+        self.assertEqual(len(win._http.posts), 1)
+        content = win._http.posts[0][1]["markdown"]["content"]
+        self.assertIn("上调止盈线至110.00", content)
+        self.assertIn("止盈价：110.00", content)
+
     def test_strategy_daily_summary_sends_once_after_configured_time(self):
         class FakeHttp:
             def __init__(self):

@@ -320,6 +320,8 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertTrue(states[0]["lock_raised"])
+        self.assertTrue(states[0]["triggered"])
+        self.assertEqual(states[0]["severity"], "warning")
         self.assertEqual(states[0]["stop_price"], 110.0)
         self.assertIn("上调止盈线至110.00", states[0]["status"])
 

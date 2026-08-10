@@ -752,6 +752,9 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             stop_price = strategy_stop_price(cost, rules, lock_pct)
             if position.get("lock_raised") and stop_price is not None:
                 status_parts.append(f"上调止盈线至{stop_price:.2f}")
+                triggered = True
+                if severity != "danger":
+                    severity = "warning"
             if profit_pct <= lock_pct:
                 status_parts.append(f"触发锁盈{lock_pct:.0f}%（止盈价{stop_price:.2f}）" if stop_price is not None else f"触发锁盈{lock_pct:.0f}%")
                 triggered = True
