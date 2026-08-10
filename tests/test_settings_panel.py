@@ -382,6 +382,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["stale_position_days"], 10)
         preview = [dlg.list_strategy_preview.item(i).text() for i in range(dlg.list_strategy_preview.count())]
         self.assertTrue(any("桌面弹窗" in row and "远程推送" in row for row in preview))
+        self.assertTrue(any("每日11:00远程推送" in row for row in preview))
         self.assertTrue(any("浮亏达到 6.0%" in row for row in preview))
 
         dlg._del_strategy_position()

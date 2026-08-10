@@ -3,7 +3,7 @@ import requests, keyboard
 from urllib.parse import quote
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import time
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
@@ -93,6 +93,7 @@ class FloatLabel(QWidget):
         self._refresh_previous_quotes = {}
         self._refresh_again_requested = False
         self._strategy_push_sent_keys = set()
+        self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
         self._daily_kline_cache = {}
 
         # 设置初值
@@ -243,6 +244,7 @@ class FloatLabel(QWidget):
             "alert_rules": self.alert_rules,
             "price_alerts": self.price_alerts,
             "strategy_alert_config": self.strategy_alert_config,
+            "strategy_daily_summary_sent_date": getattr(self, "_strategy_daily_summary_sent_date", ""),
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
@@ -1401,14 +1403,16 @@ class FloatLabel(QWidget):
         profit = state.get("profit_pct")
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
         lock_pct = float(state.get("locked_profit_pct", 0.0))
-        stop_price = state.get("stop_price")
+        take_profit_price = state.get("take_profit_price")
+        if take_profit_price is None and lock_pct > 0:
+            take_profit_price = state.get("stop_price")
         stop_loss_price = state.get("stop_loss_price")
-        if stop_price is None:
-            lock_text = "成本线"
+        if take_profit_price is None:
+            lock_text = "未锁盈"
             stop_text = "-"
         else:
-            lock_text = f"{float(stop_price):.2f}（锁盈+{lock_pct:.1f}%）"
-            stop_text = f"{float(stop_price):.2f}"
+            lock_text = f"{float(take_profit_price):.2f}（锁盈+{lock_pct:.1f}%）"
+            stop_text = f"{float(take_profit_price):.2f}"
         stop_loss_text = "-" if stop_loss_price is None else f"{float(stop_loss_price):.2f}"
         return (
             f"## StockWidget 策略提醒\n"
@@ -1420,6 +1424,41 @@ class FloatLabel(QWidget):
             f">止盈价：{stop_text}\n"
             f">状态：{state.get('status', '')}"
         )
+
+    def _strategy_daily_summary_text(self, strategy_states, now=None):
+        now = now or datetime.now()
+        lines = [f"## StockWidget 策略午间摘要 {now:%Y-%m-%d %H:%M}"]
+        for state in strategy_states or []:
+            profit = state.get("profit_pct")
+            profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
+            stop_loss_text = self._format_strategy_price(state.get("stop_loss_price"))
+            take_profit_text = self._format_strategy_price(state.get("take_profit_price"))
+            if take_profit_text == "-":
+                take_profit_text = self._format_strategy_price(state.get("stop_price") if float(state.get("locked_profit_pct", 0.0)) > 0 else None)
+            lines.append(
+                f">{state.get('name') or state.get('code')}({state.get('code')}) "
+                f"盈亏 {profit_text} 止损 {stop_loss_text} 止盈 {take_profit_text} 状态 {state.get('status', '-')}"
+            )
+        return "\n".join(lines)
+
+    def _send_strategy_daily_summary(self, strategy_states, now=None):
+        notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
+        if not notifications.get("remote_push") or not notifications.get("webhook_url"):
+            return False
+        now_provider = getattr(self, "_now", None)
+        now = now or (now_provider() if callable(now_provider) else datetime.now())
+        if now.hour < 11:
+            return False
+        today_key = now.strftime("%Y-%m-%d")
+        if getattr(self, "_strategy_daily_summary_sent_date", "") == today_key:
+            return False
+        states = list(strategy_states or [])
+        if not states:
+            return False
+        if self._send_strategy_push_text(self._strategy_daily_summary_text(states, now)):
+            self._strategy_daily_summary_sent_date = today_key
+            return True
+        return False
 
     def _send_strategy_pushes(self, strategy_states):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
@@ -1613,8 +1652,10 @@ class FloatLabel(QWidget):
                 self.strategy_alert_config = updated_config
             strategy_states = evaluate_strategy_alerts(self.strategy_alert_config, quote_by_code, daily_by_code or {})
             self._send_strategy_pushes(strategy_states)
+            daily_summary_sent = self._send_strategy_daily_summary(strategy_states)
         else:
             strategy_changed = False
+            daily_summary_sent = False
             strategy_states = []
         full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code, daily_by_code, strategy_states)
         self._latest_quotes = quote_by_code
@@ -1624,7 +1665,7 @@ class FloatLabel(QWidget):
             if name and self.code_names.get(code) != name:
                 self.code_names[code] = name
                 learned_names = True
-        if learned_names or strategy_changed:
+        if learned_names or strategy_changed or daily_summary_sent:
             self._notify_change()
 
         try:

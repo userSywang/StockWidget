@@ -294,6 +294,8 @@ class StockLogicTests(unittest.TestCase):
         )
 
         self.assertEqual(states[0]["stop_price"], 110.0)
+        self.assertEqual(states[0]["stop_loss_price"], 95.0)
+        self.assertEqual(states[0]["take_profit_price"], 110.0)
         self.assertEqual(states[0]["ma5"], 18.0)
         self.assertEqual(states[0]["ma10"], 15.5)
         self.assertEqual(states[0]["ma20"], 10.5)

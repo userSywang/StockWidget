@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -570,6 +571,72 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(len(win._http.posts), 1)
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
+
+    def test_strategy_daily_summary_sends_once_after_eleven(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_daily_summary_sent_date = ""
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+        states = [{
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": 12.0,
+            "locked_profit_pct": 10.0,
+            "stop_loss_price": 95.0,
+            "take_profit_price": 110.0,
+            "status": "已锁盈10%",
+        }]
+        now = datetime(2026, 8, 10, 11, 0)
+
+        sent = FloatLabel._send_strategy_daily_summary(win, states, now)
+        repeated = FloatLabel._send_strategy_daily_summary(win, states, now)
+
+        self.assertTrue(sent)
+        self.assertFalse(repeated)
+        self.assertEqual(win._strategy_daily_summary_sent_date, "2026-08-10")
+        self.assertEqual(len(win._http.posts), 1)
+        content = win._http.posts[0][1]["markdown"]["content"]
+        self.assertIn("策略午间摘要", content)
+        self.assertIn("药明康德(sh603259)", content)
+        self.assertIn("止损 95.00", content)
+        self.assertIn("止盈 110.00", content)
+
+    def test_strategy_daily_summary_waits_until_eleven(self):
+        class FakeHttp:
+            def post(self, *_args, **_kwargs):
+                raise AssertionError("should not push before 11:00")
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_daily_summary_sent_date = ""
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+
+        sent = FloatLabel._send_strategy_daily_summary(
+            win,
+            [{"code": "sh603259", "name": "药明康德", "status": "未触发"}],
+            datetime(2026, 8, 10, 10, 59),
+        )
+
+        self.assertFalse(sent)
 
     def test_column_width_sources_ignore_message_rows(self):
         rows = [

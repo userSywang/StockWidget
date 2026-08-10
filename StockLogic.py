@@ -541,6 +541,33 @@ def strategy_stop_price(cost, rules, locked_profit_pct):
     return round(max(stop_prices), 4)
 
 
+def strategy_loss_price(cost, rules):
+    try:
+        cost = float(cost)
+    except Exception:
+        cost = 0.0
+    if cost <= 0 or not (rules or {}).get("max_loss_enabled"):
+        return None
+    try:
+        max_loss_pct = float((rules or {}).get("max_loss_pct", 0.0))
+    except Exception:
+        max_loss_pct = 0.0
+    if max_loss_pct <= 0:
+        return None
+    return round(cost * (1.0 - max_loss_pct / 100.0), 4)
+
+
+def strategy_take_profit_price(cost, locked_profit_pct):
+    try:
+        cost = float(cost)
+        locked_profit_pct = float(locked_profit_pct)
+    except Exception:
+        return None
+    if cost <= 0 or locked_profit_pct <= 0:
+        return None
+    return round(cost * (1.0 + locked_profit_pct / 100.0), 4)
+
+
 def strategy_enabled_rule_labels(rules):
     rules = rules or {}
     labels = []
@@ -687,6 +714,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "locked_profit_pct": lock_pct,
                 "lock_raised": bool(position.get("lock_raised", False)),
                 "stop_price": strategy_stop_price(cost, rules, lock_pct),
+                "stop_loss_price": strategy_loss_price(cost, rules),
+                "take_profit_price": strategy_take_profit_price(cost, lock_pct),
                 "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
                 "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
                 "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
@@ -748,6 +777,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "locked_profit_pct": lock_pct,
             "lock_raised": bool(position.get("lock_raised", False)),
             "stop_price": strategy_stop_price(cost, rules, lock_pct),
+            "stop_loss_price": strategy_loss_price(cost, rules),
+            "take_profit_price": strategy_take_profit_price(cost, lock_pct),
             "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
             "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
             "ma20": None if stock_ma20 is None else round(stock_ma20, 4),

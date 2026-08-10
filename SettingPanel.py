@@ -2268,6 +2268,8 @@ class SettingsDialog(QDialog):
             rows.append(f"触发后使用：{channel_text}")
             if notifications.get("remote_push") and not notifications.get("webhook_url"):
                 rows.append("远程推送未配置Webhook地址")
+            elif notifications.get("remote_push"):
+                rows.append("每日11:00远程推送：当前持仓止损/止盈摘要")
             if rules.get("max_loss_enabled"):
                 rows.append(f"持仓浮亏达到 {float(rules.get('max_loss_pct', 0.0)):.1f}%：提醒清仓")
             if rules.get("stock_ma5_break_enabled"):
