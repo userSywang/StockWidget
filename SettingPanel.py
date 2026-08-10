@@ -89,6 +89,29 @@ class SettingsDialog(QDialog):
         btn_col.addSpacing(8)
         btn_col.addWidget(self.btn_code_to_alert)
         btn_col.addWidget(self.btn_code_to_strategy)
+        btn_col.addSpacing(8)
+        self.cmb_code_holding = QComboBox()
+        self.cmb_code_holding.setFixedWidth(72)
+        self.cmb_code_holding.addItem("未标记", userData="")
+        self.cmb_code_holding.addItem("持有", userData="hold")
+        self.cmb_code_holding.addItem("观察", userData="watch")
+        self.cmb_code_holding.addItem("已清仓", userData="cleared")
+        self.cmb_code_cycle = QComboBox()
+        self.cmb_code_cycle.setFixedWidth(72)
+        self.cmb_code_cycle.addItem("周期", userData="")
+        self.cmb_code_cycle.addItem("短线", userData="short")
+        self.cmb_code_cycle.addItem("波段", userData="swing")
+        self.cmb_code_cycle.addItem("长期", userData="long")
+        self.cmb_code_priority = QComboBox()
+        self.cmb_code_priority.setFixedWidth(72)
+        self.cmb_code_priority.addItem("优先级", userData="")
+        self.cmb_code_priority.addItem("重点", userData="focus")
+        self.cmb_code_priority.addItem("普通", userData="normal")
+        self.cmb_code_priority.addItem("低优先", userData="low")
+        btn_col.addWidget(QLabel("标识"))
+        btn_col.addWidget(self.cmb_code_holding)
+        btn_col.addWidget(self.cmb_code_cycle)
+        btn_col.addWidget(self.cmb_code_priority)
         btn_col.addStretch(1)
 
         lay_codes.addWidget(self.tree_codes, 1)
@@ -899,8 +922,10 @@ class SettingsDialog(QDialog):
         self.strategy_subtabs.addTab(tab_strategy_library, "策略库")
 
         self._loading_strategy_editor = False
+        self._loading_code_tag_editor = False
         self._set_strategy_selection_visible(False)
         self._load_strategy_config()
+        self._load_code_tag_editor()
         self.tabs.addTab(tab_strategy, "策略")
 
         # ---- 第四页 ----
@@ -1047,6 +1072,7 @@ class SettingsDialog(QDialog):
         # ---- 连接 ----
         # 连接：代码列表
         self.tree_codes.itemChanged.connect(self._on_codes_changed)
+        self.tree_codes.currentItemChanged.connect(self._on_code_tree_selection_changed)
         self.btn_add.clicked.connect(self._add_code)
         self.btn_add_group.clicked.connect(self._add_group)
         self.btn_del.clicked.connect(self._del_code)
@@ -1054,6 +1080,9 @@ class SettingsDialog(QDialog):
         self.btn_dn.clicked.connect(self._move_down)
         self.btn_code_to_alert.clicked.connect(self._open_price_alert_for_current_code)
         self.btn_code_to_strategy.clicked.connect(self._open_strategy_for_current_code)
+        self.cmb_code_holding.currentIndexChanged.connect(self._on_code_tag_changed)
+        self.cmb_code_cycle.currentIndexChanged.connect(self._on_code_tag_changed)
+        self.cmb_code_priority.currentIndexChanged.connect(self._on_code_tag_changed)
         self.list_alerts.currentRowChanged.connect(self._on_alert_selected)
         self.btn_alert_add.clicked.connect(self._add_alert_rule)
         self.btn_alert_del.clicked.connect(self._del_alert_rule)
@@ -1215,7 +1244,24 @@ class SettingsDialog(QDialog):
 
     def _format_code_item_text(self, code: str):
         short_name = self._display_name_for_code(code)
-        return f"{code}  {short_name}" if short_name else code
+        tags = self._code_tag_label(code)
+        text = f"{code}  {short_name}" if short_name else code
+        return f"{text}  [{tags}]" if tags else text
+
+    def _code_tag_label(self, code: str):
+        tags = getattr(self.win, "code_tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        item = tags.get(code) if isinstance(tags.get(code), dict) else {}
+        holding_map = {"hold": "持有", "watch": "观察", "cleared": "清仓"}
+        cycle_map = {"short": "短线", "swing": "波段", "long": "长期"}
+        priority_map = {"focus": "重点", "normal": "普通", "low": "低优"}
+        parts = [
+            holding_map.get(item.get("holding"), ""),
+            cycle_map.get(item.get("cycle"), ""),
+            priority_map.get(item.get("priority"), ""),
+        ]
+        return "/".join(part for part in parts if part)
 
     def _code_from_item_text(self, text: str):
         text = str(text or "").strip()
@@ -1339,6 +1385,56 @@ class SettingsDialog(QDialog):
             return ""
         code = item.data(0, Qt.UserRole + 1) or self._code_from_item_text(item.text(0))
         return normalize_code_or_none(code) or ""
+
+    def _set_combo_data(self, combo, value):
+        index = combo.findData(value)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def _on_code_tree_selection_changed(self, *_args):
+        self._load_code_tag_editor()
+
+    def _load_code_tag_editor(self):
+        code = self._current_code_from_tree()
+        tags = getattr(self.win, "code_tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        item = tags.get(code) if code and isinstance(tags.get(code), dict) else {}
+        self._loading_code_tag_editor = True
+        try:
+            self._set_combo_data(self.cmb_code_holding, item.get("holding", ""))
+            self._set_combo_data(self.cmb_code_cycle, item.get("cycle", ""))
+            self._set_combo_data(self.cmb_code_priority, item.get("priority", ""))
+            enabled = bool(code)
+            self.cmb_code_holding.setEnabled(enabled)
+            self.cmb_code_cycle.setEnabled(enabled)
+            self.cmb_code_priority.setEnabled(enabled)
+        finally:
+            self._loading_code_tag_editor = False
+
+    def _on_code_tag_changed(self, *_args):
+        if getattr(self, "_loading_code_tag_editor", False):
+            return
+        code = self._current_code_from_tree()
+        if not code:
+            return
+        code_tags = dict(getattr(self.win, "code_tags", {}) if isinstance(getattr(self.win, "code_tags", {}), dict) else {})
+        tags = {
+            "holding": self.cmb_code_holding.currentData() or "",
+            "cycle": self.cmb_code_cycle.currentData() or "",
+            "priority": self.cmb_code_priority.currentData() or "",
+        }
+        if any(tags.values()):
+            code_tags[code] = tags
+        else:
+            code_tags.pop(code, None)
+        setter = getattr(self.win, "set_code_tags", None)
+        if callable(setter):
+            setter(code_tags)
+        else:
+            self.win.code_tags = code_tags
+        item = self.tree_codes.currentItem()
+        if item is not None and item.data(0, Qt.UserRole) == "code":
+            item.setText(0, self._format_code_item_text(code))
 
     def _open_price_alert_for_current_code(self):
         code = self._current_code_from_tree()

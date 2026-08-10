@@ -20,6 +20,7 @@ from StockLogic import (
     flatten_group_codes,
     moving_average,
     normalize_alert_rules,
+    normalize_code_or_none,
     normalize_groups,
     normalize_codes,
     normalize_price_alerts,
@@ -83,6 +84,7 @@ class FloatLabel(QWidget):
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
         self.code_names         = dict(cfg.get("code_names", {})) if isinstance(cfg.get("code_names"), dict) else {}
+        self.code_tags          = self._normalize_code_tags(cfg.get("code_tags", {}))
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
         self._latest_quotes     = {}
         self._http              = requests.Session()
@@ -245,6 +247,7 @@ class FloatLabel(QWidget):
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
             "code_names": self.code_names,
+            "code_tags": self.code_tags,
             "code_visible": bool(getattr(self, 'code_visible', False)),
             "name_visible": bool(getattr(self, 'name_visible', False)),
             "price_visible": bool(getattr(self, 'price_visible', False)),
@@ -281,6 +284,36 @@ class FloatLabel(QWidget):
             "start_on_boot": bool(self.start_on_boot),
             "data_source": self.data_source,
         }
+
+    @staticmethod
+    def _normalize_code_tags(code_tags):
+        if not isinstance(code_tags, dict):
+            return {}
+        allowed_holding = {"", "hold", "watch", "cleared"}
+        allowed_cycle = {"", "short", "swing", "long"}
+        allowed_priority = {"", "focus", "normal", "low"}
+        normalized = {}
+        for raw_code, raw_tags in code_tags.items():
+            code = normalize_code_or_none(raw_code)
+            if not code or not isinstance(raw_tags, dict):
+                continue
+            holding = str(raw_tags.get("holding") or "").strip()
+            cycle = str(raw_tags.get("cycle") or "").strip()
+            priority = str(raw_tags.get("priority") or "").strip()
+            item = {
+                "holding": holding if holding in allowed_holding else "",
+                "cycle": cycle if cycle in allowed_cycle else "",
+                "priority": priority if priority in allowed_priority else "",
+            }
+            if any(item.values()):
+                normalized[code] = item
+        return normalized
+
+    def set_code_tags(self, code_tags):
+        self.code_tags = self._normalize_code_tags(code_tags)
+        valid_codes = set(getattr(self, "codes", []))
+        self.code_tags = {code: tags for code, tags in self.code_tags.items() if code in valid_codes}
+        self._notify_change()
 
     @staticmethod
     def _normalize_data_source(data_source):
@@ -1589,6 +1622,7 @@ class FloatLabel(QWidget):
         self.checked_codes = [c for c in self.checked_codes if c in self.codes]
         if not self.checked_codes:
             self.checked_codes = list(self.codes)
+        self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
         self._notify_change()
         self._refresh_from_function()
 
@@ -1598,6 +1632,7 @@ class FloatLabel(QWidget):
             new = ["sh000001"]
         self.codes = new
         self.groups = [{"name": "默认", "codes": list(new)}]
+        self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
         self._notify_change()
         self._refresh_from_function()
 

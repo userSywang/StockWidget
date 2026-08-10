@@ -31,6 +31,7 @@ class FakeWindow:
         self.alert_rules = []
         self.price_alerts = []
         self.strategy_alert_config = {}
+        self.code_tags = {}
         self.warning_visible = False
         self.warning_text = ""
         self.market_amount_visible = False
@@ -60,6 +61,9 @@ class FakeWindow:
 
     def set_strategy_alert_config(self, config):
         self.strategy_alert_config = config
+
+    def set_code_tags(self, code_tags):
+        self.code_tags = code_tags
 
     def set_data_source(self, data_source):
         self.data_source = data_source
@@ -140,6 +144,28 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertIn("药明", dlg.list_price_alerts.item(0).text())
         self.assertIn("药明", dlg.list_strategy_positions.item(0).text())
+        dlg.close()
+
+    def test_self_selected_code_tags_are_saved_and_displayed(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        win.code_tags = {}
+        dlg = SettingsDialog(win, None)
+
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+        dlg.cmb_code_holding.setCurrentIndex(dlg.cmb_code_holding.findData("hold"))
+        dlg.cmb_code_cycle.setCurrentIndex(dlg.cmb_code_cycle.findData("short"))
+        dlg.cmb_code_priority.setCurrentIndex(dlg.cmb_code_priority.findData("focus"))
+        dlg._on_code_tag_changed()
+
+        self.assertEqual(win.code_tags["sh603259"]["holding"], "hold")
+        self.assertEqual(win.code_tags["sh603259"]["cycle"], "short")
+        self.assertIn("持有", code_item.text(0))
+        self.assertIn("短线", code_item.text(0))
         dlg.close()
 
     def test_display_data_page_includes_ma_and_strategy_columns(self):

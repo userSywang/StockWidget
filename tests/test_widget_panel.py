@@ -139,6 +139,25 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_current_config_persists_code_tags(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "code_tags": {
+                "sh603259": {"holding": "hold", "cycle": "short", "priority": "focus"}
+            },
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            self.assertEqual(win.code_tags["sh603259"]["holding"], "hold")
+            self.assertEqual(win.current_config()["code_tags"]["sh603259"]["cycle"], "short")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_refresh_request_codes_include_market_amount_indexes(self):
         win = FloatLabel.__new__(FloatLabel)
         win.checked_codes = ["sh600000"]
