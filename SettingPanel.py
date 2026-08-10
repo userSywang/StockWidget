@@ -1099,7 +1099,7 @@ class SettingsDialog(QDialog):
         other_settings.addWidget(g_icon)
 
         self.tabs.addTab(tab_3, "常规")
-        self._install_spinbox_wheel_guards()
+        self._install_wheel_guards()
 
         # ---- 连接 ----
         # 连接：代码列表
@@ -2484,13 +2484,16 @@ class SettingsDialog(QDialog):
             if shown >= 50:
                 break
 
-    def _install_spinbox_wheel_guards(self):
+    def _install_wheel_guards(self):
         for widget in self.findChildren(QSpinBox) + self.findChildren(QDoubleSpinBox):
+            widget.setFocusPolicy(Qt.StrongFocus)
+            widget.installEventFilter(self)
+        for widget in self.findChildren(QComboBox):
             widget.setFocusPolicy(Qt.StrongFocus)
             widget.installEventFilter(self)
 
     def eventFilter(self, obj, event):
-        if isinstance(obj, (QSpinBox, QDoubleSpinBox)) and event.type() == QEvent.Wheel and not obj.hasFocus():
+        if isinstance(obj, (QSpinBox, QDoubleSpinBox, QComboBox)) and event.type() == QEvent.Wheel and not obj.hasFocus():
             event.ignore()
             return True
         return super().eventFilter(obj, event)

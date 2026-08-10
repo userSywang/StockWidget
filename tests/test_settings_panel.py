@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import QApplication, QComboBox, QDoubleSpinBox, QSpinBox
 from PySide6.QtCore import QPoint, Qt, QTime, QEvent
 
 from SettingPanel import SettingsDialog
@@ -665,6 +665,24 @@ class SettingsPanelTests(unittest.TestCase):
             spin.clearFocus()
             event = QEvent(QEvent.Wheel)
             self.assertTrue(dlg.eventFilter(spin, event))
+        dlg.close()
+
+    def test_combo_boxes_ignore_wheel_when_not_focused(self):
+        win = FakeWindow()
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {"remote_push": True, "remote_channel": "wecom", "webhook_url": "https://example.test"},
+        }
+        dlg = SettingsDialog(win, None)
+        combo_boxes = dlg.findChildren(QComboBox)
+        self.assertGreater(len(combo_boxes), 0)
+
+        dlg.cmb_strategy_remote_channel.setCurrentIndex(dlg.cmb_strategy_remote_channel.findData("wecom"))
+        dlg.cmb_strategy_remote_channel.clearFocus()
+        event = QEvent(QEvent.Wheel)
+
+        self.assertTrue(dlg.eventFilter(dlg.cmb_strategy_remote_channel, event))
+        self.assertEqual(dlg.cmb_strategy_remote_channel.currentData(), "wecom")
         dlg.close()
 
     def test_strategy_page_removes_positions_not_in_self_selected_codes(self):
