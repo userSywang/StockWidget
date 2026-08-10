@@ -1274,16 +1274,21 @@ class FloatLabel(QWidget):
         result = list(row or [])
         if len(result) < len(self.ALL_HEADERS):
             result.extend(["-"] * (len(self.ALL_HEADERS) - len(result)))
+        code_index = self.ALL_HEADERS.index("代码") if "代码" in self.ALL_HEADERS else -1
         name_index = self.ALL_HEADERS.index("名称") if "名称" in self.ALL_HEADERS else -1
         labels = []
         tag_label = self._code_tag_label(code)
         if tag_label:
             labels.append(tag_label)
         labels.extend(str(badge) for badge in (badges or []) if str(badge or "").strip())
-        if labels and 0 <= name_index < len(result):
-            name = str(result[name_index] or "").strip()
-            if name and name != "-":
-                result[name_index] = f"{name} [{'/'.join(labels)}]"
+        if labels:
+            label_text = f"[{'/'.join(labels)}]"
+            show_name = self._header_visible_for_indicator("名称")
+            target_index = name_index if show_name and 0 <= name_index < len(result) else code_index
+            if 0 <= target_index < len(result):
+                text = str(result[target_index] or "").strip()
+                if text and text != "-":
+                    result[target_index] = f"{text} {label_text}"
         daily_rows = (daily_by_code or {}).get(code)
         ma_values = {
             "MA5": moving_average(daily_rows, 5),
@@ -1311,6 +1316,24 @@ class FloatLabel(QWidget):
                 if header in self.ALL_HEADERS:
                     result[self.ALL_HEADERS.index(header)] = "-"
         return result
+
+    def _header_visible_for_indicator(self, header):
+        checker = getattr(self, "header_is_visible", None)
+        if callable(checker) and "header_is_visible" in getattr(self, "__dict__", {}):
+            try:
+                return bool(checker(header))
+            except Exception:
+                return True
+        attr_by_header = {"代码": "code_visible", "名称": "name_visible"}
+        attr = attr_by_header.get(header)
+        if attr and not hasattr(self, attr):
+            return True
+        if callable(checker):
+            try:
+                return bool(checker(header))
+            except Exception:
+                return True
+        return True
 
     def _code_tag_label(self, code):
         tags = getattr(self, "code_tags", {})
@@ -1423,6 +1446,14 @@ class FloatLabel(QWidget):
             lock_text = f"{float(take_profit_price):.2f}（锁盈+{lock_pct:.1f}%）"
             stop_text = f"{float(take_profit_price):.2f}"
         stop_loss_text = "-" if stop_loss_price is None else f"{float(stop_loss_price):.2f}"
+        line_change_text = ""
+        previous_stop_price = state.get("stop_line_previous_price")
+        current_stop_price = state.get("stop_price")
+        try:
+            if state.get("stop_line_changed") and previous_stop_price is not None and current_stop_price is not None:
+                line_change_text = f">止盈线变动：{float(previous_stop_price):.2f} -> {float(current_stop_price):.2f}\n"
+        except Exception:
+            line_change_text = ""
         return (
             f"## StockWidget 策略提醒\n"
             f">标的：{state.get('name') or state.get('code')}\n"
@@ -1431,12 +1462,13 @@ class FloatLabel(QWidget):
             f">止损线：{stop_loss_text}\n"
             f">止盈线：{lock_text}\n"
             f">止盈价：{stop_text}\n"
+            f"{line_change_text}"
             f">状态：{state.get('status', '')}"
         )
 
     def _strategy_daily_summary_text(self, strategy_states, now=None):
         now = now or datetime.now()
-        lines = [f"## StockWidget 策略午间摘要 {now:%Y-%m-%d %H:%M}"]
+        lines = [f"## StockWidget 策略定时摘要 {now:%Y-%m-%d %H:%M}"]
         for state in strategy_states or []:
             profit = state.get("profit_pct")
             profit_text = "-" if profit is None else f"{float(profit):+.1f}%"

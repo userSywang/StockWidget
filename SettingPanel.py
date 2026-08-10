@@ -1471,6 +1471,8 @@ class SettingsDialog(QDialog):
             target_row = len(alerts) - 1
         self.tabs.setCurrentIndex(3)
         self._load_price_alert_list(target_row)
+        self.edit_price_alert_code.setFocus(Qt.OtherFocusReason)
+        self.edit_price_alert_code.selectAll()
 
     def _open_strategy_for_current_code(self):
         code = self._current_code_from_tree()
@@ -1500,6 +1502,8 @@ class SettingsDialog(QDialog):
         if hasattr(self, "strategy_subtabs"):
             self.strategy_subtabs.setCurrentIndex(0)
         self._load_strategy_config(target_row)
+        self.edit_strategy_code.setFocus(Qt.OtherFocusReason)
+        self.edit_strategy_code.selectAll()
 
     def _add_group(self):
         item = self._make_group_item("新分组")

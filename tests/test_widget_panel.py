@@ -476,6 +476,37 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("药明康德", name_text)
         self.assertIn("[持有/短线/重点]", name_text)
 
+    def test_compose_display_rows_appends_code_tags_to_code_when_name_hidden(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.strategy_alert_config = {"enabled": False}
+        win.code_tags = {
+            "sh603259": {"holding": "hold", "cycle": "long", "priority": "focus"}
+        }
+        win.header_is_visible = lambda header: header != "名称"
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, _meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [],
+        )
+
+        stock_row = rows[1]
+        code_text = stock_row[STRATEGY_HEADERS.index("代码")]
+        self.assertIn("sh603259", code_text)
+        self.assertIn("[持有/长期/重点]", code_text)
+
     def test_compose_display_rows_marks_triggered_price_and_strategy_alerts(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = STRATEGY_HEADERS
@@ -555,6 +586,23 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("止盈线：110.00（锁盈+10.0%）", text)
         self.assertIn("止盈价：110.00", text)
         self.assertIn("上调止盈线至110.00", text)
+
+    def test_strategy_push_text_includes_changed_stop_line_prices(self):
+        win = FloatLabel.__new__(FloatLabel)
+        text = FloatLabel._strategy_push_text_for_state(win, {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": 15.0,
+            "locked_profit_pct": 10.0,
+            "stop_price": 110.0,
+            "take_profit_price": 110.0,
+            "stop_line_changed": True,
+            "stop_line_previous_price": 109.0,
+            "status": "止盈线变动至110.00",
+        })
+
+        self.assertIn("止盈线变动：109.00 -> 110.00", text)
+        self.assertIn("状态：止盈线变动至110.00", text)
 
     def test_strategy_push_payload_uses_custom_json(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -677,7 +725,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._strategy_daily_summary_sent_date, "2026-08-10")
         self.assertEqual(len(win._http.posts), 1)
         content = win._http.posts[0][1]["markdown"]["content"]
-        self.assertIn("策略午间摘要", content)
+        self.assertIn("策略定时摘要", content)
         self.assertIn("药明康德(sh603259)", content)
         self.assertIn("止损 95.00", content)
         self.assertIn("止盈 110.00", content)

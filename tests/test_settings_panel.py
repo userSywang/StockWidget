@@ -112,7 +112,9 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertEqual(dlg.tabs.currentIndex(), 3)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
+        self.assertEqual(dlg.list_price_alerts.currentRow(), 0)
         self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
+        self.assertTrue(dlg.edit_price_alert_code.hasSelectedText())
         dlg.close()
 
     def test_current_self_selected_code_opens_strategy_position_editor(self):
@@ -129,7 +131,9 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertEqual(dlg.tabs.currentIndex(), 4)
         self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh603259")
+        self.assertEqual(dlg.list_strategy_positions.currentRow(), 0)
         self.assertEqual(dlg.edit_strategy_code.text(), "sh603259")
+        self.assertTrue(dlg.edit_strategy_code.hasSelectedText())
         dlg.close()
 
     def test_alert_and_strategy_lists_show_stock_short_names(self):
