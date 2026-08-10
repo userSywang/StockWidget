@@ -445,6 +445,36 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("止损线")], "110.00")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10%")
 
+    def test_compose_display_rows_appends_code_tags_to_name(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.strategy_alert_config = {"enabled": False}
+        win.code_tags = {
+            "sh603259": {"holding": "hold", "cycle": "short", "priority": "focus"}
+        }
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, _meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [],
+        )
+
+        stock_row = rows[1]
+        name_text = stock_row[STRATEGY_HEADERS.index("名称")]
+        self.assertIn("药明康德", name_text)
+        self.assertIn("[持有/短线/重点]", name_text)
+
     def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = STRATEGY_HEADERS

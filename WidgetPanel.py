@@ -1267,6 +1267,12 @@ class FloatLabel(QWidget):
         result = list(row or [])
         if len(result) < len(self.ALL_HEADERS):
             result.extend(["-"] * (len(self.ALL_HEADERS) - len(result)))
+        name_index = self.ALL_HEADERS.index("名称") if "名称" in self.ALL_HEADERS else -1
+        tag_label = self._code_tag_label(code)
+        if tag_label and 0 <= name_index < len(result):
+            name = str(result[name_index] or "").strip()
+            if name and name != "-":
+                result[name_index] = f"{name} [{tag_label}]"
         daily_rows = (daily_by_code or {}).get(code)
         ma_values = {
             "MA5": moving_average(daily_rows, 5),
@@ -1294,6 +1300,21 @@ class FloatLabel(QWidget):
                 if header in self.ALL_HEADERS:
                     result[self.ALL_HEADERS.index(header)] = "-"
         return result
+
+    def _code_tag_label(self, code):
+        tags = getattr(self, "code_tags", {})
+        if not isinstance(tags, dict):
+            tags = {}
+        item = tags.get(code) if isinstance(tags.get(code), dict) else {}
+        holding_map = {"hold": "持有", "watch": "观察", "cleared": "清仓"}
+        cycle_map = {"short": "短线", "swing": "波段", "long": "长期"}
+        priority_map = {"focus": "重点", "normal": "普通", "low": "低优"}
+        parts = [
+            holding_map.get(item.get("holding"), ""),
+            cycle_map.get(item.get("cycle"), ""),
+            priority_map.get(item.get("priority"), ""),
+        ]
+        return "/".join(part for part in parts if part)
 
     def _compose_strategy_rows(self, strategy_states):
         rows, meta = [], []

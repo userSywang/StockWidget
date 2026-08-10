@@ -168,6 +168,36 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertIn("短线", code_item.text(0))
         dlg.close()
 
+    def test_self_selected_code_tag_controls_do_not_overlap_buttons(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        dlg = SettingsDialog(win, None)
+        dlg.show()
+        self.app.processEvents()
+
+        def global_rect(widget):
+            rect = widget.rect()
+            rect.moveTopLeft(widget.mapToGlobal(QPoint(0, 0)))
+            return rect
+
+        buttons = [
+            dlg.btn_add,
+            dlg.btn_add_group,
+            dlg.btn_del,
+            dlg.btn_up,
+            dlg.btn_dn,
+            dlg.btn_code_to_alert,
+            dlg.btn_code_to_strategy,
+        ]
+        combos = [dlg.cmb_code_holding, dlg.cmb_code_cycle, dlg.cmb_code_priority]
+        for button in buttons:
+            for combo in combos:
+                self.assertFalse(global_rect(button).intersects(global_rect(combo)))
+        self.assertGreater(global_rect(dlg.cmb_code_holding).top(), global_rect(dlg.btn_code_to_strategy).bottom())
+        dlg.close()
+
     def test_display_data_page_includes_ma_and_strategy_columns(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
