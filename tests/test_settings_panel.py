@@ -530,10 +530,12 @@ class SettingsPanelTests(unittest.TestCase):
         win.checked_codes = ["sh603259"]
         win.code_names = {"sh603259": "药明康德"}
         pushed = []
+        remote_pushed = []
         win.show_desktop_alert = lambda text: pushed.append(text)
+        win._send_strategy_push_text = lambda text: remote_pushed.append(text) or True
         win.strategy_alert_config = {
             "enabled": True,
-            "notifications": {"desktop_popup": True},
+            "notifications": {"desktop_popup": True, "remote_push": True, "webhook_url": "https://example.test"},
             "positions": [],
         }
         dlg = SettingsDialog(win, None)
@@ -548,6 +550,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(position["last_stop_price"], 95.0)
         self.assertTrue(any("药明康德策略套用" in text for text in pushed))
         self.assertTrue(any("止损线：95.00" in text for text in pushed))
+        self.assertTrue(any("药明康德策略套用" in text for text in remote_pushed))
         self.assertEqual(win.strategy_alert_history[0]["code"], "sh603259")
         self.assertIn("策略套用", win.strategy_alert_history[0]["status"])
         dlg.close()
@@ -559,10 +562,12 @@ class SettingsPanelTests(unittest.TestCase):
         win.checked_codes = ["sh603259"]
         win.code_names = {"sh603259": "药明康德"}
         pushed = []
+        remote_pushed = []
         win.show_desktop_alert = lambda text: pushed.append(text)
+        win._send_strategy_push_text = lambda text: remote_pushed.append(text) or True
         win.strategy_alert_config = {
             "enabled": True,
-            "notifications": {"desktop_popup": True},
+            "notifications": {"desktop_popup": True, "remote_push": True, "webhook_url": "https://example.test"},
             "positions": [{
                 "code": "sh603259",
                 "cost_price": 100.0,
@@ -582,7 +587,45 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(any("浮亏清仓阈值：10.0% → 5.0%" in text for text in pushed))
         self.assertTrue(any("药明康德止损线变化" in text for text in pushed))
         self.assertTrue(any("90.00 -> 95.00" in text for text in pushed))
+        self.assertTrue(any("浮亏清仓阈值：10.0% → 5.0%" in text for text in remote_pushed))
+        self.assertTrue(any("药明康德止损线变化" in text for text in remote_pushed))
         self.assertTrue(any("策略修改" in item["status"] for item in win.strategy_alert_history))
+        self.assertTrue(any("止损线变化" in item["status"] for item in win.strategy_alert_history))
+        dlg.close()
+
+    def test_strategy_params_save_sends_alerts_and_webhook(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        pushed = []
+        remote_pushed = []
+        win.show_desktop_alert = lambda text: pushed.append(text)
+        win._send_strategy_push_text = lambda text: remote_pushed.append(text) or True
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {"desktop_popup": True, "remote_push": True, "webhook_url": "https://example.test"},
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 100.0,
+                "last_stop_price": 90.0,
+                "rules": {"max_loss_enabled": True, "max_loss_pct": 10.0},
+            }],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        dlg._on_strategy_params_edit()
+        dlg.spin_strategy_loss.setValue(5.0)
+        dlg._on_strategy_params_save()
+
+        self.assertEqual(win.strategy_alert_config["positions"][0]["last_stop_price"], 95.0)
+        self.assertTrue(any("浮亏清仓阈值：10.0% → 5.0%" in text for text in pushed))
+        self.assertTrue(any("药明康德止损线变化" in text for text in pushed))
+        self.assertTrue(any("浮亏清仓阈值：10.0% → 5.0%" in text for text in remote_pushed))
+        self.assertTrue(any("药明康德止损线变化" in text for text in remote_pushed))
         self.assertTrue(any("止损线变化" in item["status"] for item in win.strategy_alert_history))
         dlg.close()
 

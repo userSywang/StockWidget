@@ -2571,7 +2571,7 @@ class SettingsDialog(QDialog):
         self.list_strategy_params.setVisible(True)
         self.btn_strategy_params_edit.setVisible(True)
         self.btn_strategy_params_save.setVisible(False)
-        self._on_strategy_config_changed()
+        self._save_strategy_position()
         self._refresh_strategy_params_list()
 
     def _on_strategy_template_reset(self):
