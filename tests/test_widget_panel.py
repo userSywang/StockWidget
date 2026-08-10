@@ -562,7 +562,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("sh603259", code_text)
         self.assertIn("[持有/长期/重点]", code_text)
 
-    def test_compose_display_rows_marks_triggered_price_and_strategy_alerts(self):
+    def test_compose_display_rows_prioritizes_strategy_badge_over_price_alert(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = STRATEGY_HEADERS
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
@@ -587,9 +587,38 @@ class WidgetPanelTests(unittest.TestCase):
 
         stock_row = rows[1]
         name_text = stock_row[STRATEGY_HEADERS.index("名称")]
-        self.assertIn("[价警/策略]", name_text)
+        self.assertIn("[策略]", name_text)
+        self.assertNotIn("价警/策略", name_text)
         self.assertTrue(meta[1]["strategy"])
         self.assertEqual(meta[1]["severity"], "danger")
+        self.assertTrue(meta[1]["price_alerts"][0]["triggered"])
+
+    def test_compose_display_rows_shows_price_alert_badge_without_strategy_trigger(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.strategy_alert_config = {"enabled": True}
+        win.code_tags = {}
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {"sh603259": [{"triggered": True, "detail": "价格提醒"}]},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [{"code": "sh603259", "triggered": False, "severity": "neutral", "status": "未触发"}],
+        )
+
+        stock_row = rows[1]
+        name_text = stock_row[STRATEGY_HEADERS.index("名称")]
+        self.assertIn("[价警]", name_text)
         self.assertTrue(meta[1]["price_alerts"][0]["triggered"])
 
     def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):

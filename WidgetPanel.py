@@ -1259,10 +1259,11 @@ class FloatLabel(QWidget):
                     if code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
                     badges = []
-                    if any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
-                        badges.append("价警")
-                    if strategy_state and strategy_state.get("triggered"):
+                    strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
+                    if strategy_triggered:
                         badges.append("策略")
+                    elif any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
+                        badges.append("价警")
                     full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code, badges))
                     meta_rows.append(meta)
 
