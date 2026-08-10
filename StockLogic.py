@@ -358,6 +358,9 @@ def normalize_strategy_position(position):
         "peak_profit_pct": _bounded_float(position.get("peak_profit_pct"), 0.0, -100.0, 10000.0),
         "locked_profit_pct": _bounded_float(position.get("locked_profit_pct"), 0.0, 0.0, 10000.0),
         "lock_raised": bool(position.get("lock_raised", False)),
+        "last_stop_price": _bounded_float(position.get("last_stop_price"), 0.0, 0.0, 999999.9999),
+        "stop_line_changed": bool(position.get("stop_line_changed", False)),
+        "stop_line_previous_price": _bounded_float(position.get("stop_line_previous_price"), 0.0, 0.0, 999999.9999),
         "note": str(position.get("note") or "").strip(),
         "rules": dict(position_rules) if position_rules is not None else {},
     }
@@ -649,6 +652,8 @@ def update_strategy_position_state(config, quotes):
     for position in config.get("positions", []):
         item = dict(position)
         item["lock_raised"] = False
+        item["stop_line_changed"] = False
+        item["stop_line_previous_price"] = 0.0
         position_rules = strategy_rules_for_position(config, item)
         quote = (quotes or {}).get(item["code"]) or {}
         cost = float(item.get("cost_price", 0.0))
@@ -667,6 +672,16 @@ def update_strategy_position_state(config, quotes):
                 item["locked_profit_pct"] = round(lock_pct, 4)
                 item["lock_raised"] = True
                 changed = True
+            stop_price = strategy_stop_price(cost, position_rules, item.get("locked_profit_pct", 0.0))
+            previous_stop_price = float(item.get("last_stop_price", 0.0))
+            if stop_price is not None:
+                if previous_stop_price > 0 and abs(stop_price - previous_stop_price) > 0.0001:
+                    item["stop_line_changed"] = True
+                    item["stop_line_previous_price"] = round(previous_stop_price, 4)
+                    changed = True
+                if abs(stop_price - previous_stop_price) > 0.0001:
+                    item["last_stop_price"] = round(stop_price, 4)
+                    changed = True
         positions.append(item)
     config["positions"] = positions
     return config, changed
@@ -727,6 +742,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "profit_pct": None,
                 "locked_profit_pct": lock_pct,
                 "lock_raised": bool(position.get("lock_raised", False)),
+                "stop_line_changed": bool(position.get("stop_line_changed", False)),
+                "stop_line_previous_price": float(position.get("stop_line_previous_price", 0.0)),
                 "stop_price": strategy_stop_price(cost, rules, lock_pct),
                 "stop_loss_price": strategy_loss_price(cost, rules),
                 "take_profit_price": strategy_take_profit_price(cost, lock_pct),
@@ -750,8 +767,12 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             severity = "danger"
         if lock_pct > 0:
             stop_price = strategy_stop_price(cost, rules, lock_pct)
-            if position.get("lock_raised") and stop_price is not None:
-                status_parts.append(f"上调止盈线至{stop_price:.2f}")
+            stop_line_changed = bool(position.get("stop_line_changed", False))
+            if (position.get("lock_raised") or stop_line_changed) and stop_price is not None:
+                if position.get("lock_raised"):
+                    status_parts.append(f"上调止盈线至{stop_price:.2f}")
+                else:
+                    status_parts.append(f"止盈线变动至{stop_price:.2f}")
                 triggered = True
                 if severity != "danger":
                     severity = "warning"
@@ -793,6 +814,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "profit_pct": profit_pct,
             "locked_profit_pct": lock_pct,
             "lock_raised": bool(position.get("lock_raised", False)),
+            "stop_line_changed": bool(position.get("stop_line_changed", False)),
+            "stop_line_previous_price": float(position.get("stop_line_previous_price", 0.0)),
             "stop_price": strategy_stop_price(cost, rules, lock_pct),
             "stop_loss_price": strategy_loss_price(cost, rules),
             "take_profit_price": strategy_take_profit_price(cost, lock_pct),

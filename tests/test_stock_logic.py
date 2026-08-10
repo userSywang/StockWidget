@@ -325,6 +325,42 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(states[0]["stop_price"], 110.0)
         self.assertIn("上调止盈线至110.00", states[0]["status"])
 
+    def test_strategy_alert_initializes_stop_line_without_alert(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0, "locked_profit_pct": 10.0}],
+        })
+        updated, changed = update_strategy_position_state(config, {"sh603259": {"price": 115.0}})
+        states = evaluate_strategy_alerts(updated, {"sh603259": {"price": 115.0}})
+
+        self.assertTrue(changed)
+        self.assertEqual(updated["positions"][0]["last_stop_price"], 110.0)
+        self.assertFalse(updated["positions"][0]["stop_line_changed"])
+        self.assertFalse(states[0]["triggered"])
+        self.assertIn("已锁盈10%", states[0]["status"])
+
+    def test_strategy_alert_triggers_when_existing_stop_line_changes_without_lock_raise(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{
+                "code": "603259",
+                "cost_price": 100.0,
+                "locked_profit_pct": 10.0,
+                "last_stop_price": 109.0,
+            }],
+        })
+        updated, changed = update_strategy_position_state(config, {"sh603259": {"price": 115.0}})
+        states = evaluate_strategy_alerts(updated, {"sh603259": {"price": 115.0}})
+
+        self.assertTrue(changed)
+        self.assertFalse(states[0]["lock_raised"])
+        self.assertTrue(states[0]["stop_line_changed"])
+        self.assertTrue(states[0]["triggered"])
+        self.assertEqual(states[0]["severity"], "warning")
+        self.assertEqual(states[0]["stop_line_previous_price"], 109.0)
+        self.assertEqual(states[0]["stop_price"], 110.0)
+        self.assertIn("止盈线变动至110.00", states[0]["status"])
+
     def test_stock_and_index_ma5_conditions_report_clearance(self):
         config = normalize_strategy_alert_config({
             "enabled": True,
