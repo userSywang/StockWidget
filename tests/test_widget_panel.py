@@ -159,6 +159,27 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_current_config_persists_strategy_alert_history(self):
+        cfg = {
+            "strategy_alert_history": [{
+                "time": "2026-08-10 10:00",
+                "code": "603259",
+                "name": "药明康德",
+                "status": "触发止损",
+                "severity": "danger",
+            }],
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            self.assertEqual(win.strategy_alert_history[0]["code"], "sh603259")
+            self.assertEqual(win.current_config()["strategy_alert_history"][0]["status"], "触发止损")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_refresh_request_codes_include_market_amount_indexes(self):
         win = FloatLabel.__new__(FloatLabel)
         win.checked_codes = ["sh600000"]
@@ -294,6 +315,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(daily["sh603259"][-1]["date"], "2026-08-10")
         self.assertEqual(daily["sh603259"][-1]["close"], 20.0)
+        self.assertTrue(daily["sh603259"][-1]["realtime"])
         self.assertEqual(daily["sh603259"][-5:], rows[1:] + [daily["sh603259"][-1]])
         self.assertEqual(sum(row["close"] for row in daily["sh603259"][-5:]) / 5, 6.8)
 
@@ -310,6 +332,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(daily["sh603259"][-1]["close"], 12.0)
         self.assertEqual(daily["sh603259"][-1]["high"], 12.0)
+        self.assertTrue(daily["sh603259"][-1]["realtime"])
 
     def test_get_daily_klines_falls_back_to_eastmoney_rows(self):
         class FakeResponse:
@@ -480,6 +503,8 @@ class WidgetPanelTests(unittest.TestCase):
             "profit_pct": 12.0,
             "stop_price": 110.0,
             "status": "已锁盈10%",
+            "daily_date": "2026-08-10",
+            "daily_realtime": True,
         }]
 
         rows, _meta = FloatLabel._compose_display_rows(
@@ -499,7 +524,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("MA20")], "10.50")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("持仓盈亏")], "+12.0%")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("止损线")], "110.00")
-        self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10%")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10% | 实时08-10")
 
     def test_compose_display_rows_appends_code_tags_to_name(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -804,6 +829,50 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(len(win._http.posts), 1)
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
+
+    def test_strategy_pushes_respects_cooldown_and_records_history(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_push_sent_keys = set()
+        win._strategy_push_sent_at = {}
+        win.strategy_alert_history = []
+        changes = []
+        win._on_change = lambda: changes.append("saved")
+        win._now = lambda: datetime(2026, 8, 10, 10, 0)
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+                "push_cooldown_minutes": 30,
+            },
+        }
+        state = {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -5.2,
+            "locked_profit_pct": 0.0,
+            "triggered": True,
+            "severity": "danger",
+            "status": "触发止损",
+        }
+
+        FloatLabel._send_strategy_pushes(win, [state])
+        FloatLabel._send_strategy_pushes(win, [state])
+        win._now = lambda: datetime(2026, 8, 10, 10, 31)
+        FloatLabel._send_strategy_pushes(win, [state])
+
+        self.assertEqual(len(win._http.posts), 2)
+        self.assertEqual(win.strategy_alert_history[0]["time"], "2026-08-10 10:31")
+        self.assertEqual(win.strategy_alert_history[0]["name"], "药明康德")
+        self.assertEqual(changes, ["saved", "saved"])
 
     def test_strategy_pushes_raised_stop_line_state(self):
         class FakeHttp:

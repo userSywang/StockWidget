@@ -31,6 +31,7 @@ class FakeWindow:
         self.alert_rules = []
         self.price_alerts = []
         self.strategy_alert_config = {}
+        self.strategy_alert_history = []
         self.code_tags = {}
         self.warning_visible = False
         self.warning_text = ""
@@ -151,6 +152,23 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertIn("药明", dlg.list_price_alerts.item(0).text())
         self.assertIn("药明", dlg.list_strategy_positions.item(0).text())
+        dlg.close()
+
+    def test_self_selected_buttons_show_current_stock_short_name(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+
+        self.assertEqual(dlg.btn_code_to_alert.text(), "提醒:药明")
+        self.assertEqual(dlg.btn_code_to_strategy.text(), "策略:药明")
+        self.assertTrue(dlg.btn_code_to_alert.isEnabled())
+        self.assertTrue(dlg.btn_code_to_strategy.isEnabled())
         dlg.close()
 
     def test_self_selected_code_tags_are_saved_and_displayed(self):
@@ -395,6 +413,7 @@ class SettingsPanelTests(unittest.TestCase):
         preview = [dlg.list_strategy_preview.item(i).text() for i in range(dlg.list_strategy_preview.count())]
         self.assertTrue(any("桌面弹窗" in row and "远程推送" in row for row in preview))
         self.assertTrue(any("每日14:30远程推送" in row for row in preview))
+        self.assertTrue(any("30 分钟内不重复推送" in row for row in preview))
         self.assertTrue(any("浮亏达到 6.0%" in row for row in preview))
 
         dlg._del_strategy_position()
@@ -492,6 +511,31 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(any("止盈线：110.00 -> 132.00" in text for text in pushed))
         self.assertFalse(any("重要提醒" in text for text in pushed))
         self.assertFalse(any("止盈/止损线" in text for text in pushed))
+        dlg.close()
+
+    def test_strategy_history_filters_to_selected_position(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259", "sh600584"]}]
+        win.codes = ["sh603259", "sh600584"]
+        win.checked_codes = ["sh603259", "sh600584"]
+        win.strategy_alert_history = [
+            {"time": "2026-08-10 10:00", "code": "sh603259", "name": "药明康德", "status": "触发止损"},
+            {"time": "2026-08-10 10:01", "code": "sh600584", "name": "长电科技", "status": "止盈线变化"},
+        ]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [
+                {"code": "sh603259", "cost_price": 100.0},
+                {"code": "sh600584", "cost_price": 30.0},
+            ],
+        }
+        dlg = SettingsDialog(win, None)
+
+        dlg.list_strategy_positions.setCurrentRow(0)
+        rows = [dlg.list_strategy_history.item(i).text() for i in range(dlg.list_strategy_history.count())]
+
+        self.assertTrue(any("药明康德" in row for row in rows))
+        self.assertFalse(any("长电科技" in row for row in rows))
         dlg.close()
 
     def test_strategy_page_removes_positions_not_in_self_selected_codes(self):

@@ -169,8 +169,16 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(config["notifications"]["remote_channel"], "custom")
         self.assertEqual(config["notifications"]["webhook_url"], "https://example.test/webhook")
         self.assertEqual(config["notifications"]["daily_summary_time"], "14:30")
+        self.assertEqual(config["notifications"]["push_cooldown_minutes"], 30)
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
+
+    def test_strategy_alert_config_normalizes_push_cooldown(self):
+        config = normalize_strategy_alert_config({
+            "notifications": {"push_cooldown_minutes": "5"},
+        })
+
+        self.assertEqual(config["notifications"]["push_cooldown_minutes"], 5)
 
     def test_strategy_alert_config_defaults_daily_summary_to_23_00(self):
         config = normalize_strategy_alert_config({

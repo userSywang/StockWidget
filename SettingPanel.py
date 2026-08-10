@@ -448,6 +448,7 @@ class SettingsDialog(QDialog):
         self._loading_price_alert_editor = False
         self._load_alert_list()
         self._load_price_alert_list()
+        self._refresh_code_action_buttons()
         self.tabs.addTab(tab_alert, "提醒")
 
         # ---- 第四页：策略 ----
@@ -699,6 +700,8 @@ class SettingsDialog(QDialog):
         self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
         self.list_strategy_preview.setFixedHeight(86)
+        self.list_strategy_history = QListWidget()
+        self.list_strategy_history.setFixedHeight(74)
         notify.addWidget(self.chk_strategy_notify_desktop, 0, 0)
         notify.addWidget(self.chk_strategy_notify_panel, 0, 1)
         notify.addWidget(self.chk_strategy_notify_remote, 0, 2)
@@ -712,6 +715,8 @@ class SettingsDialog(QDialog):
         notify.addWidget(self.btn_strategy_push_test, 4, 1, Qt.AlignLeft)
         notify.addWidget(QLabel("提醒预览："), 5, 0, Qt.AlignTop)
         notify.addWidget(self.list_strategy_preview, 5, 1, 1, 3)
+        notify.addWidget(QLabel("最近触发："), 6, 0, Qt.AlignTop)
+        notify.addWidget(self.list_strategy_history, 6, 1, 1, 3)
         position_strategy_layout.addWidget(g_strategy_notify)
         position_strategy_layout.addStretch(1)
 
@@ -1410,6 +1415,17 @@ class SettingsDialog(QDialog):
 
     def _on_code_tree_selection_changed(self, *_args):
         self._load_code_tag_editor()
+        self._refresh_code_action_buttons()
+
+    def _refresh_code_action_buttons(self):
+        code = self._current_code_from_tree()
+        name = self._display_name_for_code(code) if code else ""
+        suffix = name or (code[-2:] if code else "")
+        has_code = bool(code)
+        self.btn_code_to_alert.setEnabled(has_code)
+        self.btn_code_to_strategy.setEnabled(has_code)
+        self.btn_code_to_alert.setText(f"提醒:{suffix}" if suffix else "设提醒")
+        self.btn_code_to_strategy.setText(f"策略:{suffix}" if suffix else "设策略")
 
     def _load_code_tag_editor(self):
         code = self._current_code_from_tree()
@@ -2349,6 +2365,7 @@ class SettingsDialog(QDialog):
         if self._current_strategy_position_row() < 0:
             self.list_strategy_preview.clear()
             self.list_strategy_preview.addItem(QListWidgetItem("请先选择持仓查看对应策略"))
+            self._refresh_strategy_history()
             return
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
         rules = self._current_strategy_rules()
@@ -2373,6 +2390,7 @@ class SettingsDialog(QDialog):
                 rows.append("远程推送未配置Webhook地址")
             elif notifications.get("remote_push"):
                 rows.append(f"每日{notifications.get('daily_summary_time', '23:00')}远程推送：当前持仓止损/止盈摘要")
+                rows.append(f"同一状态 {int(notifications.get('push_cooldown_minutes', 30))} 分钟内不重复推送")
             if rules.get("max_loss_enabled"):
                 rows.append(f"持仓浮亏达到 {float(rules.get('max_loss_pct', 0.0)):.1f}%：提醒清仓")
             if rules.get("stock_ma5_break_enabled"):
@@ -2398,6 +2416,32 @@ class SettingsDialog(QDialog):
         self.list_strategy_preview.clear()
         for row in rows:
             self.list_strategy_preview.addItem(QListWidgetItem(row))
+        self._refresh_strategy_history()
+
+    def _refresh_strategy_history(self):
+        if not hasattr(self, "list_strategy_history"):
+            return
+        self.list_strategy_history.clear()
+        history = getattr(self.win, "strategy_alert_history", [])
+        if not history:
+            self.list_strategy_history.addItem(QListWidgetItem("暂无触发记录"))
+            return
+        current_code = ""
+        row = self._current_strategy_position_row()
+        positions = self._strategy_config.get("positions", []) if isinstance(getattr(self, "_strategy_config", {}), dict) else []
+        if 0 <= row < len(positions):
+            current_code = positions[row].get("code", "")
+        shown = 0
+        for item in history:
+            if current_code and item.get("code") != current_code:
+                continue
+            text = f"{item.get('time', '')} {item.get('name') or item.get('code')} {item.get('status', '')}".strip()
+            self.list_strategy_history.addItem(QListWidgetItem(text))
+            shown += 1
+            if shown >= 8:
+                break
+        if shown == 0:
+            self.list_strategy_history.addItem(QListWidgetItem("当前持仓暂无触发记录"))
 
     def _on_strategy_position_editor_changed(self, *_args):
         if getattr(self, "_loading_strategy_editor", False):

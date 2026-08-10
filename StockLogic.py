@@ -13,6 +13,7 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "remote_channel": "wecom",
         "webhook_url": "",
         "daily_summary_time": "23:00",
+        "push_cooldown_minutes": 30,
     },
     "rules": {
         "max_loss_enabled": True,
@@ -489,6 +490,7 @@ def normalize_strategy_alert_config(config):
             "remote_channel": source_notifications.get("remote_channel") if source_notifications.get("remote_channel") in ("wecom", "custom") else default_notifications["remote_channel"],
             "webhook_url": str(source_notifications.get("webhook_url") or "").strip(),
             "daily_summary_time": _normalize_time_text(source_notifications.get("daily_summary_time"), default_notifications["daily_summary_time"]),
+            "push_cooldown_minutes": _bounded_int(source_notifications.get("push_cooldown_minutes"), default_notifications["push_cooldown_minutes"], 1, 1440),
         },
         "rules": normalized_rules,
     }
@@ -632,6 +634,18 @@ def daily_error_text(daily_rows):
     return ""
 
 
+def daily_meta(daily_rows):
+    if not isinstance(daily_rows, list) or not daily_rows:
+        return "", False
+    for row in reversed(daily_rows):
+        if not isinstance(row, dict):
+            continue
+        date_text = str(row.get("date") or "").strip()
+        if date_text:
+            return date_text, bool(row.get("realtime"))
+    return "", False
+
+
 def trailing_lock_pct(rules, peak_profit_pct):
     if not rules.get("trailing_profit_enabled"):
         return 0.0
@@ -732,6 +746,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             price = 0.0
         lock_pct = float(position.get("locked_profit_pct", 0.0))
         daily_rows = daily_by_code.get(position["code"])
+        daily_date, daily_realtime = daily_meta(daily_rows)
         stock_ma5 = moving_average(daily_rows, 5)
         stock_ma10 = moving_average(daily_rows, 10)
         stock_ma20 = moving_average(daily_rows, 20)
@@ -750,6 +765,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
                 "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
                 "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
+                "daily_date": daily_date,
+                "daily_realtime": daily_realtime,
                 "enabled_rules": strategy_enabled_rule_labels(rules),
                 "triggered": False,
                 "severity": "neutral",
@@ -822,6 +839,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
             "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
             "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
+            "daily_date": daily_date,
+            "daily_realtime": daily_realtime,
             "enabled_rules": strategy_enabled_rule_labels(rules),
             "triggered": triggered,
             "severity": severity,

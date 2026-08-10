@@ -93,6 +93,8 @@ class FloatLabel(QWidget):
         self._refresh_previous_quotes = {}
         self._refresh_again_requested = False
         self._strategy_push_sent_keys = set()
+        self._strategy_push_sent_at = {}
+        self.strategy_alert_history = self._normalize_strategy_alert_history(cfg.get("strategy_alert_history", []))
         self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
         self._daily_kline_cache = {}
 
@@ -244,6 +246,7 @@ class FloatLabel(QWidget):
             "alert_rules": self.alert_rules,
             "price_alerts": self.price_alerts,
             "strategy_alert_config": self.strategy_alert_config,
+            "strategy_alert_history": self.strategy_alert_history,
             "strategy_daily_summary_sent_date": getattr(self, "_strategy_daily_summary_sent_date", ""),
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
@@ -336,6 +339,24 @@ class FloatLabel(QWidget):
             "headers": {str(k): str(v) for k, v in headers.items() if str(k).strip()},
             "fields": dict(fields),
         }
+
+    @staticmethod
+    def _normalize_strategy_alert_history(history):
+        normalized = []
+        for item in history or []:
+            if not isinstance(item, dict):
+                continue
+            code = normalize_code_or_none(item.get("code"))
+            if not code:
+                continue
+            normalized.append({
+                "time": str(item.get("time") or "").strip(),
+                "code": code,
+                "name": str(item.get("name") or code).strip(),
+                "status": str(item.get("status") or "").strip(),
+                "severity": str(item.get("severity") or "neutral").strip(),
+            })
+        return normalized[:50]
 
     def header_is_visible(self, header: str) -> bool:
         """返回指定列标题对应的独立可见属性值（替代旧的 flags 字典）。"""
@@ -1226,8 +1247,9 @@ class FloatLabel(QWidget):
                     merged[-1]["close"] = price
                     merged[-1]["high"] = max(float(merged[-1].get("high", price) or price), price)
                     merged[-1]["low"] = min(float(merged[-1].get("low", price) or price), price)
+                    merged[-1]["realtime"] = True
                 else:
-                    merged.append({"date": today_key, "open": price, "high": price, "low": price, "close": price, "volume": 0.0, "amount": 0.0})
+                    merged.append({"date": today_key, "open": price, "high": price, "low": price, "close": price, "volume": 0.0, "amount": 0.0, "realtime": True})
             result[code] = merged
         return result
 
@@ -1332,10 +1354,14 @@ class FloatLabel(QWidget):
         strategy_enabled = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {})).get("enabled")
         if strategy_enabled and state:
             profit = state.get("profit_pct")
+            status_text = str(state.get("status") or "-")
+            daily_label = self._format_strategy_daily_label(state)
+            if daily_label and status_text != "-":
+                status_text = f"{status_text} | {daily_label}"
             values = {
                 "持仓盈亏": "-" if profit is None else f"{float(profit):+.1f}%",
                 "止损线": self._format_strategy_price(state.get("stop_price")),
-                "策略状态": str(state.get("status") or "-"),
+                "策略状态": status_text,
             }
             for header, value in values.items():
                 if header in self.ALL_HEADERS:
@@ -1420,6 +1446,16 @@ class FloatLabel(QWidget):
         if value <= 0:
             return "-"
         return f"{value:.2f}"
+
+    @staticmethod
+    def _format_strategy_daily_label(state):
+        date_text = str((state or {}).get("daily_date") or "").strip()
+        if not date_text:
+            return ""
+        if len(date_text) >= 10:
+            date_text = date_text[5:10]
+        prefix = "实时" if (state or {}).get("daily_realtime") else "日线"
+        return f"{prefix}{date_text}"
 
     def _project_strategy_columns(self, rows, meta):
         headers = ["名称", "盈亏/MA5", "止损/MA10", "状态/MA20"]
@@ -1565,11 +1601,18 @@ class FloatLabel(QWidget):
         if not desktop and not remote:
             return
         sent_keys = getattr(self, "_strategy_push_sent_keys", set())
+        sent_at = getattr(self, "_strategy_push_sent_at", {})
+        cooldown_seconds = int(notifications.get("push_cooldown_minutes", 30)) * 60
+        now_provider = getattr(self, "_now", None)
+        now_dt = now_provider() if callable(now_provider) else datetime.now()
+        now_ts = now_dt.timestamp() if hasattr(now_dt, "timestamp") else time.time()
+        history_changed = False
         for state in strategy_states or []:
             if not state.get("triggered"):
                 continue
             key = f"{state.get('code')}|{state.get('status')}"
-            if key in sent_keys:
+            last_ts = float(sent_at.get(key, 0.0) or 0.0)
+            if key in sent_keys and now_ts - last_ts < cooldown_seconds:
                 continue
             pushed = False
             if remote:
@@ -1586,7 +1629,33 @@ class FloatLabel(QWidget):
                     pass
             if pushed:
                 sent_keys.add(key)
+                sent_at[key] = now_ts
+                self._record_strategy_alert_history(state, now_dt)
+                history_changed = True
         self._strategy_push_sent_keys = sent_keys
+        self._strategy_push_sent_at = sent_at
+        if history_changed:
+            self._notify_change()
+
+    def _record_strategy_alert_history(self, state, now=None):
+        now = now or datetime.now()
+        time_text = now.strftime("%Y-%m-%d %H:%M") if hasattr(now, "strftime") else str(now)
+        code = normalize_code_or_none(state.get("code")) or str(state.get("code") or "")
+        item = {
+            "time": time_text,
+            "code": code,
+            "name": str(state.get("name") or code).strip(),
+            "status": str(state.get("status") or "").strip(),
+            "severity": str(state.get("severity") or "neutral").strip(),
+        }
+        history = [item]
+        for old in getattr(self, "strategy_alert_history", []):
+            if old.get("code") == item["code"] and old.get("status") == item["status"] and old.get("time") == item["time"]:
+                continue
+            history.append(old)
+            if len(history) >= 50:
+                break
+        self.strategy_alert_history = history
 
     def _create_alert_toast(self, plain):
         toast = QFrame(self)
