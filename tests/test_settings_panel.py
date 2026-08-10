@@ -3,8 +3,8 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QPoint, Qt, QTime
+from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QSpinBox
+from PySide6.QtCore import QPoint, Qt, QTime, QEvent
 
 from SettingPanel import SettingsDialog
 
@@ -154,7 +154,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertIn("药明", dlg.list_strategy_positions.item(0).text())
         dlg.close()
 
-    def test_self_selected_buttons_show_current_stock_short_name(self):
+    def test_self_selected_buttons_keep_generic_text_and_enable_jump(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
         win.codes = ["sh603259"]
@@ -165,8 +165,8 @@ class SettingsPanelTests(unittest.TestCase):
         code_item = dlg.tree_codes.topLevelItem(0).child(0)
         dlg.tree_codes.setCurrentItem(code_item)
 
-        self.assertEqual(dlg.btn_code_to_alert.text(), "提醒:药明")
-        self.assertEqual(dlg.btn_code_to_strategy.text(), "策略:药明")
+        self.assertEqual(dlg.btn_code_to_alert.text(), "设提醒")
+        self.assertEqual(dlg.btn_code_to_strategy.text(), "设策略")
         self.assertTrue(dlg.btn_code_to_alert.isEnabled())
         self.assertTrue(dlg.btn_code_to_strategy.isEnabled())
         dlg.close()
@@ -513,7 +513,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertFalse(any("止盈/止损线" in text for text in pushed))
         dlg.close()
 
-    def test_strategy_history_filters_to_selected_position(self):
+    def test_strategy_history_log_shows_all_recent_triggers(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259", "sh600584"]}]
         win.codes = ["sh603259", "sh600584"]
@@ -535,7 +535,20 @@ class SettingsPanelTests(unittest.TestCase):
         rows = [dlg.list_strategy_history.item(i).text() for i in range(dlg.list_strategy_history.count())]
 
         self.assertTrue(any("药明康德" in row for row in rows))
-        self.assertFalse(any("长电科技" in row for row in rows))
+        self.assertTrue(any("长电科技" in row for row in rows))
+        self.assertEqual(dlg.strategy_subtabs.tabText(2), "触发日志")
+        dlg.close()
+
+    def test_spin_boxes_ignore_wheel_when_not_focused(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        spin_boxes = dlg.findChildren(QSpinBox) + dlg.findChildren(QDoubleSpinBox)
+        self.assertGreater(len(spin_boxes), 0)
+
+        for spin in spin_boxes:
+            spin.clearFocus()
+            event = QEvent(QEvent.Wheel)
+            self.assertTrue(dlg.eventFilter(spin, event))
         dlg.close()
 
     def test_strategy_page_removes_positions_not_in_self_selected_codes(self):

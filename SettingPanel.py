@@ -2,7 +2,7 @@ import json
 import os, re
 from functools import partial
 
-from PySide6.QtCore import Qt, QSize, QTime, QTimer
+from PySide6.QtCore import Qt, QSize, QTime, QTimer, QEvent
 from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
@@ -83,8 +83,10 @@ class SettingsDialog(QDialog):
         self.btn_dn.setFixedWidth(60)
         self.btn_code_to_alert = QPushButton("设提醒")
         self.btn_code_to_alert.setFixedWidth(60)
+        self.btn_code_to_alert.setToolTip("用当前选中的自选股创建或打开价格提醒")
         self.btn_code_to_strategy = QPushButton("设策略")
         self.btn_code_to_strategy.setFixedWidth(60)
+        self.btn_code_to_strategy.setToolTip("用当前选中的自选股创建或打开持仓策略")
         for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
             btn_col.addWidget(b)
         btn_col.addSpacing(8)
@@ -700,8 +702,6 @@ class SettingsDialog(QDialog):
         self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
         self.list_strategy_preview.setFixedHeight(86)
-        self.list_strategy_history = QListWidget()
-        self.list_strategy_history.setFixedHeight(74)
         notify.addWidget(self.chk_strategy_notify_desktop, 0, 0)
         notify.addWidget(self.chk_strategy_notify_panel, 0, 1)
         notify.addWidget(self.chk_strategy_notify_remote, 0, 2)
@@ -715,8 +715,6 @@ class SettingsDialog(QDialog):
         notify.addWidget(self.btn_strategy_push_test, 4, 1, Qt.AlignLeft)
         notify.addWidget(QLabel("提醒预览："), 5, 0, Qt.AlignTop)
         notify.addWidget(self.list_strategy_preview, 5, 1, 1, 3)
-        notify.addWidget(QLabel("最近触发："), 6, 0, Qt.AlignTop)
-        notify.addWidget(self.list_strategy_history, 6, 1, 1, 3)
         position_strategy_layout.addWidget(g_strategy_notify)
         position_strategy_layout.addStretch(1)
 
@@ -943,6 +941,15 @@ class SettingsDialog(QDialog):
 
         self.strategy_subtabs.addTab(tab_strategy_library, "策略库")
 
+        # ===== 子Tab 3: 触发日志 =====
+        tab_strategy_history = QWidget()
+        strategy_history_layout = QVBoxLayout(tab_strategy_history)
+        strategy_history_layout.setContentsMargins(6, 6, 6, 6)
+        self.list_strategy_history = QListWidget()
+        self.list_strategy_history.setMinimumHeight(260)
+        strategy_history_layout.addWidget(self.list_strategy_history)
+        self.strategy_subtabs.addTab(tab_strategy_history, "触发日志")
+
         self._loading_strategy_editor = False
         self._loading_code_tag_editor = False
         self._set_strategy_selection_visible(False)
@@ -1090,6 +1097,7 @@ class SettingsDialog(QDialog):
         other_settings.addWidget(g_icon)
 
         self.tabs.addTab(tab_3, "常规")
+        self._install_spinbox_wheel_guards()
 
         # ---- 连接 ----
         # 连接：代码列表
@@ -1419,13 +1427,11 @@ class SettingsDialog(QDialog):
 
     def _refresh_code_action_buttons(self):
         code = self._current_code_from_tree()
-        name = self._display_name_for_code(code) if code else ""
-        suffix = name or (code[-2:] if code else "")
         has_code = bool(code)
         self.btn_code_to_alert.setEnabled(has_code)
         self.btn_code_to_strategy.setEnabled(has_code)
-        self.btn_code_to_alert.setText(f"提醒:{suffix}" if suffix else "设提醒")
-        self.btn_code_to_strategy.setText(f"策略:{suffix}" if suffix else "设策略")
+        self.btn_code_to_alert.setText("设提醒")
+        self.btn_code_to_strategy.setText("设策略")
 
     def _load_code_tag_editor(self):
         code = self._current_code_from_tree()
@@ -2426,22 +2432,24 @@ class SettingsDialog(QDialog):
         if not history:
             self.list_strategy_history.addItem(QListWidgetItem("暂无触发记录"))
             return
-        current_code = ""
-        row = self._current_strategy_position_row()
-        positions = self._strategy_config.get("positions", []) if isinstance(getattr(self, "_strategy_config", {}), dict) else []
-        if 0 <= row < len(positions):
-            current_code = positions[row].get("code", "")
         shown = 0
         for item in history:
-            if current_code and item.get("code") != current_code:
-                continue
             text = f"{item.get('time', '')} {item.get('name') or item.get('code')} {item.get('status', '')}".strip()
             self.list_strategy_history.addItem(QListWidgetItem(text))
             shown += 1
-            if shown >= 8:
+            if shown >= 50:
                 break
-        if shown == 0:
-            self.list_strategy_history.addItem(QListWidgetItem("当前持仓暂无触发记录"))
+
+    def _install_spinbox_wheel_guards(self):
+        for widget in self.findChildren(QSpinBox) + self.findChildren(QDoubleSpinBox):
+            widget.setFocusPolicy(Qt.StrongFocus)
+            widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if isinstance(obj, (QSpinBox, QDoubleSpinBox)) and event.type() == QEvent.Wheel and not obj.hasFocus():
+            event.ignore()
+            return True
+        return super().eventFilter(obj, event)
 
     def _on_strategy_position_editor_changed(self, *_args):
         if getattr(self, "_loading_strategy_editor", False):
