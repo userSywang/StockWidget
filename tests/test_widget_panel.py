@@ -281,6 +281,36 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(calls, ["baostock", "baostock"])
         self.assertEqual(daily["sh000001"][1]["close"], 12.5)
 
+    def test_daily_rows_use_realtime_price_for_today_ma(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._today = lambda: date(2026, 8, 10)
+        rows = [{"date": f"2026-08-0{i}", "close": float(i)} for i in range(1, 6)]
+
+        daily = FloatLabel._daily_rows_with_realtime_price(
+            win,
+            {"sh603259": rows},
+            {"sh603259": {"price": 20.0}},
+        )
+
+        self.assertEqual(daily["sh603259"][-1]["date"], "2026-08-10")
+        self.assertEqual(daily["sh603259"][-1]["close"], 20.0)
+        self.assertEqual(daily["sh603259"][-5:], rows[1:] + [daily["sh603259"][-1]])
+        self.assertEqual(sum(row["close"] for row in daily["sh603259"][-5:]) / 5, 6.8)
+
+    def test_daily_rows_replace_today_close_with_realtime_price(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._today = lambda: date(2026, 8, 10)
+        rows = [{"date": "2026-08-10", "close": 10.0, "high": 11.0, "low": 9.0}]
+
+        daily = FloatLabel._daily_rows_with_realtime_price(
+            win,
+            {"sh603259": rows},
+            {"sh603259": {"price": 12.0}},
+        )
+
+        self.assertEqual(daily["sh603259"][-1]["close"], 12.0)
+        self.assertEqual(daily["sh603259"][-1]["high"], 12.0)
+
     def test_get_daily_klines_falls_back_to_eastmoney_rows(self):
         class FakeResponse:
             def __init__(self, payload):
@@ -596,6 +626,20 @@ class WidgetPanelTests(unittest.TestCase):
         payload = FloatLabel._strategy_push_payload(win, "测试内容")
 
         self.assertEqual(payload, {"msgtype": "markdown", "markdown": {"content": "测试内容"}})
+
+    def test_compact_desktop_alert_text_keeps_key_lines(self):
+        text = FloatLabel._compact_desktop_alert_text(
+            "## StockWidget 策略线变动提醒\n"
+            ">标的：sh603259\n"
+            ">成本价：100.000 -> 120.000\n"
+            ">止盈/止损线：110.00 -> 132.00\n"
+            ">备注：不会显示"
+        )
+
+        self.assertIn("策略线变动提醒", text)
+        self.assertIn("标的：sh603259", text)
+        self.assertIn("止盈/止损线：110.00 -> 132.00", text)
+        self.assertNotIn("备注", text)
 
     def test_strategy_push_text_includes_stop_price_and_raised_status(self):
         win = FloatLabel.__new__(FloatLabel)

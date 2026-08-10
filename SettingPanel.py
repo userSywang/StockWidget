@@ -19,6 +19,7 @@ from StockLogic import (
     normalize_alert_rules,
     normalize_alert_target,
     normalize_code_or_none,
+    normalize_codes,
     normalize_price_alert,
     normalize_price_alerts,
     normalize_strategy_alert_config,
@@ -1505,6 +1506,21 @@ class SettingsDialog(QDialog):
         self.edit_strategy_code.setFocus(Qt.OtherFocusReason)
         self.edit_strategy_code.selectAll()
 
+    def _strategy_allowed_codes(self):
+        return set(normalize_codes(getattr(self.win, "codes", [])))
+
+    def _filter_strategy_config_to_self_selected(self, config):
+        config = normalize_strategy_alert_config(config)
+        allowed = self._strategy_allowed_codes()
+        if not allowed:
+            config["positions"] = []
+            return config
+        config["positions"] = [
+            position for position in config.get("positions", [])
+            if normalize_code_or_none(position.get("code")) in allowed
+        ]
+        return config
+
     def _add_group(self):
         item = self._make_group_item("新分组")
         self.tree_codes.addTopLevelItem(item)
@@ -1831,7 +1847,10 @@ class SettingsDialog(QDialog):
         return f"{self._format_code_item_text(code)} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
 
     def _load_strategy_config(self, current_row=None):
-        self._strategy_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
+        original_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
+        self._strategy_config = self._filter_strategy_config_to_self_selected(original_config)
+        if self._strategy_config.get("positions") != original_config.get("positions"):
+            self.win.set_strategy_alert_config(self._strategy_config)
         rules = self._strategy_config["rules"]
         notifications = self._strategy_config["notifications"]
         self._loading_strategy_editor = True
@@ -2359,8 +2378,12 @@ class SettingsDialog(QDialog):
         if row < 0:
             return
         previous = self._strategy_config["positions"][row]
+        code = normalize_code_or_none(self.edit_strategy_code.text())
+        if code not in self._strategy_allowed_codes():
+            self.edit_strategy_code.setText(previous.get("code", ""))
+            return
         position = normalize_strategy_position({
-            "code": self.edit_strategy_code.text(),
+            "code": code,
             "strategy_id": self.cmb_strategy_profile.currentData() or previous.get("strategy_id", "default"),
             "cost_price": self.spin_strategy_cost.value(),
             "buy_date": self.edit_strategy_buy_date.text(),
@@ -2382,7 +2405,11 @@ class SettingsDialog(QDialog):
 
     def _add_strategy_position(self):
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
-        default_code = self.win.codes[0] if getattr(self.win, "codes", []) else "sh000001"
+        selected_code = self._current_code_from_tree()
+        allowed_codes = list(normalize_codes(getattr(self.win, "codes", [])))
+        default_code = selected_code if selected_code in allowed_codes else (allowed_codes[0] if allowed_codes else "")
+        if not default_code:
+            return
         config["positions"].append({
             "code": default_code,
             "strategy_id": "default",

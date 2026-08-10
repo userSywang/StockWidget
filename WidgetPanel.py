@@ -8,7 +8,7 @@ import time
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
 from PySide6.QtGui import QFont, QAction, QColor
-from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QLabel, QTableView, QHeaderView, QAbstractItemView, QFrame, QStyledItemDelegate
+from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableView, QHeaderView, QAbstractItemView, QFrame, QStyledItemDelegate
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
@@ -1206,6 +1206,31 @@ class FloatLabel(QWidget):
                 daily_by_code = {}
         return row_by_code, sign_by_code, quote_by_code, daily_by_code
 
+    def _daily_rows_with_realtime_price(self, daily_by_code, quote_by_code):
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        result = {}
+        for code, rows in (daily_by_code or {}).items():
+            if isinstance(rows, dict):
+                result[code] = rows
+                continue
+            merged = [dict(row) for row in (rows or []) if isinstance(row, dict)]
+            quote = (quote_by_code or {}).get(code) or {}
+            try:
+                price = float(quote.get("price", 0.0))
+            except Exception:
+                price = 0.0
+            if price > 0:
+                if merged and str(merged[-1].get("date") or "") == today_key:
+                    merged[-1]["close"] = price
+                    merged[-1]["high"] = max(float(merged[-1].get("high", price) or price), price)
+                    merged[-1]["low"] = min(float(merged[-1].get("low", price) or price), price)
+                else:
+                    merged.append({"date": today_key, "open": price, "high": price, "low": price, "close": price, "volume": 0.0, "amount": 0.0})
+            result[code] = merged
+        return result
+
     def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None, daily_by_code=None, strategy_states=None):
         full_rows, meta_rows = [], []
         checked = set(getattr(self, "checked_codes", []))
@@ -1539,33 +1564,73 @@ class FloatLabel(QWidget):
         toast = getattr(self, "_alert_toast", None)
         if toast is not None:
             return toast
-        toast = QLabel(self)
+        toast = QFrame(self)
         toast.setObjectName("alert_toast")
-        toast.setMinimumWidth(260)
-        toast.setMaximumWidth(360)
-        toast.setWordWrap(True)
         toast.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        layout = QHBoxLayout(toast)
+        layout.setContentsMargins(10, 8, 8, 8)
+        layout.setSpacing(8)
+        label = QLabel(toast)
+        label.setObjectName("alert_toast_label")
+        label.setWordWrap(True)
+        label.setMinimumWidth(220)
+        label.setMaximumWidth(340)
+        close_btn = QPushButton("×", toast)
+        close_btn.setObjectName("alert_toast_close")
+        close_btn.setFixedSize(20, 20)
+        close_btn.clicked.connect(toast.hide)
+        layout.addWidget(label, 1)
+        layout.addWidget(close_btn, 0, Qt.AlignTop)
         toast.setStyleSheet(
-            "QLabel#alert_toast{background:#1f2937;color:#f9fafb;border:1px solid #60a5fa;"
-            "border-radius:8px;padding:12px 14px;font-size:13px;}"
+            "QFrame#alert_toast{background:#1f2937;color:#f9fafb;border:1px solid #60a5fa;border-radius:6px;}"
+            "QLabel#alert_toast_label{color:#f9fafb;font-size:12px;}"
+            "QPushButton#alert_toast_close{background:transparent;color:#f9fafb;border:none;font-size:16px;font-weight:700;}"
+            "QPushButton#alert_toast_close:hover{background:#374151;border-radius:3px;}"
         )
+        toast._message_label = label
         toast.hide()
         self._alert_toast = toast
         self._alert_toast_timer = QTimer(self)
         self._alert_toast_timer.timeout.connect(toast.hide)
         return toast
 
+    @staticmethod
+    def _compact_desktop_alert_text(text):
+        lines = []
+        for raw in str(text or "").splitlines():
+            clean = str(raw or "").strip()
+            if clean.startswith("## "):
+                clean = clean[3:].strip()
+            if clean.startswith(">"):
+                clean = clean[1:].strip()
+            if clean:
+                lines.append(clean)
+        if not lines:
+            return ""
+        picked = [lines[0]]
+        for line in lines[1:]:
+            if line.startswith(("标的：", "代码：", "成本价：", "止盈/止损线：", "止盈线变动：", "状态：")):
+                picked.append(line)
+            if len(picked) >= 4:
+                break
+        return "\n".join(picked)
+
     def show_desktop_alert(self, text):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
         if not notifications.get("desktop_popup"):
             return
-        plain = text.replace("## ", "").replace("> ", "  ")
+        plain = self._compact_desktop_alert_text(text)
         toast = self._ensure_alert_toast()
-        toast.setText(plain)
+        label = getattr(toast, "_message_label", None)
+        if label is not None:
+            label.setText(plain)
         toast.adjustSize()
         geo = self.geometry()
-        x = geo.x() + max(0, geo.width() - toast.width() - 16)
-        y = geo.y() + max(0, geo.height() - toast.height() - 16)
+        x = geo.x() + max(0, geo.width() - toast.width())
+        screen = QApplication.screenAt(geo.center()) or QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        top_limit = available.top() + 8 if available is not None else 8
+        y = max(top_limit, geo.y() - toast.height() - 8)
         toast.move(x, y)
         toast.show()
         self._alert_toast_timer.start(6000)
@@ -1690,6 +1755,7 @@ class FloatLabel(QWidget):
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
+        daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
         config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
         if config.get("enabled"):
             updated_config, strategy_changed = update_strategy_position_state(self.strategy_alert_config, quote_by_code)

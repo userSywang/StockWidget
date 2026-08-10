@@ -138,6 +138,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_alert_and_strategy_lists_show_stock_short_names(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         win.code_names = {"sh603259": "药明康德"}
         win.price_alerts = [{"enabled": True, "code": "sh603259", "direction": "below", "price": 145.0, "message": ""}]
         win.strategy_alert_config = {
@@ -350,6 +353,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_page_edits_positions_and_rules(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh000001", "sh512000"]}]
+        win.codes = ["sh000001", "sh512000"]
+        win.checked_codes = ["sh000001", "sh512000"]
         dlg = SettingsDialog(win, None)
 
         dlg.tabs.setCurrentIndex(4)
@@ -397,6 +403,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_rules_follow_selected_position_and_save_to_position(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh512000", "sh000001"]}]
+        win.codes = ["sh512000", "sh000001"]
+        win.checked_codes = ["sh512000", "sh000001"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [
@@ -417,6 +426,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_rule_edits_do_not_change_other_default_positions(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259", "sh600584"]}]
+        win.codes = ["sh603259", "sh600584"]
+        win.checked_codes = ["sh603259", "sh600584"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [
@@ -448,6 +460,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_cost_edit_sends_line_change_alert_and_keeps_state(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         pushed = []
         win.show_desktop_alert = lambda text: pushed.append(text)
         win._send_strategy_push_text = lambda text: pushed.append(text) or True
@@ -474,8 +489,49 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(any("110.00 -> 132.00" in text for text in pushed))
         dlg.close()
 
+    def test_strategy_page_removes_positions_not_in_self_selected_codes(self):
+        win = FakeWindow()
+        win.codes = ["sh603259"]
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [
+                {"code": "sh603259", "cost_price": 100.0},
+                {"code": "sz000636", "cost_price": 1.0},
+            ],
+        }
+
+        dlg = SettingsDialog(win, None)
+
+        self.assertEqual([p["code"] for p in win.strategy_alert_config["positions"]], ["sh603259"])
+        self.assertEqual(dlg.list_strategy_positions.count(), 1)
+        dlg.close()
+
+    def test_strategy_editor_rejects_code_outside_self_selected_list(self):
+        win = FakeWindow()
+        win.codes = ["sh603259"]
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 100.0}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        dlg.edit_strategy_code.setText("000636")
+        dlg._on_strategy_position_editor_changed()
+
+        self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh603259")
+        self.assertEqual(dlg.edit_strategy_code.text(), "sh603259")
+        dlg.close()
+
     def test_strategy_rules_are_hidden_until_a_position_is_selected(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh512000"]}]
+        win.codes = ["sh512000"]
+        win.checked_codes = ["sh512000"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [{"code": "sh512000", "cost_price": 1.0}],
@@ -490,6 +546,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_rule_controls_do_not_overlap_after_show(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh512000"]}]
+        win.codes = ["sh512000"]
+        win.checked_codes = ["sh512000"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [{"code": "sh512000", "cost_price": 1.0}],
@@ -518,6 +577,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_tier_controls_are_compact_and_visible(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [{"code": "sh603259", "cost_price": 100.0}],
@@ -559,6 +621,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_page_sections_stay_inside_scroll_viewport(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [{"code": "sh603259", "cost_price": 100.0}],
@@ -578,6 +643,9 @@ class SettingsPanelTests(unittest.TestCase):
 
     def test_strategy_position_and_tier_fields_are_not_clipped(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         win.strategy_alert_config = {
             "enabled": True,
             "positions": [{"code": "sh603259", "cost_price": 149.448, "buy_date": "2026-08-05", "position_pct": 33.0}],
