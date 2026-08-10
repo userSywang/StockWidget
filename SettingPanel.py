@@ -1627,14 +1627,16 @@ class SettingsDialog(QDialog):
 
     # —— 价格提醒 —— #
     def _format_price_alert(self, alert):
+        code = alert.get("code", "")
         direction = "高于" if alert.get("direction") == "above" else "低于"
         suffix = "" if alert.get("enabled", True) else "（停用）"
-        return f"{alert.get('code', '')} {direction} {float(alert.get('price', 0.0)):.3f}{suffix}"
+        return f"{self._format_code_item_text(code)} {direction} {float(alert.get('price', 0.0)):.3f}{suffix}"
 
     def _load_price_alert_list(self, current_row=0):
         self.list_price_alerts.blockSignals(True)
         self.list_price_alerts.clear()
         self._price_alerts = normalize_price_alerts(getattr(self.win, "price_alerts", []))
+        self._refresh_code_names(alert.get("code") for alert in self._price_alerts)
         for alert in self._price_alerts:
             self.list_price_alerts.addItem(QListWidgetItem(self._format_price_alert(alert)))
         self.list_price_alerts.blockSignals(False)
@@ -1709,7 +1711,7 @@ class SettingsDialog(QDialog):
         pct = float(position.get("position_pct", 0.0))
         date = position.get("buy_date", "")
         date_part = f" {date}" if date else ""
-        return f"{code} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
+        return f"{self._format_code_item_text(code)} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
 
     def _load_strategy_config(self, current_row=None):
         self._strategy_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
@@ -1745,6 +1747,7 @@ class SettingsDialog(QDialog):
 
             self.list_strategy_positions.blockSignals(True)
             self.list_strategy_positions.clear()
+            self._refresh_code_names(position.get("code") for position in self._strategy_config.get("positions", []))
             for position in self._strategy_config.get("positions", []):
                 item = QListWidgetItem(self._format_strategy_position(position))
                 item.setData(Qt.UserRole, position)

@@ -128,6 +128,20 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.edit_strategy_code.text(), "sh603259")
         dlg.close()
 
+    def test_alert_and_strategy_lists_show_stock_short_names(self):
+        win = FakeWindow()
+        win.code_names = {"sh603259": "药明康德"}
+        win.price_alerts = [{"enabled": True, "code": "sh603259", "direction": "below", "price": 145.0, "message": ""}]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{"code": "sh603259", "cost_price": 149.448, "strategy_id": "default"}],
+        }
+        dlg = SettingsDialog(win, None)
+
+        self.assertIn("药明", dlg.list_price_alerts.item(0).text())
+        self.assertIn("药明", dlg.list_strategy_positions.item(0).text())
+        dlg.close()
+
     def test_display_data_page_includes_ma_and_strategy_columns(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
