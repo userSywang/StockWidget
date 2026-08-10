@@ -1157,11 +1157,14 @@ class FloatLabel(QWidget):
 
     def _get_daily_klines(self, codes, limit=20):
         daily_by_code = {}
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
         for code in normalize_codes(codes):
             cache = getattr(self, "_daily_kline_cache", {})
             cache_key = (code, int(limit))
             cached = cache.get(cache_key) if isinstance(cache, dict) else None
-            if cached and time.monotonic() - cached.get("time", 0.0) < 300:
+            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < 300:
                 daily_by_code[code] = cached.get("rows", [])
                 continue
 
@@ -1186,7 +1189,7 @@ class FloatLabel(QWidget):
             if rows:
                 daily_by_code[code] = rows
                 if isinstance(cache, dict):
-                    cache[cache_key] = {"time": time.monotonic(), "rows": rows}
+                    cache[cache_key] = {"date": today_key, "time": time.monotonic(), "rows": rows}
                     self._daily_kline_cache = cache
             else:
                 daily_by_code[code] = {"error": "日线接口不可用" if errors else "日线数据为空"}
@@ -1760,6 +1763,7 @@ class FloatLabel(QWidget):
 
     def set_strategy_alert_config(self, config):
         self.strategy_alert_config = normalize_strategy_alert_config(config)
+        self._daily_kline_cache = {}
         self._notify_change()
         self._refresh_from_function()
 
@@ -1821,11 +1825,11 @@ class FloatLabel(QWidget):
             elif header == "K线":
                 prev = bool(getattr(self, 'kline_visible', False)); self.kline_visible = checked
             elif header == "MA5":
-                prev = bool(getattr(self, 'ma5_visible', False)); self.ma5_visible = checked
+                prev = bool(getattr(self, 'ma5_visible', False)); self.ma5_visible = checked; self._daily_kline_cache = {}
             elif header == "MA10":
-                prev = bool(getattr(self, 'ma10_visible', False)); self.ma10_visible = checked
+                prev = bool(getattr(self, 'ma10_visible', False)); self.ma10_visible = checked; self._daily_kline_cache = {}
             elif header == "MA20":
-                prev = bool(getattr(self, 'ma20_visible', False)); self.ma20_visible = checked
+                prev = bool(getattr(self, 'ma20_visible', False)); self.ma20_visible = checked; self._daily_kline_cache = {}
             elif header == "持仓盈亏":
                 prev = bool(getattr(self, 'strategy_profit_visible', False)); self.strategy_profit_visible = checked
             elif header == "止损线":

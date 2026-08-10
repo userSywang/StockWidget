@@ -2096,6 +2096,10 @@ class SettingsDialog(QDialog):
         code = position.get("code", "")
         old_rules = dict(position.get("rules", {}))
         old_profile_id = position.get("strategy_id", "default")
+        old_cost = float(position.get("cost_price") or 0.0)
+        old_locked_pct = float(position.get("locked_profit_pct") or 0.0)
+        old_resolved_rules = strategy_rules_for_position(self._strategy_config, position)
+        old_stop_price = strategy_stop_price(old_cost, old_resolved_rules, old_locked_pct)
         was_first_apply = self._consume_pending_apply_alert(code)
 
         self._on_strategy_position_editor_changed()
@@ -2104,6 +2108,10 @@ class SettingsDialog(QDialog):
         new_position = self._strategy_config["positions"][row]
         new_rules = new_position.get("rules", {})
         new_profile_id = new_position.get("strategy_id", "default")
+        new_cost = float(new_position.get("cost_price") or 0.0)
+        new_locked_pct = float(new_position.get("locked_profit_pct") or 0.0)
+        new_resolved_rules = strategy_rules_for_position(self._strategy_config, new_position)
+        new_stop_price = strategy_stop_price(new_cost, new_resolved_rules, new_locked_pct)
 
         profile_changed = old_profile_id != new_profile_id
         if was_first_apply or profile_changed:
@@ -2112,6 +2120,19 @@ class SettingsDialog(QDialog):
         elif old_rules != new_rules:
             # 仅覆盖参数变更：提醒具体变化
             self._send_strategy_change_alert(new_position, old_rules, new_rules, old_profile_id, new_profile_id)
+        previous_line = old_stop_price
+        stored_line = new_position.get("last_stop_price", 0.0)
+        try:
+            if not self._strategy_line_changed(old_stop_price, new_stop_price) and float(stored_line) > 0:
+                previous_line = float(stored_line)
+        except Exception:
+            pass
+        if not was_first_apply and self._strategy_line_changed(previous_line, new_stop_price):
+            self._send_strategy_line_change_alert(new_position, old_cost, new_cost, previous_line, new_stop_price)
+            if new_stop_price is not None:
+                new_position["last_stop_price"] = round(float(new_stop_price), 4)
+                self._strategy_config["positions"][row] = new_position
+                self.win.set_strategy_alert_config(self._strategy_config)
 
         self.btn_strategy_save.setText("已保存")
         QTimer.singleShot(1200, lambda: self.btn_strategy_save.setText("保存当前持仓"))
@@ -2134,6 +2155,27 @@ class SettingsDialog(QDialog):
             codes.discard(code)
             return True
         return False
+
+    @staticmethod
+    def _strategy_line_changed(old_price, new_price):
+        try:
+            if old_price is None or new_price is None:
+                return old_price != new_price
+            return abs(float(old_price) - float(new_price)) > 0.0001
+        except Exception:
+            return old_price != new_price
+
+    def _send_strategy_line_change_alert(self, position, old_cost, new_cost, old_stop_price, new_stop_price):
+        code = position.get("code", "")
+        old_line = "-" if old_stop_price is None else f"{float(old_stop_price):.2f}"
+        new_line = "-" if new_stop_price is None else f"{float(new_stop_price):.2f}"
+        alert_text = (
+            f"## StockWidget 策略线变动提醒\n"
+            f">标的：{code}\n"
+            f">成本价：{float(old_cost):.3f} -> {float(new_cost):.3f}\n"
+            f">止盈/止损线：{old_line} -> {new_line}"
+        )
+        self._send_desktop_alert(alert_text)
 
     def _send_strategy_apply_alert(self, position, profile_id):
         """股票套用/切换策略时，发送止损线提醒"""
@@ -2316,14 +2358,18 @@ class SettingsDialog(QDialog):
         row = self._current_strategy_position_row()
         if row < 0:
             return
+        previous = self._strategy_config["positions"][row]
         position = normalize_strategy_position({
             "code": self.edit_strategy_code.text(),
-            "strategy_id": self.cmb_strategy_profile.currentData() or self._strategy_config["positions"][row].get("strategy_id", "default"),
+            "strategy_id": self.cmb_strategy_profile.currentData() or previous.get("strategy_id", "default"),
             "cost_price": self.spin_strategy_cost.value(),
             "buy_date": self.edit_strategy_buy_date.text(),
             "position_pct": self.spin_strategy_position_pct.value(),
             "note": self.edit_strategy_note.text(),
-            "rules": self._strategy_config["positions"][row].get("rules", {}),
+            "peak_profit_pct": previous.get("peak_profit_pct", 0.0),
+            "locked_profit_pct": previous.get("locked_profit_pct", 0.0),
+            "last_stop_price": previous.get("last_stop_price", 0.0),
+            "rules": previous.get("rules", {}),
         })
         if not position:
             return

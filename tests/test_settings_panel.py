@@ -446,6 +446,34 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.spin_strategy_loss.value(), 5.0)
         dlg.close()
 
+    def test_strategy_cost_edit_sends_line_change_alert_and_keeps_state(self):
+        win = FakeWindow()
+        pushed = []
+        win.show_desktop_alert = lambda text: pushed.append(text)
+        win._send_strategy_push_text = lambda text: pushed.append(text) or True
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {"desktop_popup": True, "remote_push": True, "webhook_url": "https://example.test"},
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 100.0,
+                "locked_profit_pct": 10.0,
+                "last_stop_price": 110.0,
+            }],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        dlg.spin_strategy_cost.setValue(120.0)
+        dlg._save_strategy_position()
+
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["last_stop_price"], 132.0)
+        self.assertEqual(position["locked_profit_pct"], 10.0)
+        self.assertTrue(any("策略线变动提醒" in text for text in pushed))
+        self.assertTrue(any("110.00 -> 132.00" in text for text in pushed))
+        dlg.close()
+
     def test_strategy_rules_are_hidden_until_a_position_is_selected(self):
         win = FakeWindow()
         win.strategy_alert_config = {

@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -255,6 +255,31 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(calls, ["baostock"])
         self.assertEqual(daily["sh000001"][1]["close"], 10.5)
+
+    def test_get_daily_klines_refreshes_cache_on_new_day(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+        today_values = [date(2026, 8, 10), date(2026, 8, 11)]
+        win._today = lambda: today_values[min(len(calls), len(today_values) - 1)]
+
+        def fake_baostock(*_args):
+            calls.append("baostock")
+            close = 10.0 + len(calls)
+            return [
+                {"date": "2026-08-01", "close": close},
+                {"date": "2026-08-02", "close": close + 0.5},
+            ]
+
+        win._get_baostock_daily_klines = fake_baostock
+        win._get_tencent_daily_klines = lambda *_args: []
+        win._get_eastmoney_daily_klines = lambda *_args: []
+        win._daily_kline_cache = {}
+
+        FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+        daily = FloatLabel._get_daily_klines(win, ["sh000001"], limit=2)
+
+        self.assertEqual(calls, ["baostock", "baostock"])
+        self.assertEqual(daily["sh000001"][1]["close"], 12.5)
 
     def test_get_daily_klines_falls_back_to_eastmoney_rows(self):
         class FakeResponse:
