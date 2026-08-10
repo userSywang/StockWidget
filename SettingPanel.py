@@ -2202,9 +2202,10 @@ class SettingsDialog(QDialog):
         old_line = "-" if old_stop_price is None else f"{float(old_stop_price):.2f}"
         new_line = "-" if new_stop_price is None else f"{float(new_stop_price):.2f}"
         line_label = self._strategy_line_label_for_position(position)
+        stock_name = self._strategy_alert_stock_name(code)
         alert_text = (
-            f"## 重要提醒\n"
-            f">标的：{self._strategy_alert_stock_name(code)}\n"
+            f"## {stock_name}{line_label}变化\n"
+            f">标的：{stock_name}\n"
             f">代码：{code}\n"
             f"\n"
             f">变动：\n"
@@ -2226,9 +2227,10 @@ class SettingsDialog(QDialog):
         max_loss_pct = float(rules.get("max_loss_pct", 0.0))
         profile = self._get_profile_by_id(profile_id)
         profile_name = profile.get("name", profile_id) if profile else profile_id
+        stock_name = self._strategy_alert_stock_name(code)
         alert_text = (
-            f"## 重要提醒\n"
-            f">标的：{self._strategy_alert_stock_name(code)}\n"
+            f"## {stock_name}策略套用\n"
+            f">标的：{stock_name}\n"
             f">代码：{code}\n"
             f"\n"
             f">策略模板：{profile_name}\n"
@@ -2266,9 +2268,10 @@ class SettingsDialog(QDialog):
 
         if changes:
             change_text = "\n".join(f"• {c}" for c in changes)
+            stock_name = self._strategy_alert_stock_name(code)
             alert_text = (
-                f"## 重要提醒\n"
-                f">标的：{self._strategy_alert_stock_name(code)}\n"
+                f"## {stock_name}策略修改\n"
+                f">标的：{stock_name}\n"
                 f">代码：{code}\n"
                 f"\n"
                 f">修改内容：\n{change_text}"

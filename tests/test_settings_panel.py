@@ -486,10 +486,11 @@ class SettingsPanelTests(unittest.TestCase):
         position = win.strategy_alert_config["positions"][0]
         self.assertEqual(position["last_stop_price"], 132.0)
         self.assertEqual(position["locked_profit_pct"], 10.0)
-        self.assertTrue(any("重要提醒" in text for text in pushed))
+        self.assertTrue(any("药明康德止盈线变化" in text for text in pushed))
         self.assertTrue(any("标的：药明康德" in text for text in pushed))
         self.assertTrue(any("110.00 -> 132.00" in text for text in pushed))
         self.assertTrue(any("止盈线：110.00 -> 132.00" in text for text in pushed))
+        self.assertFalse(any("重要提醒" in text for text in pushed))
         self.assertFalse(any("止盈/止损线" in text for text in pushed))
         dlg.close()
 

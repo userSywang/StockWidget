@@ -1466,6 +1466,18 @@ class FloatLabel(QWidget):
         except Exception:
             return "止损线"
 
+    def _strategy_alert_title_for_state(self, state):
+        name = str(state.get("name") or state.get("code") or "策略").strip()
+        lock_pct = state.get("locked_profit_pct", 0.0)
+        if state.get("stop_line_changed"):
+            return f"{name}{self._strategy_line_label(lock_pct)}变化"
+        status = str(state.get("status") or "").strip()
+        if "止损" in status:
+            return f"{name}止损触发"
+        if "止盈" in status or "锁盈" in status:
+            return f"{name}止盈触发"
+        return f"{name}策略触发"
+
     def _strategy_push_text_for_state(self, state):
         profit = state.get("profit_pct")
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
@@ -1491,7 +1503,7 @@ class FloatLabel(QWidget):
         except Exception:
             change_lines = []
         lines = [
-            "## 重要提醒",
+            f"## {self._strategy_alert_title_for_state(state)}",
             f">标的：{state.get('name') or state.get('code')}",
             f">代码：{state.get('code')}",
             "",
@@ -1506,7 +1518,7 @@ class FloatLabel(QWidget):
 
     def _strategy_daily_summary_text(self, strategy_states, now=None):
         now = now or datetime.now()
-        lines = [f"## 重要提醒", f">策略摘要：{now:%Y-%m-%d %H:%M}"]
+        lines = [f"## 策略定时摘要", f">时间：{now:%Y-%m-%d %H:%M}"]
         for state in strategy_states or []:
             profit = state.get("profit_pct")
             profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
@@ -1674,7 +1686,7 @@ class FloatLabel(QWidget):
         toast.show()
 
     def send_strategy_push_test(self):
-        self._send_strategy_push_text("## 重要提醒\n>测试推送：策略远程推送已配置")
+        self._send_strategy_push_text("## 策略测试推送\n>状态：策略远程推送已配置")
 
     def _project_columns(self, full_rows, sign_data):
         # 从 ALL_HEADERS 中按显示顺序筛选已启用的列
