@@ -223,6 +223,16 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreater(global_rect(dlg.cmb_code_holding).top(), global_rect(dlg.btn_code_to_strategy).bottom())
         dlg.close()
 
+    def test_self_selected_list_has_expanded_display_area(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        self.assertGreaterEqual(dlg.tab_sizes[0].width(), 460)
+        self.assertGreaterEqual(dlg.tab_sizes[0].height(), 420)
+        self.assertGreaterEqual(dlg.tree_codes.width(), 300)
+        self.assertGreaterEqual(dlg.tree_codes.minimumHeight(), 250)
+        dlg.close()
+
     def test_display_data_page_includes_ma_and_strategy_columns(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

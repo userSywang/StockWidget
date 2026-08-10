@@ -43,7 +43,7 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         self.tab_sizes = {
-            0: QSize(360, 340),
+            0: QSize(460, 420),
             1: QSize(440, 420),
             2: QSize(520, 240),
             3: QSize(500, 520),
@@ -66,7 +66,8 @@ class SettingsDialog(QDialog):
         self.tree_codes = QTreeWidget()
         self.tree_codes.setHeaderHidden(True)
         self.tree_codes.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.EditKeyPressed)
-        self.tree_codes.setFixedWidth(210)
+        self.tree_codes.setFixedWidth(300)
+        self.tree_codes.setMinimumHeight(250)
         self._load_code_tree()
         # 1.2 操作按钮
         btn_col = QVBoxLayout()
@@ -115,7 +116,7 @@ class SettingsDialog(QDialog):
 
         lay_codes.addWidget(self.tree_codes, 1)
         lay_codes.addLayout(btn_col)
-        code_settings.addWidget(g_codes)
+        code_settings.addWidget(g_codes, 1)
 
         g_code_tags = QGroupBox("标的标识")
         g_code_tags.setContentsMargins(3, 12, 3, 6)
