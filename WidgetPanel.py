@@ -1459,6 +1459,13 @@ class FloatLabel(QWidget):
         poster(url, json=self._strategy_push_payload(text), timeout=5)
         return True
 
+    @staticmethod
+    def _strategy_line_label(locked_profit_pct):
+        try:
+            return "止盈线" if float(locked_profit_pct or 0.0) > 0 else "止损线"
+        except Exception:
+            return "止损线"
+
     def _strategy_push_text_for_state(self, state):
         profit = state.get("profit_pct")
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
@@ -1474,29 +1481,32 @@ class FloatLabel(QWidget):
             lock_text = f"{float(take_profit_price):.2f}（锁盈+{lock_pct:.1f}%）"
             stop_text = f"{float(take_profit_price):.2f}"
         stop_loss_text = "-" if stop_loss_price is None else f"{float(stop_loss_price):.2f}"
-        line_change_text = ""
+        change_lines = []
         previous_stop_price = state.get("stop_line_previous_price")
         current_stop_price = state.get("stop_price")
         try:
             if state.get("stop_line_changed") and previous_stop_price is not None and current_stop_price is not None:
-                line_change_text = f">止盈线变动：{float(previous_stop_price):.2f} -> {float(current_stop_price):.2f}\n"
+                line_label = self._strategy_line_label(lock_pct)
+                change_lines.append(f">{line_label}：{float(previous_stop_price):.2f} -> {float(current_stop_price):.2f}")
         except Exception:
-            line_change_text = ""
-        return (
-            f"## StockWidget 策略提醒\n"
-            f">标的：{state.get('name') or state.get('code')}\n"
-            f">代码：{state.get('code')}\n"
-            f">盈亏：{profit_text}\n"
-            f">止损线：{stop_loss_text}\n"
-            f">止盈线：{lock_text}\n"
-            f">止盈价：{stop_text}\n"
-            f"{line_change_text}"
-            f">状态：{state.get('status', '')}"
-        )
+            change_lines = []
+        lines = [
+            "## 重要提醒",
+            f">标的：{state.get('name') or state.get('code')}",
+            f">代码：{state.get('code')}",
+            "",
+            f">盈亏：{profit_text}",
+            f">止损线：{stop_loss_text}",
+            f">止盈线：{lock_text}",
+        ]
+        if change_lines:
+            lines.extend(["", ">变动：", *change_lines])
+        lines.extend(["", f">状态：{state.get('status', '-')}"])
+        return "\n".join(lines)
 
     def _strategy_daily_summary_text(self, strategy_states, now=None):
         now = now or datetime.now()
-        lines = [f"## StockWidget 策略定时摘要 {now:%Y-%m-%d %H:%M}"]
+        lines = [f"## 重要提醒", f">策略摘要：{now:%Y-%m-%d %H:%M}"]
         for state in strategy_states or []:
             profit = state.get("profit_pct")
             profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
@@ -1504,10 +1514,15 @@ class FloatLabel(QWidget):
             take_profit_text = self._format_strategy_price(state.get("take_profit_price"))
             if take_profit_text == "-":
                 take_profit_text = self._format_strategy_price(state.get("stop_price") if float(state.get("locked_profit_pct", 0.0)) > 0 else None)
-            lines.append(
-                f">{state.get('name') or state.get('code')}({state.get('code')}) "
-                f"盈亏 {profit_text} 止损 {stop_loss_text} 止盈 {take_profit_text} 状态 {state.get('status', '-')}"
-            )
+            lines.extend([
+                "",
+                f">标的：{state.get('name') or state.get('code')}",
+                f">代码：{state.get('code')}",
+                f">盈亏：{profit_text}",
+                f">止损线：{stop_loss_text}",
+                f">止盈线：{take_profit_text}",
+                f">状态：{state.get('status', '-')}",
+            ])
         return "\n".join(lines)
 
     def _send_strategy_daily_summary(self, strategy_states, now=None):
@@ -1560,10 +1575,7 @@ class FloatLabel(QWidget):
                 sent_keys.add(key)
         self._strategy_push_sent_keys = sent_keys
 
-    def _ensure_alert_toast(self):
-        toast = getattr(self, "_alert_toast", None)
-        if toast is not None:
-            return toast
+    def _create_alert_toast(self, plain):
         toast = QFrame(self)
         toast.setObjectName("alert_toast")
         toast.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -1578,7 +1590,7 @@ class FloatLabel(QWidget):
         close_btn = QPushButton("×", toast)
         close_btn.setObjectName("alert_toast_close")
         close_btn.setFixedSize(20, 20)
-        close_btn.clicked.connect(toast.hide)
+        close_btn.clicked.connect(lambda _checked=False, item=toast: self._close_alert_toast(item))
         layout.addWidget(label, 1)
         layout.addWidget(close_btn, 0, Qt.AlignTop)
         toast.setStyleSheet(
@@ -1588,11 +1600,38 @@ class FloatLabel(QWidget):
             "QPushButton#alert_toast_close:hover{background:#374151;border-radius:3px;}"
         )
         toast._message_label = label
+        label.setText(plain)
         toast.hide()
-        self._alert_toast = toast
-        self._alert_toast_timer = QTimer(self)
-        self._alert_toast_timer.timeout.connect(toast.hide)
         return toast
+
+    def _close_alert_toast(self, toast):
+        toasts = list(getattr(self, "_alert_toasts", []))
+        if toast in toasts:
+            toasts.remove(toast)
+            self._alert_toasts = toasts
+        try:
+            toast.hide()
+            toast.deleteLater()
+        except Exception:
+            pass
+        self._relayout_alert_toasts()
+
+    def _relayout_alert_toasts(self):
+        toasts = [toast for toast in getattr(self, "_alert_toasts", []) if toast is not None]
+        if not toasts:
+            self._alert_toasts = []
+            return
+        geo = self.geometry()
+        screen = QApplication.screenAt(geo.center()) or QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        top_limit = available.top() + 8 if available is not None else 8
+        bottom_y = geo.y() - 8
+        for toast in reversed(toasts):
+            toast.adjustSize()
+            x = geo.x() + max(0, geo.width() - toast.width())
+            y = max(top_limit, bottom_y - toast.height())
+            toast.move(x, y)
+            bottom_y = y - 6
 
     @staticmethod
     def _compact_desktop_alert_text(text):
@@ -1609,9 +1648,9 @@ class FloatLabel(QWidget):
             return ""
         picked = [lines[0]]
         for line in lines[1:]:
-            if line.startswith(("标的：", "代码：", "成本价：", "止盈/止损线：", "止盈线变动：", "状态：")):
+            if line.startswith(("标的：", "代码：", "盈亏：", "成本价：", "止损线：", "止盈线：", "变动：", "状态：")):
                 picked.append(line)
-            if len(picked) >= 4:
+            if len(picked) >= 6:
                 break
         return "\n".join(picked)
 
@@ -1620,23 +1659,22 @@ class FloatLabel(QWidget):
         if not notifications.get("desktop_popup"):
             return
         plain = self._compact_desktop_alert_text(text)
-        toast = self._ensure_alert_toast()
-        label = getattr(toast, "_message_label", None)
-        if label is not None:
-            label.setText(plain)
-        toast.adjustSize()
-        geo = self.geometry()
-        x = geo.x() + max(0, geo.width() - toast.width())
-        screen = QApplication.screenAt(geo.center()) or QApplication.primaryScreen()
-        available = screen.availableGeometry() if screen else None
-        top_limit = available.top() + 8 if available is not None else 8
-        y = max(top_limit, geo.y() - toast.height() - 8)
-        toast.move(x, y)
+        toast = self._create_alert_toast(plain)
+        toasts = list(getattr(self, "_alert_toasts", []))
+        toasts.append(toast)
+        while len(toasts) > 3:
+            old = toasts.pop(0)
+            try:
+                old.hide()
+                old.deleteLater()
+            except Exception:
+                pass
+        self._alert_toasts = toasts
+        self._relayout_alert_toasts()
         toast.show()
-        self._alert_toast_timer.start(6000)
 
     def send_strategy_push_test(self):
-        self._send_strategy_push_text("## StockWidget 测试推送\n>策略远程推送已配置")
+        self._send_strategy_push_text("## 重要提醒\n>测试推送：策略远程推送已配置")
 
     def _project_columns(self, full_rows, sign_data):
         # 从 ALL_HEADERS 中按显示顺序筛选已启用的列

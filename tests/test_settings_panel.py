@@ -463,6 +463,7 @@ class SettingsPanelTests(unittest.TestCase):
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
         win.codes = ["sh603259"]
         win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
         pushed = []
         win.show_desktop_alert = lambda text: pushed.append(text)
         win._send_strategy_push_text = lambda text: pushed.append(text) or True
@@ -485,8 +486,11 @@ class SettingsPanelTests(unittest.TestCase):
         position = win.strategy_alert_config["positions"][0]
         self.assertEqual(position["last_stop_price"], 132.0)
         self.assertEqual(position["locked_profit_pct"], 10.0)
-        self.assertTrue(any("策略线变动提醒" in text for text in pushed))
+        self.assertTrue(any("重要提醒" in text for text in pushed))
+        self.assertTrue(any("标的：药明康德" in text for text in pushed))
         self.assertTrue(any("110.00 -> 132.00" in text for text in pushed))
+        self.assertTrue(any("止盈线：110.00 -> 132.00" in text for text in pushed))
+        self.assertFalse(any("止盈/止损线" in text for text in pushed))
         dlg.close()
 
     def test_strategy_page_removes_positions_not_in_self_selected_codes(self):

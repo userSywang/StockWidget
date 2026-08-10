@@ -2184,15 +2184,32 @@ class SettingsDialog(QDialog):
         except Exception:
             return old_price != new_price
 
+    def _strategy_alert_stock_name(self, code):
+        names = getattr(self.win, "code_names", {})
+        if not isinstance(names, dict):
+            names = {}
+        return str(names.get(code) or code or "").strip()
+
+    @staticmethod
+    def _strategy_line_label_for_position(position):
+        try:
+            return "止盈线" if float(position.get("locked_profit_pct") or 0.0) > 0 else "止损线"
+        except Exception:
+            return "止损线"
+
     def _send_strategy_line_change_alert(self, position, old_cost, new_cost, old_stop_price, new_stop_price):
         code = position.get("code", "")
         old_line = "-" if old_stop_price is None else f"{float(old_stop_price):.2f}"
         new_line = "-" if new_stop_price is None else f"{float(new_stop_price):.2f}"
+        line_label = self._strategy_line_label_for_position(position)
         alert_text = (
-            f"## StockWidget 策略线变动提醒\n"
-            f">标的：{code}\n"
+            f"## 重要提醒\n"
+            f">标的：{self._strategy_alert_stock_name(code)}\n"
+            f">代码：{code}\n"
+            f"\n"
+            f">变动：\n"
             f">成本价：{float(old_cost):.3f} -> {float(new_cost):.3f}\n"
-            f">止盈/止损线：{old_line} -> {new_line}"
+            f">{line_label}：{old_line} -> {new_line}"
         )
         self._send_desktop_alert(alert_text)
 
@@ -2210,8 +2227,10 @@ class SettingsDialog(QDialog):
         profile = self._get_profile_by_id(profile_id)
         profile_name = profile.get("name", profile_id) if profile else profile_id
         alert_text = (
-            f"## StockWidget 策略套用提醒\n"
-            f">标的：{code}\n"
+            f"## 重要提醒\n"
+            f">标的：{self._strategy_alert_stock_name(code)}\n"
+            f">代码：{code}\n"
+            f"\n"
             f">策略模板：{profile_name}\n"
             f">成本价：{cost:.2f}\n"
             f">止损线：{stop_price:.2f}（止损 -{max_loss_pct:.1f}%）"
@@ -2247,7 +2266,13 @@ class SettingsDialog(QDialog):
 
         if changes:
             change_text = "\n".join(f"• {c}" for c in changes)
-            alert_text = f"## StockWidget 策略修改提醒\n>标的：{code}\n>修改内容：\n{change_text}"
+            alert_text = (
+                f"## 重要提醒\n"
+                f">标的：{self._strategy_alert_stock_name(code)}\n"
+                f">代码：{code}\n"
+                f"\n"
+                f">修改内容：\n{change_text}"
+            )
             self._send_desktop_alert(alert_text)
 
     def _get_profile_by_id(self, profile_id):

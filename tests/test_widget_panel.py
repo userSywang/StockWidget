@@ -629,17 +629,51 @@ class WidgetPanelTests(unittest.TestCase):
 
     def test_compact_desktop_alert_text_keeps_key_lines(self):
         text = FloatLabel._compact_desktop_alert_text(
-            "## StockWidget 策略线变动提醒\n"
-            ">标的：sh603259\n"
+            "## 重要提醒\n"
+            ">标的：药明康德\n"
+            ">代码：sh603259\n"
+            ">变动：\n"
             ">成本价：100.000 -> 120.000\n"
-            ">止盈/止损线：110.00 -> 132.00\n"
+            ">止盈线：110.00 -> 132.00\n"
             ">备注：不会显示"
         )
 
-        self.assertIn("策略线变动提醒", text)
-        self.assertIn("标的：sh603259", text)
-        self.assertIn("止盈/止损线：110.00 -> 132.00", text)
+        self.assertIn("重要提醒", text)
+        self.assertIn("标的：药明康德", text)
+        self.assertIn("代码：sh603259", text)
+        self.assertIn("变动：", text)
+        self.assertIn("成本价：100.000 -> 120.000", text)
+        self.assertIn("止盈线：110.00 -> 132.00", text)
         self.assertNotIn("备注", text)
+
+    def test_desktop_alert_keeps_latest_three_until_closed(self):
+        win = FloatLabel({
+            "codes": ["sh603259"],
+            "checked_codes": ["sh603259"],
+            "strategy_alerts": {
+                "notifications": {"desktop_popup": True},
+            },
+        })
+        try:
+            win.setGeometry(100, 200, 260, 80)
+            for idx in range(4):
+                win.show_desktop_alert(f"## 重要提醒\n>标的：股票{idx}\n>代码：sh00000{idx}\n>状态：测试")
+
+            toasts = getattr(win, "_alert_toasts", [])
+            self.assertEqual(len(toasts), 3)
+            labels = [toast._message_label.text() for toast in toasts]
+            self.assertNotIn("股票0", "\n".join(labels))
+            self.assertIn("股票1", labels[0])
+            self.assertIn("股票3", labels[-1])
+            self.assertFalse(hasattr(win, "_alert_toast_timer"))
+
+            win._close_alert_toast(toasts[-1])
+            self.assertEqual(len(getattr(win, "_alert_toasts", [])), 2)
+        finally:
+            for toast in list(getattr(win, "_alert_toasts", [])):
+                toast.hide()
+                toast.deleteLater()
+            win.close()
 
     def test_strategy_push_text_includes_stop_price_and_raised_status(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -652,9 +686,12 @@ class WidgetPanelTests(unittest.TestCase):
             "status": "上调止盈线至110.00",
         })
 
+        self.assertIn("## 重要提醒", text)
+        self.assertIn("标的：药明康德", text)
         self.assertIn("止盈线：110.00（锁盈+10.0%）", text)
-        self.assertIn("止盈价：110.00", text)
         self.assertIn("上调止盈线至110.00", text)
+        self.assertNotIn("StockWidget", text)
+        self.assertNotIn("止盈/止损线", text)
 
     def test_strategy_push_text_includes_changed_stop_line_prices(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -670,8 +707,25 @@ class WidgetPanelTests(unittest.TestCase):
             "status": "止盈线变动至110.00",
         })
 
-        self.assertIn("止盈线变动：109.00 -> 110.00", text)
+        self.assertIn("变动：", text)
+        self.assertIn("止盈线：109.00 -> 110.00", text)
         self.assertIn("状态：止盈线变动至110.00", text)
+
+    def test_strategy_push_text_uses_stop_loss_label_without_locked_profit(self):
+        win = FloatLabel.__new__(FloatLabel)
+        text = FloatLabel._strategy_push_text_for_state(win, {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -5.0,
+            "locked_profit_pct": 0.0,
+            "stop_price": 95.0,
+            "stop_line_changed": True,
+            "stop_line_previous_price": 96.0,
+            "status": "止损线变动至95.00",
+        })
+
+        self.assertIn("止损线：96.00 -> 95.00", text)
+        self.assertNotIn("止盈线：96.00 -> 95.00", text)
 
     def test_strategy_push_payload_uses_custom_json(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -754,7 +808,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(len(win._http.posts), 1)
         content = win._http.posts[0][1]["markdown"]["content"]
         self.assertIn("上调止盈线至110.00", content)
-        self.assertIn("止盈价：110.00", content)
+        self.assertIn("止盈线：110.00", content)
 
     def test_strategy_daily_summary_sends_once_after_configured_time(self):
         class FakeHttp:
@@ -794,10 +848,12 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._strategy_daily_summary_sent_date, "2026-08-10")
         self.assertEqual(len(win._http.posts), 1)
         content = win._http.posts[0][1]["markdown"]["content"]
-        self.assertIn("策略定时摘要", content)
-        self.assertIn("药明康德(sh603259)", content)
-        self.assertIn("止损 95.00", content)
-        self.assertIn("止盈 110.00", content)
+        self.assertIn("重要提醒", content)
+        self.assertIn("策略摘要：2026-08-10 14:30", content)
+        self.assertIn("标的：药明康德", content)
+        self.assertIn("代码：sh603259", content)
+        self.assertIn("止损线：95.00", content)
+        self.assertIn("止盈线：110.00", content)
 
     def test_strategy_daily_summary_waits_until_configured_time(self):
         class FakeHttp:
