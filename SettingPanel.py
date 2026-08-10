@@ -1,5 +1,6 @@
 import json
 import os, re
+from datetime import datetime
 from functools import partial
 
 from PySide6.QtCore import Qt, QSize, QTime, QTimer, QEvent
@@ -2030,6 +2031,8 @@ class SettingsDialog(QDialog):
             )
         finally:
             self._loading_strategy_editor = False
+        self._strategy_save_baseline_row = row
+        self._strategy_save_baseline_position = dict(position)
         self._refresh_strategy_preview()
         self._refresh_strategy_params_list()
 
@@ -2135,12 +2138,20 @@ class SettingsDialog(QDialog):
             return
         # 保存前快照，用于检测条件/模板变化
         position = self._strategy_config["positions"][row]
+        baseline = getattr(self, "_strategy_save_baseline_position", None)
+        if getattr(self, "_strategy_save_baseline_row", -1) == row and isinstance(baseline, dict):
+            position = dict(baseline)
         code = position.get("code", "")
         old_rules = dict(position.get("rules", {}))
         old_profile_id = position.get("strategy_id", "default")
         old_cost = float(position.get("cost_price") or 0.0)
         old_locked_pct = float(position.get("locked_profit_pct") or 0.0)
-        old_resolved_rules = strategy_rules_for_position(self._strategy_config, position)
+        old_config = dict(self._strategy_config)
+        old_positions = list(old_config.get("positions", []))
+        if 0 <= row < len(old_positions):
+            old_positions[row] = position
+        old_config["positions"] = old_positions
+        old_resolved_rules = strategy_rules_for_position(old_config, position)
         old_stop_price = strategy_stop_price(old_cost, old_resolved_rules, old_locked_pct)
         was_first_apply = self._consume_pending_apply_alert(code)
 
@@ -2159,6 +2170,10 @@ class SettingsDialog(QDialog):
         if was_first_apply or profile_changed:
             # 第一次套用策略 或 切换模板：提醒止损线
             self._send_strategy_apply_alert(new_position, new_profile_id)
+            if new_stop_price is not None:
+                new_position["last_stop_price"] = round(float(new_stop_price), 4)
+                self._strategy_config["positions"][row] = new_position
+                self.win.set_strategy_alert_config(self._strategy_config)
         elif old_rules != new_rules:
             # 仅覆盖参数变更：提醒具体变化
             self._send_strategy_change_alert(new_position, old_rules, new_rules, old_profile_id, new_profile_id)
@@ -2175,6 +2190,9 @@ class SettingsDialog(QDialog):
                 new_position["last_stop_price"] = round(float(new_stop_price), 4)
                 self._strategy_config["positions"][row] = new_position
                 self.win.set_strategy_alert_config(self._strategy_config)
+
+        self._strategy_save_baseline_row = row
+        self._strategy_save_baseline_position = dict(self._strategy_config["positions"][row])
 
         self.btn_strategy_save.setText("已保存")
         QTimer.singleShot(1200, lambda: self.btn_strategy_save.setText("保存当前持仓"))
@@ -2236,6 +2254,7 @@ class SettingsDialog(QDialog):
             f">{line_label}：{old_line} -> {new_line}"
         )
         self._send_desktop_alert(alert_text)
+        self._record_strategy_settings_history(position, f"{line_label}变化", "warning")
 
     def _send_strategy_apply_alert(self, position, profile_id):
         """股票套用/切换策略时，发送止损线提醒"""
@@ -2261,6 +2280,7 @@ class SettingsDialog(QDialog):
             f">止损线：{stop_price:.2f}（止损 -{max_loss_pct:.1f}%）"
         )
         self._send_desktop_alert(alert_text)
+        self._record_strategy_settings_history(position, "策略套用", "warning")
 
     def _send_strategy_change_alert(self, position, old_rules, new_rules, old_profile_id, new_profile_id):
         """发送策略条件修改提醒"""
@@ -2300,6 +2320,29 @@ class SettingsDialog(QDialog):
                 f">修改内容：\n{change_text}"
             )
             self._send_desktop_alert(alert_text)
+            self._record_strategy_settings_history(position, "策略修改", "warning")
+
+    def _record_strategy_settings_history(self, position, status, severity="warning"):
+        code = normalize_code_or_none(position.get("code")) or str(position.get("code") or "")
+        item = {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "code": code,
+            "name": self._strategy_alert_stock_name(code),
+            "status": str(status or "").strip(),
+            "severity": str(severity or "warning").strip(),
+        }
+        history = [item]
+        for old in getattr(self.win, "strategy_alert_history", []):
+            if old.get("code") == item["code"] and old.get("status") == item["status"] and old.get("time") == item["time"]:
+                continue
+            history.append(old)
+            if len(history) >= 50:
+                break
+        self.win.strategy_alert_history = history
+        notifier = getattr(self.win, "_notify_change", None)
+        if callable(notifier):
+            notifier()
+        self._refresh_strategy_history()
 
     def _get_profile_by_id(self, profile_id):
         """根据ID获取策略模板"""

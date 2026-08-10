@@ -523,6 +523,69 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertFalse(any("止盈/止损线" in text for text in pushed))
         dlg.close()
 
+    def test_new_strategy_position_save_alerts_initial_stop_line_and_logs(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        pushed = []
+        win.show_desktop_alert = lambda text: pushed.append(text)
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {"desktop_popup": True},
+            "positions": [],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+
+        dlg._add_strategy_position()
+        dlg.spin_strategy_cost.setValue(100.0)
+        dlg.spin_strategy_loss.setValue(5.0)
+        dlg._save_strategy_position()
+
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["last_stop_price"], 95.0)
+        self.assertTrue(any("药明康德策略套用" in text for text in pushed))
+        self.assertTrue(any("止损线：95.00" in text for text in pushed))
+        self.assertEqual(win.strategy_alert_history[0]["code"], "sh603259")
+        self.assertIn("策略套用", win.strategy_alert_history[0]["status"])
+        dlg.close()
+
+    def test_strategy_loss_threshold_save_alerts_change_and_logs_after_live_edit(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        pushed = []
+        win.show_desktop_alert = lambda text: pushed.append(text)
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {"desktop_popup": True},
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 100.0,
+                "last_stop_price": 90.0,
+                "rules": {"max_loss_enabled": True, "max_loss_pct": 10.0},
+            }],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(4)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        dlg.spin_strategy_loss.setValue(5.0)
+        dlg._save_strategy_position()
+
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["last_stop_price"], 95.0)
+        self.assertTrue(any("浮亏清仓阈值：10.0% → 5.0%" in text for text in pushed))
+        self.assertTrue(any("药明康德止损线变化" in text for text in pushed))
+        self.assertTrue(any("90.00 -> 95.00" in text for text in pushed))
+        self.assertTrue(any("策略修改" in item["status"] for item in win.strategy_alert_history))
+        self.assertTrue(any("止损线变化" in item["status"] for item in win.strategy_alert_history))
+        dlg.close()
+
     def test_strategy_history_log_shows_all_recent_triggers(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259", "sh600584"]}]
