@@ -154,6 +154,7 @@ class StockLogicTests(unittest.TestCase):
                 "remote_push": True,
                 "remote_channel": "custom",
                 "webhook_url": " https://example.test/webhook ",
+                "daily_summary_time": "14:30",
             },
             "rules": {"max_loss_pct": "6", "stale_position_days": "10"},
         })
@@ -167,8 +168,16 @@ class StockLogicTests(unittest.TestCase):
         self.assertTrue(config["notifications"]["remote_push"])
         self.assertEqual(config["notifications"]["remote_channel"], "custom")
         self.assertEqual(config["notifications"]["webhook_url"], "https://example.test/webhook")
+        self.assertEqual(config["notifications"]["daily_summary_time"], "14:30")
         self.assertEqual(config["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(config["rules"]["stale_position_days"], 10)
+
+    def test_strategy_alert_config_defaults_daily_summary_to_23_00(self):
+        config = normalize_strategy_alert_config({
+            "notifications": {"daily_summary_time": "bad"},
+        })
+
+        self.assertEqual(config["notifications"]["daily_summary_time"], "23:00")
 
     def test_strategy_config_does_not_drop_unknown_position_records(self):
         config = normalize_strategy_alert_config({

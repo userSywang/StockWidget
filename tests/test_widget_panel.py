@@ -572,7 +572,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
 
-    def test_strategy_daily_summary_sends_once_after_eleven(self):
+    def test_strategy_daily_summary_sends_once_after_configured_time(self):
         class FakeHttp:
             def __init__(self):
                 self.posts = []
@@ -588,6 +588,7 @@ class WidgetPanelTests(unittest.TestCase):
                 "remote_push": True,
                 "remote_channel": "wecom",
                 "webhook_url": "https://example.test/webhook",
+                "daily_summary_time": "14:30",
             },
         }
         states = [{
@@ -599,7 +600,7 @@ class WidgetPanelTests(unittest.TestCase):
             "take_profit_price": 110.0,
             "status": "已锁盈10%",
         }]
-        now = datetime(2026, 8, 10, 11, 0)
+        now = datetime(2026, 8, 10, 14, 30)
 
         sent = FloatLabel._send_strategy_daily_summary(win, states, now)
         repeated = FloatLabel._send_strategy_daily_summary(win, states, now)
@@ -614,7 +615,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("止损 95.00", content)
         self.assertIn("止盈 110.00", content)
 
-    def test_strategy_daily_summary_waits_until_eleven(self):
+    def test_strategy_daily_summary_waits_until_configured_time(self):
         class FakeHttp:
             def post(self, *_args, **_kwargs):
                 raise AssertionError("should not push before 11:00")
@@ -627,13 +628,14 @@ class WidgetPanelTests(unittest.TestCase):
                 "remote_push": True,
                 "remote_channel": "wecom",
                 "webhook_url": "https://example.test/webhook",
+                "daily_summary_time": "23:00",
             },
         }
 
         sent = FloatLabel._send_strategy_daily_summary(
             win,
             [{"code": "sh603259", "name": "药明康德", "status": "未触发"}],
-            datetime(2026, 8, 10, 10, 59),
+            datetime(2026, 8, 10, 22, 59),
         )
 
         self.assertFalse(sent)

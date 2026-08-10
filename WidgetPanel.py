@@ -1447,7 +1447,8 @@ class FloatLabel(QWidget):
             return False
         now_provider = getattr(self, "_now", None)
         now = now or (now_provider() if callable(now_provider) else datetime.now())
-        if now.hour < 11:
+        hour, minute = [int(part) for part in str(notifications.get("daily_summary_time", "23:00")).split(":", 1)]
+        if (now.hour, now.minute) < (hour, minute):
             return False
         today_key = now.strftime("%Y-%m-%d")
         if getattr(self, "_strategy_daily_summary_sent_date", "") == today_key:

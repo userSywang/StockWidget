@@ -12,6 +12,7 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "remote_push": False,
         "remote_channel": "wecom",
         "webhook_url": "",
+        "daily_summary_time": "23:00",
     },
     "rules": {
         "max_loss_enabled": True,
@@ -329,6 +330,18 @@ def _bounded_int(value, default, minimum=0, maximum=99999):
     return max(int(minimum), min(int(maximum), number))
 
 
+def _normalize_time_text(value, default="23:00"):
+    text = str(value or "").strip()
+    match = re.fullmatch(r"(\d{1,2}):(\d{1,2})", text)
+    if not match:
+        return default
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return default
+    return f"{hour:02d}:{minute:02d}"
+
+
 def normalize_strategy_position(position):
     if not isinstance(position, dict):
         position = {}
@@ -472,6 +485,7 @@ def normalize_strategy_alert_config(config):
             "remote_push": bool(source_notifications.get("remote_push", default_notifications["remote_push"])),
             "remote_channel": source_notifications.get("remote_channel") if source_notifications.get("remote_channel") in ("wecom", "custom") else default_notifications["remote_channel"],
             "webhook_url": str(source_notifications.get("webhook_url") or "").strip(),
+            "daily_summary_time": _normalize_time_text(source_notifications.get("daily_summary_time"), default_notifications["daily_summary_time"]),
         },
         "rules": normalized_rules,
     }

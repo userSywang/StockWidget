@@ -2,13 +2,13 @@ import json
 import os, re
 from functools import partial
 
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTime, QTimer
 from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton, QTimeEdit
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -691,6 +691,9 @@ class SettingsDialog(QDialog):
         self.edit_strategy_webhook.setPlaceholderText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
         self.edit_strategy_webhook.setMinimumWidth(240)
         self.edit_strategy_webhook.setFixedWidth(280)
+        self.time_strategy_daily_summary = QTimeEdit()
+        self.time_strategy_daily_summary.setDisplayFormat("HH:mm")
+        self.time_strategy_daily_summary.setFixedWidth(76)
         self.btn_strategy_push_test = QPushButton("测试推送")
         self.btn_strategy_push_test.setFixedWidth(76)
         self.list_strategy_preview = QListWidget()
@@ -702,9 +705,12 @@ class SettingsDialog(QDialog):
         notify.addWidget(self.cmb_strategy_remote_channel, 1, 1, 1, 3)
         notify.addWidget(QLabel("Webhook："), 2, 0)
         notify.addWidget(self.edit_strategy_webhook, 2, 1, 1, 3)
-        notify.addWidget(self.btn_strategy_push_test, 3, 1, Qt.AlignLeft)
-        notify.addWidget(QLabel("提醒预览："), 4, 0, Qt.AlignTop)
-        notify.addWidget(self.list_strategy_preview, 4, 1, 1, 3)
+        notify.addWidget(QLabel("每日摘要："), 3, 0)
+        notify.addWidget(self.time_strategy_daily_summary, 3, 1, Qt.AlignLeft)
+        notify.addWidget(QLabel("24小时制"), 3, 2, Qt.AlignLeft)
+        notify.addWidget(self.btn_strategy_push_test, 4, 1, Qt.AlignLeft)
+        notify.addWidget(QLabel("提醒预览："), 5, 0, Qt.AlignTop)
+        notify.addWidget(self.list_strategy_preview, 5, 1, 1, 3)
         position_strategy_layout.addWidget(g_strategy_notify)
         position_strategy_layout.addStretch(1)
 
@@ -1121,6 +1127,7 @@ class SettingsDialog(QDialog):
         self.chk_strategy_notify_remote.toggled.connect(self._on_strategy_config_changed)
         self.cmb_strategy_remote_channel.currentIndexChanged.connect(self._on_strategy_config_changed)
         self.edit_strategy_webhook.editingFinished.connect(self._on_strategy_config_changed)
+        self.time_strategy_daily_summary.timeChanged.connect(self._on_strategy_config_changed)
         self.btn_strategy_push_test.clicked.connect(self._send_strategy_push_test)
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
         self.cmb_strategy_profile.currentIndexChanged.connect(self._on_strategy_profile_selected)
@@ -1832,6 +1839,8 @@ class SettingsDialog(QDialog):
             channel_idx = self.cmb_strategy_remote_channel.findData(notifications.get("remote_channel", "wecom"))
             self.cmb_strategy_remote_channel.setCurrentIndex(channel_idx if channel_idx >= 0 else 0)
             self.edit_strategy_webhook.setText(notifications.get("webhook_url", ""))
+            summary_time = str(notifications.get("daily_summary_time", "23:00"))
+            self.time_strategy_daily_summary.setTime(QTime.fromString(summary_time, "HH:mm") if QTime.fromString(summary_time, "HH:mm").isValid() else QTime(23, 0))
             self.chk_strategy_loss.setChecked(bool(rules.get("max_loss_enabled")))
             self.spin_strategy_loss.setValue(float(rules.get("max_loss_pct", 5.0)))
             self.chk_strategy_stock_ma5.setChecked(bool(rules.get("stock_ma5_break_enabled")))
@@ -2020,6 +2029,7 @@ class SettingsDialog(QDialog):
                 "remote_push": self.chk_strategy_notify_remote.isChecked(),
                 "remote_channel": self.cmb_strategy_remote_channel.currentData() or "wecom",
                 "webhook_url": self.edit_strategy_webhook.text().strip(),
+                "daily_summary_time": self.time_strategy_daily_summary.time().toString("HH:mm"),
             },
             "rules": getattr(self, "_strategy_config", {}).get("rules", {}),
         })
@@ -2269,7 +2279,7 @@ class SettingsDialog(QDialog):
             if notifications.get("remote_push") and not notifications.get("webhook_url"):
                 rows.append("远程推送未配置Webhook地址")
             elif notifications.get("remote_push"):
-                rows.append("每日11:00远程推送：当前持仓止损/止盈摘要")
+                rows.append(f"每日{notifications.get('daily_summary_time', '23:00')}远程推送：当前持仓止损/止盈摘要")
             if rules.get("max_loss_enabled"):
                 rows.append(f"持仓浮亏达到 {float(rules.get('max_loss_pct', 0.0)):.1f}%：提醒清仓")
             if rules.get("stock_ma5_break_enabled"):

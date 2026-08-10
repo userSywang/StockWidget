@@ -4,7 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, Qt, QTime
 
 from SettingPanel import SettingsDialog
 
@@ -364,6 +364,7 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.chk_strategy_notify_remote.setChecked(True)
         dlg.cmb_strategy_remote_channel.setCurrentIndex(dlg.cmb_strategy_remote_channel.findData("wecom"))
         dlg.edit_strategy_webhook.setText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test")
+        dlg.time_strategy_daily_summary.setTime(QTime(14, 30))
         dlg.spin_strategy_loss.setValue(6.0)
         dlg.spin_strategy_stale_days.setValue(10)
         dlg._on_strategy_config_changed()
@@ -378,11 +379,12 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(win.strategy_alert_config["notifications"]["remote_push"])
         self.assertEqual(win.strategy_alert_config["notifications"]["remote_channel"], "wecom")
         self.assertEqual(win.strategy_alert_config["notifications"]["webhook_url"], "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test")
+        self.assertEqual(win.strategy_alert_config["notifications"]["daily_summary_time"], "14:30")
         self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 6.0)
         self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["stale_position_days"], 10)
         preview = [dlg.list_strategy_preview.item(i).text() for i in range(dlg.list_strategy_preview.count())]
         self.assertTrue(any("桌面弹窗" in row and "远程推送" in row for row in preview))
-        self.assertTrue(any("每日11:00远程推送" in row for row in preview))
+        self.assertTrue(any("每日14:30远程推送" in row for row in preview))
         self.assertTrue(any("浮亏达到 6.0%" in row for row in preview))
 
         dlg._del_strategy_position()
