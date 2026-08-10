@@ -80,8 +80,15 @@ class SettingsDialog(QDialog):
         self.btn_up.setFixedWidth(60)
         self.btn_dn  = QPushButton("下移")
         self.btn_dn.setFixedWidth(60)
+        self.btn_code_to_alert = QPushButton("设提醒")
+        self.btn_code_to_alert.setFixedWidth(60)
+        self.btn_code_to_strategy = QPushButton("设策略")
+        self.btn_code_to_strategy.setFixedWidth(60)
         for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
             btn_col.addWidget(b)
+        btn_col.addSpacing(8)
+        btn_col.addWidget(self.btn_code_to_alert)
+        btn_col.addWidget(self.btn_code_to_strategy)
         btn_col.addStretch(1)
 
         lay_codes.addWidget(self.tree_codes, 1)
@@ -1045,6 +1052,8 @@ class SettingsDialog(QDialog):
         self.btn_del.clicked.connect(self._del_code)
         self.btn_up.clicked.connect(self._move_up)
         self.btn_dn.clicked.connect(self._move_down)
+        self.btn_code_to_alert.clicked.connect(self._open_price_alert_for_current_code)
+        self.btn_code_to_strategy.clicked.connect(self._open_strategy_for_current_code)
         self.list_alerts.currentRowChanged.connect(self._on_alert_selected)
         self.btn_alert_add.clicked.connect(self._add_alert_rule)
         self.btn_alert_del.clicked.connect(self._del_alert_rule)
@@ -1323,6 +1332,61 @@ class SettingsDialog(QDialog):
                 self._add_group()
             return self.tree_codes.topLevelItem(0)
         return item if item.data(0, Qt.UserRole) == "group" else item.parent()
+
+    def _current_code_from_tree(self):
+        item = self.tree_codes.currentItem()
+        if item is None or item.data(0, Qt.UserRole) != "code":
+            return ""
+        code = item.data(0, Qt.UserRole + 1) or self._code_from_item_text(item.text(0))
+        return normalize_code_or_none(code) or ""
+
+    def _open_price_alert_for_current_code(self):
+        code = self._current_code_from_tree()
+        if not code:
+            return
+        alerts = list(getattr(self, "_price_alerts", normalize_price_alerts(getattr(self.win, "price_alerts", []))))
+        target_row = -1
+        for row, alert in enumerate(alerts):
+            if normalize_price_alert(alert).get("code") == code:
+                target_row = row
+                break
+        if target_row < 0:
+            alert = default_price_alert()
+            alert["code"] = code
+            alerts.append(alert)
+            self.win.set_price_alerts(alerts)
+            target_row = len(alerts) - 1
+        self.tabs.setCurrentIndex(3)
+        self._load_price_alert_list(target_row)
+
+    def _open_strategy_for_current_code(self):
+        code = self._current_code_from_tree()
+        if not code:
+            return
+        config = normalize_strategy_alert_config(getattr(self, "_strategy_config", getattr(self.win, "strategy_alert_config", {})))
+        target_row = -1
+        for row, position in enumerate(config.get("positions", [])):
+            normalized_position = normalize_strategy_position(position) or {}
+            if normalized_position.get("code") == code:
+                target_row = row
+                break
+        if target_row < 0:
+            config["positions"].append({
+                "code": code,
+                "strategy_id": "default",
+                "cost_price": 0.0,
+                "buy_date": "",
+                "position_pct": 0.0,
+                "note": "",
+                "rules": {},
+            })
+            self.win.set_strategy_alert_config(config)
+            self._strategy_config = config
+            target_row = len(config["positions"]) - 1
+        self.tabs.setCurrentIndex(4)
+        if hasattr(self, "strategy_subtabs"):
+            self.strategy_subtabs.setCurrentIndex(0)
+        self._load_strategy_config(target_row)
 
     def _add_group(self):
         item = self._make_group_item("新分组")

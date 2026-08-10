@@ -94,6 +94,40 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(group.child(1).data(0, dlg._pending_role()), True)
         dlg.close()
 
+    def test_current_self_selected_code_opens_price_alert_editor(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+        dlg._open_price_alert_for_current_code()
+
+        self.assertEqual(dlg.tabs.currentIndex(), 3)
+        self.assertEqual(win.price_alerts[0]["code"], "sh603259")
+        self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
+        dlg.close()
+
+    def test_current_self_selected_code_opens_strategy_position_editor(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+        dlg._open_strategy_for_current_code()
+
+        self.assertEqual(dlg.tabs.currentIndex(), 4)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh603259")
+        self.assertEqual(dlg.edit_strategy_code.text(), "sh603259")
+        dlg.close()
+
     def test_display_data_page_includes_ma_and_strategy_columns(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
