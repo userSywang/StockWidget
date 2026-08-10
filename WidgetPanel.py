@@ -1223,7 +1223,6 @@ class FloatLabel(QWidget):
             meta_rows.append({"row_type": "group", "text": str(group.get("name") or "分组")})
             for code in group_codes:
                 if code in row_by_code:
-                    full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code))
                     meta = dict(sign_by_code.get(code, {}))
                     strategy_state = strategy_by_code.get(code)
                     if strategy_state:
@@ -1231,6 +1230,12 @@ class FloatLabel(QWidget):
                         meta["severity"] = strategy_state.get("severity", "neutral")
                     if code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
+                    badges = []
+                    if any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
+                        badges.append("价警")
+                    if strategy_state and strategy_state.get("triggered"):
+                        badges.append("策略")
+                    full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code, badges))
                     meta_rows.append(meta)
 
         market_amount_text = self._format_market_amount(quote_by_code or {})
@@ -1265,16 +1270,20 @@ class FloatLabel(QWidget):
 
         return full_rows, meta_rows
 
-    def _display_row_with_indicators(self, row, code, daily_by_code=None, strategy_by_code=None):
+    def _display_row_with_indicators(self, row, code, daily_by_code=None, strategy_by_code=None, badges=None):
         result = list(row or [])
         if len(result) < len(self.ALL_HEADERS):
             result.extend(["-"] * (len(self.ALL_HEADERS) - len(result)))
         name_index = self.ALL_HEADERS.index("名称") if "名称" in self.ALL_HEADERS else -1
+        labels = []
         tag_label = self._code_tag_label(code)
-        if tag_label and 0 <= name_index < len(result):
+        if tag_label:
+            labels.append(tag_label)
+        labels.extend(str(badge) for badge in (badges or []) if str(badge or "").strip())
+        if labels and 0 <= name_index < len(result):
             name = str(result[name_index] or "").strip()
             if name and name != "-":
-                result[name_index] = f"{name} [{tag_label}]"
+                result[name_index] = f"{name} [{'/'.join(labels)}]"
         daily_rows = (daily_by_code or {}).get(code)
         ma_values = {
             "MA5": moving_average(daily_rows, 5),
