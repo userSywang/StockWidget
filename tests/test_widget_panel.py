@@ -784,6 +784,26 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("止损线：96.00 -> 95.00", text)
         self.assertNotIn("止盈线：96.00 -> 95.00", text)
 
+    def test_strategy_push_text_includes_triggered_action_lines(self):
+        win = FloatLabel.__new__(FloatLabel)
+        text = FloatLabel._strategy_push_text_for_state(win, {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -6.0,
+            "locked_profit_pct": 0.0,
+            "stop_loss_price": 95.0,
+            "status": "触发止损",
+            "triggered_actions": [{
+                "rule_id": "max_loss",
+                "rule_name": "浮亏清仓",
+                "action_type": "clear_position",
+                "details": {"stop_loss_price": 95.0, "threshold_pct": -5.0},
+            }],
+        })
+
+        self.assertIn(">动作：", text)
+        self.assertIn(">浮亏清仓：止损价95.00，阈值-5.0%", text)
+
     def test_strategy_push_payload_uses_custom_json(self):
         win = FloatLabel.__new__(FloatLabel)
         win.strategy_alert_config = {

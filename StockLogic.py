@@ -876,6 +876,162 @@ def _strategy_index_status(rules, quotes, daily_by_code):
     return breaks, errors
 
 
+def _strategy_action(rule, position, stock_name, action_type=None, severity="warning", message="", details=None):
+    return {
+        "rule_id": rule.get("id", ""),
+        "rule_name": rule.get("name", ""),
+        "action_type": action_type or (rule.get("action") or {}).get("type", ""),
+        "severity": severity,
+        "stock_code": position.get("code", ""),
+        "stock_name": stock_name,
+        "message": message,
+        "details": details or {},
+    }
+
+
+def _strategy_rule_by_id(config, position):
+    return {rule.get("id"): rule for rule in strategy_action_rules_for_position(config, position)}
+
+
+def evaluate_strategy_actions(config, position, quote, daily_by_code=None, context=None):
+    config = normalize_strategy_alert_config(config)
+    if not config.get("enabled") or not isinstance(position, dict):
+        return []
+    rules = strategy_rules_for_position(config, position)
+    action_rules = _strategy_rule_by_id(config, position)
+    daily_by_code = daily_by_code or {}
+    context = context or {}
+    stock_name = str((quote or {}).get("name") or position.get("code") or "")
+    try:
+        cost = float(position.get("cost_price", 0.0))
+        price = float((quote or {}).get("price", 0.0))
+    except Exception:
+        cost = 0.0
+        price = 0.0
+    if cost <= 0 or price <= 0:
+        return []
+
+    actions = []
+    profit_pct = round((price / cost - 1.0) * 100.0, 4)
+    lock_pct = float(position.get("locked_profit_pct", 0.0))
+
+    max_loss_rule = action_rules.get("max_loss")
+    if max_loss_rule and max_loss_rule.get("enabled") and profit_pct <= -float(rules.get("max_loss_pct", 0.0)):
+        actions.append(_strategy_action(
+            max_loss_rule,
+            position,
+            stock_name,
+            severity="danger",
+            message="触发浮亏清仓",
+            details={
+                "profit_pct": profit_pct,
+                "threshold_pct": -float(rules.get("max_loss_pct", 0.0)),
+                "stop_loss_price": strategy_loss_price(cost, rules),
+            },
+        ))
+
+    trailing_rule = action_rules.get("trailing_profit")
+    if trailing_rule and trailing_rule.get("enabled") and lock_pct > 0:
+        stop_price = strategy_stop_price(cost, rules, lock_pct)
+        if (position.get("lock_raised") or position.get("stop_line_changed")) and stop_price is not None:
+            actions.append(_strategy_action(
+                trailing_rule,
+                position,
+                stock_name,
+                action_type="update_stop_line",
+                severity="warning",
+                message="止盈线变化",
+                details={
+                    "locked_profit_pct": lock_pct,
+                    "stop_price": stop_price,
+                    "previous_stop_price": float(position.get("stop_line_previous_price", 0.0)),
+                    "lock_raised": bool(position.get("lock_raised", False)),
+                },
+            ))
+        if profit_pct <= lock_pct:
+            actions.append(_strategy_action(
+                trailing_rule,
+                position,
+                stock_name,
+                action_type="clear_position",
+                severity="danger",
+                message="触发锁盈清仓",
+                details={
+                    "profit_pct": profit_pct,
+                    "locked_profit_pct": lock_pct,
+                    "take_profit_price": strategy_take_profit_price(cost, lock_pct),
+                    "stop_price": stop_price,
+                },
+            ))
+
+    reduce_rule = action_rules.get("reduce_half")
+    if reduce_rule and reduce_rule.get("enabled") and profit_pct >= float(rules.get("reduce_half_profit_pct", 0.0)):
+        actions.append(_strategy_action(
+            reduce_rule,
+            position,
+            stock_name,
+            severity="warning",
+            message="盈利达到减半仓阈值",
+            details={
+                "profit_pct": profit_pct,
+                "threshold_pct": float(rules.get("reduce_half_profit_pct", 0.0)),
+            },
+        ))
+
+    stock_ma_rule = action_rules.get("stock_ma5_break")
+    if stock_ma_rule and stock_ma_rule.get("enabled"):
+        stock_ma5 = moving_average(daily_by_code.get(position.get("code")), 5)
+        if stock_ma5 is not None and price < stock_ma5:
+            actions.append(_strategy_action(
+                stock_ma_rule,
+                position,
+                stock_name,
+                severity="danger",
+                message="个股跌破5日线",
+                details={"price": price, "ma": round(stock_ma5, 4), "period": 5},
+            ))
+
+    for rule_id, period in (("index_ma5_break", 5), ("index_ma10_break", 10)):
+        index_rule = action_rules.get(rule_id)
+        if not index_rule or not index_rule.get("enabled"):
+            continue
+        for index_code in ("sh000001", "sz399001"):
+            index_quote = (context.get("quotes") or {}).get(index_code) or {}
+            try:
+                index_price = float(index_quote.get("price", 0.0))
+            except Exception:
+                index_price = 0.0
+            index_ma = moving_average(daily_by_code.get(index_code), period)
+            if index_price > 0 and index_ma and index_price < index_ma:
+                actions.append(_strategy_action(
+                    index_rule,
+                    position,
+                    stock_name,
+                    severity="danger",
+                    message=f"大盘跌破{period}日线",
+                    details={
+                        "index_code": index_code,
+                        "index_price": index_price,
+                        "ma": round(index_ma, 4),
+                        "period": period,
+                    },
+                ))
+
+    block_rule = action_rules.get("block_heavy_on_index_ma5_down")
+    if block_rule and block_rule.get("enabled") and bool(context.get("index_ma5_down")):
+        actions.append(_strategy_action(
+            block_rule,
+            position,
+            stock_name,
+            action_type="block_open",
+            severity="warning",
+            message="大盘5日线向下，禁止新开重仓",
+            details={"period": 5},
+        ))
+
+    return actions
+
+
 def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
     config = normalize_strategy_alert_config(config)
     if not config.get("enabled"):
@@ -919,6 +1075,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "daily_date": daily_date,
                 "daily_realtime": daily_realtime,
                 "enabled_rules": strategy_enabled_rule_labels(rules),
+                "triggered_actions": [],
                 "triggered": False,
                 "severity": "neutral",
                 "status": "等待价格",
@@ -976,6 +1133,14 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
         if not status_parts:
             status_parts.append("未触发")
 
+        triggered_actions = evaluate_strategy_actions(
+            config,
+            position,
+            quote,
+            daily_by_code,
+            {"quotes": quotes or {}, "index_ma5_down": index_ma5_down},
+        )
+
         states.append({
             "code": position["code"],
             "name": name,
@@ -993,6 +1158,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "daily_date": daily_date,
             "daily_realtime": daily_realtime,
             "enabled_rules": strategy_enabled_rule_labels(rules),
+            "triggered_actions": triggered_actions,
             "triggered": triggered,
             "severity": severity,
             "status": "，".join(status_parts),

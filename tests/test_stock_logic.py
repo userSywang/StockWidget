@@ -13,6 +13,7 @@ from StockLogic import (
     strategy_action_rules_from_rules,
     strategy_daily_request_codes,
     update_strategy_position_state,
+    evaluate_strategy_actions,
     evaluate_strategy_alerts,
 )
 
@@ -312,6 +313,53 @@ class StockLogicTests(unittest.TestCase):
         })
 
         self.assertEqual(codes, ["sh603259", "sh000001", "sz399001"])
+
+    def test_strategy_action_engine_reports_triggered_actions(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "rules": {
+                "max_loss_enabled": True,
+                "max_loss_pct": 5.0,
+                "reduce_half_enabled": True,
+                "reduce_half_profit_pct": 45.0,
+            },
+            "positions": [{"code": "603259", "cost_price": 100.0, "position_pct": 20.0}],
+        })
+
+        loss_actions = evaluate_strategy_actions(
+            config,
+            config["positions"][0],
+            {"price": 94.0, "name": "药明康德"},
+            {},
+            {},
+        )
+        profit_actions = evaluate_strategy_actions(
+            config,
+            config["positions"][0],
+            {"price": 146.0, "name": "药明康德"},
+            {},
+            {},
+        )
+
+        self.assertEqual(loss_actions[0]["rule_id"], "max_loss")
+        self.assertEqual(loss_actions[0]["action_type"], "clear_position")
+        self.assertEqual(loss_actions[0]["severity"], "danger")
+        self.assertEqual(profit_actions[0]["rule_id"], "reduce_half")
+        self.assertEqual(profit_actions[0]["action_type"], "reduce_position")
+        self.assertEqual(profit_actions[0]["severity"], "warning")
+
+    def test_strategy_alert_states_include_triggered_actions(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "positions": [{"code": "603259", "cost_price": 100.0, "position_pct": 20.0}],
+        })
+
+        states = evaluate_strategy_alerts(config, {"sh603259": {"price": 94.0, "name": "药明康德"}})
+
+        self.assertTrue(states[0]["triggered"])
+        self.assertEqual(states[0]["triggered_actions"][0]["rule_id"], "max_loss")
+        self.assertEqual(states[0]["triggered_actions"][0]["stock_name"], "药明康德")
 
     def test_strategy_alerts_trigger_on_stock_and_index_ma_breaks(self):
         config = normalize_strategy_alert_config({

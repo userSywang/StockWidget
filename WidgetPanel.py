@@ -1515,6 +1515,29 @@ class FloatLabel(QWidget):
             return f"{name}止盈触发"
         return f"{name}策略触发"
 
+    @staticmethod
+    def _strategy_action_lines(state):
+        action_lines = []
+        for action in state.get("triggered_actions") or []:
+            if not isinstance(action, dict):
+                continue
+            details = action.get("details") if isinstance(action.get("details"), dict) else {}
+            label = str(action.get("rule_name") or action.get("message") or action.get("rule_id") or "").strip()
+            if not label:
+                continue
+            value_parts = []
+            if details.get("stop_loss_price") is not None:
+                value_parts.append(f"止损价{float(details.get('stop_loss_price')):.2f}")
+            if details.get("take_profit_price") is not None:
+                value_parts.append(f"止盈价{float(details.get('take_profit_price')):.2f}")
+            elif details.get("stop_price") is not None:
+                value_parts.append(f"策略线{float(details.get('stop_price')):.2f}")
+            if details.get("threshold_pct") is not None:
+                value_parts.append(f"阈值{float(details.get('threshold_pct')):.1f}%")
+            action_text = label if not value_parts else f"{label}：" + "，".join(value_parts)
+            action_lines.append(f">{action_text}")
+        return action_lines
+
     def _strategy_push_text_for_state(self, state):
         profit = state.get("profit_pct")
         profit_text = "-" if profit is None else f"{float(profit):+.1f}%"
@@ -1550,6 +1573,9 @@ class FloatLabel(QWidget):
         ]
         if change_lines:
             lines.extend(["", ">变动：", *change_lines])
+        action_lines = self._strategy_action_lines(state)
+        if action_lines:
+            lines.extend(["", ">动作：", *action_lines])
         lines.extend(["", f">状态：{state.get('status', '-')}"])
         return "\n".join(lines)
 
