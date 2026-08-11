@@ -595,11 +595,19 @@ class FloatLabel(QWidget):
         headers = getattr(self.model, "_headers", [])
         meta = getattr(self.model, "_row_meta", [])
         row_types = tuple((m or {}).get("row_type", "") for m in meta)
+        price_alert_meta = tuple(
+            (
+                bool((m or {}).get("price_alerts")),
+                any(bool(a.get("triggered")) for a in ((m or {}).get("price_alerts") or []) if isinstance(a, dict)),
+            )
+            for m in meta
+        )
         text_lengths = tuple(tuple(len(str(cell)) for cell in row) for row in rows)
         return (
             tuple(headers),
             text_lengths,
             row_types,
+            price_alert_meta,
             bool(self.header_visible),
             bool(self.grid_visible),
             self.font.family(),
@@ -2057,6 +2065,7 @@ class FloatLabel(QWidget):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
+        self._latest_price_alert_states = price_alert_states
         price_alert_pushed = self._send_price_alert_pushes(price_alert_states)
         config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
         if config.get("enabled"):
@@ -2155,8 +2164,9 @@ class FloatLabel(QWidget):
 
     def set_price_alert_badge_visible(self, visible: bool):
         self.price_alert_badge_visible = bool(visible)
+        self._last_fit_signature = None
         self._notify_change()
-        self._refresh_from_function()
+        self._refresh_from_function(force=True)
 
     def set_data_source(self, data_source):
         self.data_source = self._normalize_data_source(data_source)

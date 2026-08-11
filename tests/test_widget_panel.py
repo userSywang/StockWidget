@@ -833,6 +833,38 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertNotIn("[价警]", name_text)
         self.assertNotIn("price_alerts", meta[1])
 
+    def test_fit_signature_changes_when_price_alert_badge_meta_changes(self):
+        win = FloatLabel.__new__(FloatLabel)
+        class FakeModel:
+            _headers = ["名称"]
+            _rows = [["药明康德"]]
+            _row_meta = [{}]
+        win.model = FakeModel()
+        win.header_visible = False
+        win.grid_visible = False
+        win.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
+        win.line_extra_px = 1
+
+        before = FloatLabel._fit_signature(win)
+        win.model._row_meta = [{"price_alerts": [{"triggered": False}]}]
+        after = FloatLabel._fit_signature(win)
+
+        self.assertNotEqual(before, after)
+
+    def test_set_price_alert_badge_visible_forces_immediate_refresh(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+        win.price_alert_badge_visible = True
+        win._last_fit_signature = ("old",)
+        win._notify_change = lambda: calls.append("saved")
+        win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
+
+        FloatLabel.set_price_alert_badge_visible(win, False)
+
+        self.assertFalse(win.price_alert_badge_visible)
+        self.assertIsNone(win._last_fit_signature)
+        self.assertEqual(calls, ["saved", ("refresh", True)])
+
     def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = STRATEGY_HEADERS

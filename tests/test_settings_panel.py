@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QComboBox, QDoubleSpinBox, QSpinBox
 from PySide6.QtCore import QPoint, Qt, QTime, QEvent
 
-from SettingPanel import SettingsDialog
+from SettingPanel import PRICE_ALERT_TREE_STATUS_ROLE, SettingsDialog
 
 
 class FakeWindow:
@@ -37,6 +37,7 @@ class FakeWindow:
         self.warning_text = ""
         self.market_amount_visible = False
         self.price_alert_badge_visible = True
+        self._latest_price_alert_states = {}
         self.code_names = {"sh000001": "上证指数"}
         self.lookup_names = {}
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
@@ -247,8 +248,8 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg.tabs.setCurrentIndex(2)
 
-        self.assertGreaterEqual(dlg.width(), 840)
-        self.assertLessEqual(dlg.width(), 900)
+        self.assertGreaterEqual(dlg.width(), 600)
+        self.assertLessEqual(dlg.width(), 660)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertLessEqual(dlg.list_strategy_templates.width(), 170)
         self.assertTrue(dlg.btn_template_new.isHidden())
@@ -411,12 +412,12 @@ class SettingsPanelTests(unittest.TestCase):
         code_item = dlg.tree_codes.topLevelItem(0).child(0)
         dlg.tree_codes.setCurrentItem(code_item)
 
-        self.assertTrue(code_item.icon(0).isNull())
+        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "")
         dlg._add_price_alert()
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertTrue(win.price_alerts[0]["enabled"])
-        self.assertFalse(code_item.icon(0).isNull())
+        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "configured")
 
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.spin_price_alert_price.setValue(1.234)
@@ -430,7 +431,20 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])
-        self.assertTrue(code_item.icon(0).isNull())
+        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "")
+        dlg.close()
+
+    def test_price_alert_tree_badge_uses_triggered_state(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.price_alerts = [{"enabled": True, "code": "sh603259", "direction": "below", "price": 145.0, "message": ""}]
+        win._latest_price_alert_states = {"sh603259": [{"triggered": True}]}
+        dlg = SettingsDialog(win, None)
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+
+        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "triggered")
         dlg.close()
 
     def test_strategy_page_edits_positions_and_rules(self):

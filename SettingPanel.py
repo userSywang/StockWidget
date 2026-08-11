@@ -3,14 +3,14 @@ import os, re
 from datetime import datetime
 from functools import partial
 
-from PySide6.QtCore import Qt, QSize, QTime, QTimer, QEvent
-from PySide6.QtGui import QColor, QFontDatabase, QIcon, QKeySequence, QPainter, QPen, QPixmap
+from PySide6.QtCore import Qt, QSize, QTime, QTimer, QEvent, QRect
+from PySide6.QtGui import QColor, QFontDatabase, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton, QTimeEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QStyledItemDelegate
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -32,6 +32,33 @@ from StockLogic import (
     strategy_stop_price,
 )
 
+PRICE_ALERT_TREE_STATUS_ROLE = Qt.UserRole + 3
+
+
+class PriceAlertTreeDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        status = index.data(PRICE_ALERT_TREE_STATUS_ROLE)
+        if status not in ("configured", "triggered"):
+            return
+        size = max(10, min(14, option.rect.height() - 4))
+        rect = QRect(option.rect.left() + 2, option.rect.top() + (option.rect.height() - size) // 2, size, size)
+        color = QColor("#f0c36a") if status == "triggered" else option.palette.text().color()
+        if status != "triggered":
+            color.setAlpha(130)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(QPen(color, 1.2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(max(7, font.pointSize() - 1))
+        painter.setFont(font)
+        painter.setPen(color)
+        painter.drawText(rect, Qt.AlignCenter, "!")
+        painter.restore()
+
 class SettingsDialog(QDialog):
     def __init__(self, win: FloatLabel, parent: QWidget, app=None):
         super().__init__(parent)
@@ -49,7 +76,7 @@ class SettingsDialog(QDialog):
         self.tab_sizes = {
             0: QSize(430, 620),
             1: QSize(560, 560),
-            2: QSize(860, 700),
+            2: QSize(620, 700),
             3: QSize(360, 350),
             4: QSize(300, 220),
             5: QSize(520, 240),
@@ -71,6 +98,9 @@ class SettingsDialog(QDialog):
         self.tree_codes.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.EditKeyPressed)
         self.tree_codes.setMinimumWidth(300)
         self.tree_codes.setMinimumHeight(250)
+        self.tree_codes.setIndentation(18)
+        self.tree_codes.setStyleSheet("QTreeView::indicator { margin-left: 16px; }")
+        self.tree_codes.setItemDelegate(PriceAlertTreeDelegate(self.tree_codes))
         self._load_code_tree()
         # 1.2 操作按钮
         btn_col = QVBoxLayout()
@@ -506,16 +536,16 @@ class SettingsDialog(QDialog):
         self.chk_strategy_enabled = QCheckBox("启用策略提醒")
         strategy_left.addWidget(self.chk_strategy_enabled)
         self.list_strategy_positions = QListWidget()
-        self.list_strategy_positions.setMinimumSize(340, 100)
+        self.list_strategy_positions.setMinimumSize(260, 100)
         strategy_left.addWidget(self.list_strategy_positions)
         strategy_btns = QHBoxLayout()
         strategy_btns.setSpacing(6)
-        self.btn_strategy_add = QPushButton("添加持仓")
-        self.btn_strategy_del = QPushButton("删除持仓")
-        self.btn_strategy_save = QPushButton("保存当前持仓")
-        self.btn_strategy_add.setFixedWidth(90)
-        self.btn_strategy_del.setFixedWidth(90)
-        self.btn_strategy_save.setFixedWidth(110)
+        self.btn_strategy_add = QPushButton("添加")
+        self.btn_strategy_del = QPushButton("删除")
+        self.btn_strategy_save = QPushButton("保存持仓")
+        self.btn_strategy_add.setFixedWidth(64)
+        self.btn_strategy_del.setFixedWidth(64)
+        self.btn_strategy_save.setFixedWidth(82)
         strategy_btns.addWidget(self.btn_strategy_add)
         strategy_btns.addWidget(self.btn_strategy_del)
         strategy_btns.addWidget(self.btn_strategy_save)
@@ -540,11 +570,11 @@ class SettingsDialog(QDialog):
         self.spin_strategy_position_pct.setFixedWidth(92)
         self.edit_strategy_note = QLineEdit()
         self.cmb_strategy_profile = QComboBox()
-        self.cmb_strategy_profile.setMinimumWidth(150)
+        self.cmb_strategy_profile.setMinimumWidth(120)
         self.btn_strategy_profile_clone = QPushButton("复制规则组")
         self.btn_strategy_profile_clone.setFixedWidth(90)
-        self.edit_strategy_code.setFixedWidth(126)
-        self.edit_strategy_buy_date.setFixedWidth(126)
+        self.edit_strategy_code.setFixedWidth(112)
+        self.edit_strategy_buy_date.setFixedWidth(112)
         form_strategy_position.addWidget(QLabel("代码："), 0, 0)
         form_strategy_position.addWidget(self.edit_strategy_code, 0, 1)
         form_strategy_position.addWidget(QLabel("买入价："), 0, 2)
@@ -1392,35 +1422,19 @@ class SettingsDialog(QDialog):
                 codes.add(code)
         return codes
 
-    def _price_alert_icon(self):
-        icon = getattr(self, "_price_alert_tree_icon", None)
-        if icon is not None:
-            return icon
-        size = 14
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setBrush(QColor("#fef3c7"))
-        painter.setPen(QPen(QColor("#d97706"), 1))
-        painter.drawEllipse(1, 1, size - 2, size - 2)
-        font = painter.font()
-        font.setBold(True)
-        font.setPointSize(8)
-        painter.setFont(font)
-        painter.setPen(QColor("#b45309"))
-        painter.drawText(pixmap.rect(), Qt.AlignCenter, "!")
-        painter.end()
-        self._price_alert_tree_icon = QIcon(pixmap)
-        return self._price_alert_tree_icon
+    def _price_alert_status_for_code(self, code):
+        if not code or code not in self._price_alert_codes():
+            return ""
+        states = getattr(self.win, "_latest_price_alert_states", {})
+        for alert in (states or {}).get(code, []):
+            if isinstance(alert, dict) and alert.get("triggered"):
+                return "triggered"
+        return "configured"
 
     def _apply_price_alert_icon(self, item, code):
         if item is None:
             return
-        if code and code in self._price_alert_codes():
-            item.setIcon(0, self._price_alert_icon())
-        else:
-            item.setIcon(0, QIcon())
+        item.setData(0, PRICE_ALERT_TREE_STATUS_ROLE, self._price_alert_status_for_code(code))
 
     def _refresh_price_alert_icons(self):
         if not hasattr(self, "tree_codes"):
