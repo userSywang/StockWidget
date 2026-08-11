@@ -50,7 +50,7 @@ class SettingsDialog(QDialog):
             1: QSize(440, 420),
             2: QSize(520, 240),
             3: QSize(500, 520),
-            4: QSize(760, 660),
+            4: QSize(980, 720),
             5: QSize(360, 350),
             6: QSize(300, 220),
         }
@@ -749,7 +749,7 @@ class SettingsDialog(QDialog):
         self.btn_template_new.setFixedWidth(90)
         template_list_layout.addWidget(self.btn_template_new)
         self.list_strategy_templates = QListWidget()
-        self.list_strategy_templates.setFixedWidth(200)
+        self.list_strategy_templates.setFixedWidth(160)
         template_list_layout.addWidget(self.list_strategy_templates)
         library_splitter.addWidget(g_template_list)
 
@@ -928,19 +928,22 @@ class SettingsDialog(QDialog):
         turtle_param_layout.addWidget(self.cmb_turtle_sizing, 2, 4, 1, 2)
         self.table_template_action_rules = QTableWidget(0, 7)
         self.table_template_action_rules.setHorizontalHeaderLabels(["启用", "指标", "比较", "参数", "计提单位", "动作", "附加"])
-        self.table_template_action_rules.setMinimumHeight(190)
+        self.table_template_action_rules.setMinimumHeight(240)
+        self.table_template_action_rules.setMinimumWidth(680)
+        self.table_template_action_rules.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table_template_action_rules.verticalHeader().setVisible(False)
         self.table_template_action_rules.setAlternatingRowColors(True)
         self.table_template_action_rules.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table_template_action_rules.setEditTriggers(QAbstractItemView.NoEditTriggers)
         header = self.table_template_action_rules.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.Stretch)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        self.table_template_action_rules.setColumnWidth(0, 54)
+        self.table_template_action_rules.setColumnWidth(1, 110)
+        self.table_template_action_rules.setColumnWidth(2, 110)
+        self.table_template_action_rules.setColumnWidth(3, 88)
+        self.table_template_action_rules.setColumnWidth(4, 110)
+        self.table_template_action_rules.setColumnWidth(5, 140)
+        self.table_template_action_rules.setColumnWidth(6, 80)
         self.list_template_action_rules = QListWidget()
         self.list_template_action_rules.setVisible(False)
         template_action_layout.addWidget(self.lbl_template_action_hint)
@@ -2838,6 +2841,7 @@ class SettingsDialog(QDialog):
             combo.addItem(label, data)
         idx = combo.findData(current_data)
         combo.setCurrentIndex(idx if idx >= 0 else 0)
+        combo.setMinimumWidth(86)
         return combo
 
     def _load_template_action_rules(self, action_rules):
@@ -3177,7 +3181,14 @@ class SettingsDialog(QDialog):
 
     def _apply_tab_size(self, index: int):
         size = self.tab_sizes.get(index, QSize(400, 400))
-        self.setFixedSize(size)
+        if index == 4:
+            self.setMinimumSize(size)
+            self.setMaximumSize(16777215, 16777215)
+            self.resize(size)
+        else:
+            self.setMinimumSize(size)
+            self.setMaximumSize(size)
+            self.resize(size)
 
     def pick_fg(self):
         c = QColorDialog.getColor(self.win.fg, self, "选择文字颜色")

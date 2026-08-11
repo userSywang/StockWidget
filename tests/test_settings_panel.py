@@ -233,6 +233,19 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.tree_codes.minimumHeight(), 250)
         dlg.close()
 
+    def test_strategy_library_rule_table_has_enough_display_area(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.tabs.setCurrentIndex(4)
+
+        self.assertGreaterEqual(dlg.width(), 980)
+        self.assertGreater(dlg.maximumWidth(), dlg.width())
+        self.assertLessEqual(dlg.list_strategy_templates.width(), 170)
+        self.assertGreaterEqual(dlg.table_template_action_rules.minimumWidth(), 680)
+        self.assertGreaterEqual(dlg.table_template_action_rules.minimumHeight(), 240)
+        dlg.close()
+
     def test_display_data_page_includes_ma_and_strategy_columns(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
