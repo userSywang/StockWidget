@@ -111,7 +111,7 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.tree_codes.setCurrentItem(code_item)
         dlg._open_price_alert_for_current_code()
 
-        self.assertEqual(dlg.tabs.currentIndex(), 3)
+        self.assertEqual(dlg.tabs.currentIndex(), 0)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertEqual(dlg.list_price_alerts.currentRow(), 0)
         self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
@@ -130,7 +130,7 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.tree_codes.setCurrentItem(code_item)
         dlg._open_strategy_for_current_code()
 
-        self.assertEqual(dlg.tabs.currentIndex(), 4)
+        self.assertEqual(dlg.tabs.currentIndex(), 2)
         self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh603259")
         self.assertEqual(dlg.list_strategy_positions.currentRow(), 0)
         self.assertEqual(dlg.edit_strategy_code.text(), "sh603259")
@@ -167,7 +167,7 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertEqual(dlg.btn_code_to_alert.text(), "设提醒")
         self.assertEqual(dlg.btn_code_to_strategy.text(), "设策略")
-        self.assertTrue(dlg.btn_code_to_alert.isEnabled())
+        self.assertTrue(dlg.btn_code_to_alert.isHidden())
         self.assertTrue(dlg.btn_code_to_strategy.isEnabled())
         dlg.close()
 
@@ -213,7 +213,6 @@ class SettingsPanelTests(unittest.TestCase):
             dlg.btn_del,
             dlg.btn_up,
             dlg.btn_dn,
-            dlg.btn_code_to_alert,
             dlg.btn_code_to_strategy,
         ]
         combos = [dlg.cmb_code_holding, dlg.cmb_code_cycle, dlg.cmb_code_priority]
@@ -237,7 +236,7 @@ class SettingsPanelTests(unittest.TestCase):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
 
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
 
         self.assertGreaterEqual(dlg.width(), 980)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
@@ -349,50 +348,54 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(len(win.alert_rules[0]["targets"]), 1)
         dlg.close()
 
-    def test_alert_target_buttons_are_anchored_beside_target_list(self):
+    def test_price_alert_editor_is_embedded_in_self_selected_page(self):
         win = FakeWindow()
-        win.alert_rules = [{
-            "enabled": True,
-            "name": "测试提醒",
-            "display_mode": "always",
-            "targets": [{"code": "sh000001", "op": ">", "pct": 0.0, "volume": False}],
-            "message": "测试",
-        }]
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(3)
+        dlg.tabs.setCurrentIndex(0)
         dlg.show()
         self.app.processEvents()
 
-        target_rect = dlg.list_alert_targets.rect().translated(dlg.list_alert_targets.mapToGlobal(QPoint(0, 0)))
-        add_rect = dlg.btn_target_add.rect().translated(dlg.btn_target_add.mapToGlobal(QPoint(0, 0)))
-        del_rect = dlg.btn_target_del.rect().translated(dlg.btn_target_del.mapToGlobal(QPoint(0, 0)))
+        price_rect = dlg.list_price_alerts.rect().translated(dlg.list_price_alerts.mapToGlobal(QPoint(0, 0)))
+        add_rect = dlg.btn_price_alert_add.rect().translated(dlg.btn_price_alert_add.mapToGlobal(QPoint(0, 0)))
+        del_rect = dlg.btn_price_alert_del.rect().translated(dlg.btn_price_alert_del.mapToGlobal(QPoint(0, 0)))
 
-        self.assertGreaterEqual(add_rect.left(), target_rect.right())
-        self.assertGreaterEqual(del_rect.left(), target_rect.right())
-        self.assertFalse(target_rect.intersects(add_rect))
-        self.assertFalse(target_rect.intersects(del_rect))
+        self.assertEqual(dlg.tabs.currentIndex(), 0)
+        self.assertTrue(dlg.btn_code_to_alert.isHidden())
+        self.assertGreaterEqual(add_rect.top(), price_rect.bottom() - 2)
+        self.assertGreaterEqual(del_rect.top(), price_rect.bottom() - 2)
+        self.assertFalse(price_rect.intersects(add_rect))
+        self.assertFalse(price_rect.intersects(del_rect))
         dlg.close()
 
-    def test_alert_page_has_expanded_editing_area(self):
+    def test_self_selected_page_contains_price_alert_editor_and_no_alert_tab(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
 
-        dlg.tabs.setCurrentIndex(3)
+        tab_names = [dlg.tabs.tabText(i) for i in range(dlg.tabs.count())]
 
-        self.assertGreaterEqual(dlg.width(), 720)
+        self.assertNotIn("提醒", tab_names)
+        self.assertEqual(tab_names[-1], "数据源")
+        self.assertGreaterEqual(dlg.tab_sizes[0].width(), 720)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
-        self.assertGreaterEqual(dlg.list_alerts.width(), 185)
-        self.assertGreaterEqual(dlg.list_alert_targets.minimumHeight(), 112)
         self.assertGreaterEqual(dlg.list_price_alerts.width(), 220)
         self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 300)
         dlg.close()
 
     def test_price_alerts_can_be_added_edited_and_deleted(self):
         win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
         dlg = SettingsDialog(win, None)
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
 
         dlg._add_price_alert()
         self.assertEqual(dlg.list_price_alerts.count(), 1)
+        self.assertEqual(win.price_alerts[0]["code"], "sh603259")
 
         dlg.edit_price_alert_code.setText("512000")
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
@@ -416,7 +419,7 @@ class SettingsPanelTests(unittest.TestCase):
         win.checked_codes = ["sh000001", "sh512000"]
         dlg = SettingsDialog(win, None)
 
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg._add_strategy_position()
         self.assertEqual(dlg.list_strategy_positions.count(), 1)
 
@@ -611,7 +614,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
 
         dlg._add_strategy_position()
         dlg.spin_strategy_cost.setValue(100.0)
@@ -648,7 +651,7 @@ class SettingsPanelTests(unittest.TestCase):
             }],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
 
         dlg.spin_strategy_loss.setValue(5.0)
@@ -686,7 +689,7 @@ class SettingsPanelTests(unittest.TestCase):
             }],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
 
         dlg._on_strategy_params_edit()
@@ -822,7 +825,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [{"code": "sh512000", "cost_price": 1.0}],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
         dlg._on_strategy_params_edit()
         dlg.show()
@@ -853,7 +856,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [{"code": "sh603259", "cost_price": 100.0}],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
         dlg._on_strategy_params_edit()
         dlg.show()
@@ -871,7 +874,7 @@ class SettingsPanelTests(unittest.TestCase):
     def test_strategy_notify_webhook_controls_are_visible_and_not_overlapped(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.show()
         self.app.processEvents()
 
@@ -897,7 +900,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [{"code": "sh603259", "cost_price": 100.0}],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
         dlg.show()
         self.app.processEvents()
@@ -919,7 +922,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [{"code": "sh603259", "cost_price": 149.448, "buy_date": "2026-08-05", "position_pct": 33.0}],
         }
         dlg = SettingsDialog(win, None)
-        dlg.tabs.setCurrentIndex(4)
+        dlg.tabs.setCurrentIndex(2)
         dlg.list_strategy_positions.setCurrentRow(0)
         dlg.show()
         self.app.processEvents()

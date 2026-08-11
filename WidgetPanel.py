@@ -1667,6 +1667,56 @@ class FloatLabel(QWidget):
         if history_changed:
             self._notify_change()
 
+    def _price_alert_push_text(self, code, alert):
+        name = str(alert.get("name") or code or "").strip()
+        direction = str(alert.get("direction") or "")
+        direction_text = {
+            "above": "高于/等于",
+            "below": "低于/等于",
+            "below_ma5": "低于5日线",
+        }.get(direction, direction or "-")
+        lines = [
+            f"## {name}价格提醒",
+            f">标的：{name}",
+            f">代码：{code}",
+            f">当前价：{float(alert.get('current_price', 0.0)):.3f}",
+            f">条件：{direction_text} {float(alert.get('price', 0.0)):.3f}",
+        ]
+        message = str(alert.get("message") or "").strip()
+        if message:
+            lines.append(f">提示：{message}")
+        return "\n".join(lines)
+
+    def _send_price_alert_pushes(self, price_alerts_by_code):
+        notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
+        if not notifications.get("remote_push") or not notifications.get("webhook_url"):
+            return False
+        sent_keys = getattr(self, "_price_alert_push_sent_keys", set())
+        sent_at = getattr(self, "_price_alert_push_sent_at", {})
+        cooldown_seconds = int(notifications.get("push_cooldown_minutes", 30)) * 60
+        now_provider = getattr(self, "_now", None)
+        now_dt = now_provider() if callable(now_provider) else datetime.now()
+        now_ts = now_dt.timestamp() if hasattr(now_dt, "timestamp") else time.time()
+        pushed_any = False
+        for code, alerts in (price_alerts_by_code or {}).items():
+            for alert in alerts or []:
+                if not isinstance(alert, dict) or not alert.get("triggered"):
+                    continue
+                key = f"{code}|{alert.get('direction')}|{float(alert.get('price', 0.0)):.4f}|{alert.get('message', '')}"
+                last_ts = float(sent_at.get(key, 0.0) or 0.0)
+                if key in sent_keys and now_ts - last_ts < cooldown_seconds:
+                    continue
+                try:
+                    if self._send_strategy_push_text(self._price_alert_push_text(code, alert)):
+                        sent_keys.add(key)
+                        sent_at[key] = now_ts
+                        pushed_any = True
+                except Exception:
+                    pass
+        self._price_alert_push_sent_keys = sent_keys
+        self._price_alert_push_sent_at = sent_at
+        return pushed_any
+
     def _record_strategy_alert_history(self, state, now=None):
         now = now or datetime.now()
         time_text = now.strftime("%Y-%m-%d %H:%M") if hasattr(now, "strftime") else str(now)
@@ -1968,8 +2018,9 @@ class FloatLabel(QWidget):
 
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
-        price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
+        price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
+        price_alert_pushed = self._send_price_alert_pushes(price_alert_states)
         config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
         if config.get("enabled"):
             updated_config, strategy_changed = update_strategy_position_state(self.strategy_alert_config, quote_by_code)
@@ -1992,7 +2043,7 @@ class FloatLabel(QWidget):
             if name and self.code_names.get(code) != name:
                 self.code_names[code] = name
                 learned_names = True
-        if learned_names or strategy_changed or daily_summary_sent:
+        if learned_names or strategy_changed or daily_summary_sent or price_alert_pushed:
             self._notify_change()
 
         try:

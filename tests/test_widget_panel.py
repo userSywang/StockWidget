@@ -948,6 +948,50 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
 
+    def test_price_alert_pushes_triggered_alerts_to_webhook(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._price_alert_push_sent_keys = set()
+        win._price_alert_push_sent_at = {}
+        win._now = lambda: datetime(2026, 8, 10, 10, 0)
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+                "push_cooldown_minutes": 30,
+            },
+        }
+        alerts = {
+            "sh603259": [{
+                "triggered": True,
+                "name": "药明康德",
+                "direction": "below",
+                "price": 145.0,
+                "current_price": 144.5,
+                "message": "跌破提醒",
+            }]
+        }
+
+        pushed = FloatLabel._send_price_alert_pushes(win, alerts)
+        pushed_again = FloatLabel._send_price_alert_pushes(win, alerts)
+
+        self.assertTrue(pushed)
+        self.assertFalse(pushed_again)
+        self.assertEqual(len(win._http.posts), 1)
+        content = win._http.posts[0][1]["markdown"]["content"]
+        self.assertIn("药明康德价格提醒", content)
+        self.assertIn("标的：药明康德", content)
+        self.assertIn("当前价：144.500", content)
+        self.assertIn("条件：低于/等于 145.000", content)
+
     def test_strategy_pushes_respects_cooldown_and_records_history(self):
         class FakeHttp:
             def __init__(self):

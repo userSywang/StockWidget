@@ -47,13 +47,12 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         self.tab_sizes = {
-            0: QSize(460, 420),
-            1: QSize(440, 420),
-            2: QSize(520, 240),
-            3: QSize(720, 620),
-            4: QSize(980, 720),
-            5: QSize(360, 350),
-            6: QSize(300, 220),
+            0: QSize(720, 620),
+            1: QSize(560, 560),
+            2: QSize(980, 720),
+            3: QSize(360, 350),
+            4: QSize(300, 220),
+            5: QSize(520, 240),
         }
         self._apply_tab_size(0)
 
@@ -88,6 +87,7 @@ class SettingsDialog(QDialog):
         self.btn_dn.setFixedWidth(60)
         self.btn_code_to_alert = QPushButton("设提醒")
         self.btn_code_to_alert.setFixedWidth(60)
+        self.btn_code_to_alert.setVisible(False)
         self.btn_code_to_alert.setToolTip("用当前选中的自选股创建或打开价格提醒")
         self.btn_code_to_strategy = QPushButton("设策略")
         self.btn_code_to_strategy.setFixedWidth(60)
@@ -95,7 +95,6 @@ class SettingsDialog(QDialog):
         for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
             btn_col.addWidget(b)
         btn_col.addSpacing(8)
-        btn_col.addWidget(self.btn_code_to_alert)
         btn_col.addWidget(self.btn_code_to_strategy)
         btn_col.addStretch(1)
 
@@ -308,7 +307,7 @@ class SettingsDialog(QDialog):
         source_settings.addStretch(1)
         self._sync_data_source_enabled()
 
-        self.tabs.addTab(tab_source, "数据源")
+        self.tab_source = tab_source
 
         # ---- 第三页：提醒 ----
         tab_alert = QWidget()
@@ -438,7 +437,7 @@ class SettingsDialog(QDialog):
         form_price.addWidget(QLabel("提示："), 1, 0)
         form_price.addWidget(self.edit_price_alert_message, 1, 1, 1, 4)
         lay_price_alert.addLayout(form_price, 1)
-        alert_settings.addWidget(g_price_alert)
+        code_settings.addWidget(g_price_alert)
 
         g_warning = QGroupBox("警醒标语")
         g_warning.setContentsMargins(3,12,3,6)
@@ -448,7 +447,7 @@ class SettingsDialog(QDialog):
         self.edit_warning_text = QLineEdit(getattr(self.win, "warning_text", DEFAULT_WARNING_TEXT))
         lay_warning.addWidget(self.chk_warning_visible, 0, 0)
         lay_warning.addWidget(self.edit_warning_text, 0, 1)
-        alert_settings.addWidget(g_warning)
+        data_settings.addWidget(g_warning)
 
         g_market = QGroupBox("市场概览")
         g_market.setContentsMargins(3,12,3,6)
@@ -456,7 +455,7 @@ class SettingsDialog(QDialog):
         self.chk_market_amount_visible = QCheckBox("显示沪深成交额估算")
         self.chk_market_amount_visible.setChecked(bool(getattr(self.win, "market_amount_visible", False)))
         lay_market.addWidget(self.chk_market_amount_visible, 0, 0)
-        alert_settings.addWidget(g_market)
+        data_settings.addWidget(g_market)
 
         self._loading_alert_editor = False
         self._loading_target_editor = False
@@ -464,7 +463,7 @@ class SettingsDialog(QDialog):
         self._load_alert_list()
         self._load_price_alert_list()
         self._refresh_code_action_buttons()
-        self.tabs.addTab(tab_alert, "提醒")
+        self.tab_alert_legacy = tab_alert
 
         # ---- 第四页：策略 ----
         tab_strategy = QWidget()
@@ -1190,6 +1189,7 @@ class SettingsDialog(QDialog):
         other_settings.addWidget(g_icon)
 
         self.tabs.addTab(tab_3, "常规")
+        self.tabs.addTab(self.tab_source, "数据源")
         self._install_wheel_guards()
 
         # ---- 连接 ----
@@ -1516,6 +1516,7 @@ class SettingsDialog(QDialog):
 
     def _on_code_tree_selection_changed(self, *_args):
         self._load_code_tag_editor()
+        self._select_price_alert_for_code(self._current_code_from_tree())
         self._refresh_code_action_buttons()
 
     def _refresh_code_action_buttons(self):
@@ -1585,10 +1586,32 @@ class SettingsDialog(QDialog):
             alerts.append(alert)
             self.win.set_price_alerts(alerts)
             target_row = len(alerts) - 1
-        self.tabs.setCurrentIndex(3)
         self._load_price_alert_list(target_row)
         self.edit_price_alert_code.setFocus(Qt.OtherFocusReason)
         self.edit_price_alert_code.selectAll()
+
+    def _select_price_alert_for_code(self, code):
+        if not code or not hasattr(self, "list_price_alerts"):
+            return
+        alerts = list(getattr(self, "_price_alerts", normalize_price_alerts(getattr(self.win, "price_alerts", []))))
+        for row, alert in enumerate(alerts):
+            if normalize_price_alert(alert).get("code") == code:
+                self.list_price_alerts.setCurrentRow(row)
+                return
+        self.list_price_alerts.setCurrentRow(-1)
+        self._loading_price_alert_editor = True
+        try:
+            alert = default_price_alert()
+            alert["code"] = code
+            self.chk_price_alert_enabled.setChecked(bool(alert.get("enabled", True)))
+            self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
+            idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
+            self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
+            self.spin_price_alert_price.setValue(float(alert.get("price", 0.0)))
+            self.edit_price_alert_message.setText(alert.get("message", ""))
+            self._sync_price_alert_direction_controls()
+        finally:
+            self._loading_price_alert_editor = False
 
     def _open_strategy_for_current_code(self):
         code = self._current_code_from_tree()
@@ -1614,7 +1637,7 @@ class SettingsDialog(QDialog):
             self.win.set_strategy_alert_config(config)
             self._strategy_config = config
             target_row = len(config["positions"]) - 1
-        self.tabs.setCurrentIndex(4)
+        self.tabs.setCurrentIndex(2)
         if hasattr(self, "strategy_subtabs"):
             self.strategy_subtabs.setCurrentIndex(0)
         self._load_strategy_config(target_row)
@@ -1947,7 +1970,10 @@ class SettingsDialog(QDialog):
     def _add_price_alert(self):
         alerts = list(getattr(self, "_price_alerts", normalize_price_alerts([])))
         alert = default_price_alert()
-        if getattr(self.win, "codes", None):
+        current_code = self._current_code_from_tree()
+        if current_code:
+            alert["code"] = current_code
+        elif getattr(self.win, "codes", None):
             alert["code"] = self.win.codes[0]
         alerts.append(alert)
         self.win.set_price_alerts(alerts)
@@ -3185,7 +3211,7 @@ class SettingsDialog(QDialog):
 
     def _apply_tab_size(self, index: int):
         size = self.tab_sizes.get(index, QSize(400, 400))
-        if index in (3, 4):
+        if index in (0, 1, 2):
             self.setMinimumSize(size)
             self.setMaximumSize(16777215, 16777215)
             self.resize(size)

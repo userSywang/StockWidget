@@ -446,6 +446,7 @@ def evaluate_price_alerts(alerts, quotes, daily_by_code=None):
         )
         triggered_by_code.setdefault(alert["code"], []).append({
             "triggered": triggered,
+            "name": name,
             "direction": alert["direction"],
             "price": threshold_price,
             "current_price": current_price,
