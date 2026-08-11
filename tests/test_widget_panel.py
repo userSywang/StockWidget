@@ -1431,6 +1431,40 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_project_columns_keeps_resized_window_inside_screen(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh000001", "sh515880", "sh603259"]}],
+            "checked_codes": ["sh000001", "sh515880", "sh603259"],
+            "name_visible": True,
+            "price_visible": True,
+            "change_pct_visible": True,
+            "strategy_profit_visible": True,
+            "strategy_stop_visible": True,
+            "strategy_status_visible": True,
+            "pos": {"x": 10000, "y": 10000},
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            screen_rect = self.app.primaryScreen().availableGeometry()
+            full_rows = [
+                ["sh000001", "上证指数", "3934.09", "+0.00", "-0.82%", "-", "-", "-", "-", "-", "3934.09", "", "-", "-", "-", "-", "-", "-"],
+                ["sh515880", "通信ETF国泰", "0.646", "+0.00", "+0.31%", "-", "-", "-", "-", "-", "0.646", "", "-", "-", "-", "-0.6%", "0.58", "个股破5日线清仓 | 实时08-11"],
+                ["sh603259", "药明康德", "160.21", "+0.00", "-0.70%", "-", "-", "-", "-", "-", "160.21", "", "-", "-", "-", "-1.8%", "158.28", "未触发 | 实时08-11"],
+            ]
+
+            win._project_columns(full_rows, [{}, {}, {}])
+
+            self.assertLessEqual(win.x() + win.width(), screen_rect.right())
+            self.assertLessEqual(win.y() + win.height(), screen_rect.bottom())
+            self.assertGreaterEqual(win.x(), screen_rect.left())
+            self.assertGreaterEqual(win.y(), screen_rect.top())
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
 
 if __name__ == "__main__":
     unittest.main()

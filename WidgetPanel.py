@@ -579,6 +579,23 @@ class FloatLabel(QWidget):
         self.table.setFixedSize(max(1, total_w), max(1, total_h))
         self.panel.adjustSize()
         self.resize(self.panel.size())
+        self._keep_window_inside_screen()
+
+    def _keep_window_inside_screen(self):
+        try:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return
+            rect = screen.availableGeometry()
+            max_x = max(rect.left(), rect.right() - self.width())
+            max_y = max(rect.top(), rect.bottom() - self.height())
+            x = max(rect.left(), min(self.x(), max_x))
+            y = max(rect.top(), min(self.y(), max_y))
+            if x != self.x() or y != self.y():
+                self.move(x, y)
+                self._notify_change()
+        except Exception:
+            pass
 
     def _defer_fit(self):
         if getattr(self, "_fit_pending", False):
