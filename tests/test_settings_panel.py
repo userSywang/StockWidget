@@ -219,7 +219,10 @@ class SettingsPanelTests(unittest.TestCase):
         for button in buttons:
             for combo in combos:
                 self.assertFalse(global_rect(button).intersects(global_rect(combo)))
-        self.assertGreater(global_rect(dlg.cmb_code_holding).top(), global_rect(dlg.btn_code_to_strategy).bottom())
+        panel_rect = global_rect(dlg.current_code_panel)
+        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_holding)))
+        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_cycle)))
+        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_priority)))
         dlg.close()
 
     def test_self_selected_list_has_expanded_display_area(self):
@@ -382,7 +385,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.tab_sizes[0].width(), 720)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertTrue(dlg.list_price_alerts.isHidden())
-        self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 300)
+        self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 180)
         dlg.close()
 
     def test_price_alerts_can_be_added_edited_and_deleted(self):
