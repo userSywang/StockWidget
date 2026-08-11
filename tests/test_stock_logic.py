@@ -229,6 +229,34 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 3.0)
         self.assertEqual(rules["turtle_pyramid_0_5atr"]["action"]["max_units"], 3)
 
+    def test_turtle_template_preserves_structured_action_rule_parameters(self):
+        config = normalize_strategy_alert_config({
+            "strategy_profiles": [{
+                "id": "turtle:custom",
+                "name": "自定义海龟",
+                "strategy_type": "turtle",
+                "turtle_params": {"entry_days": 20},
+                "action_rules": [{
+                    "id": "turtle_entry_20d",
+                    "name": "突破提醒",
+                    "enabled": True,
+                    "condition": {
+                        "metric": "stock_price",
+                        "operator": ">",
+                        "threshold": {"type": "donchian_high", "period": 20},
+                    },
+                    "parameter": {"value": 55, "unit": "day_high"},
+                    "action": {"type": "entry_signal"},
+                }],
+            }],
+        })
+
+        profile = next(item for item in config["strategy_profiles"] if item["id"] == "turtle:custom")
+        rule = profile["action_rules"][0]
+
+        self.assertEqual(rule["parameter"], {"value": 55, "unit": "day_high"})
+        self.assertEqual(rule["condition"]["threshold"]["period"], 55)
+
     def test_strategy_alert_config_normalizes_push_cooldown(self):
         config = normalize_strategy_alert_config({
             "notifications": {"push_cooldown_minutes": "5"},

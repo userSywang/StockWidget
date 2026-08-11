@@ -9,14 +9,14 @@ from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton, QTimeEdit
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton, QTimeEdit,
+    QTableWidget, QTableWidgetItem, QHeaderView
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     default_alert_rule,
     default_price_alert,
-    default_turtle_action_rules,
     normalize_alert_rule,
     normalize_alert_rules,
     normalize_alert_target,
@@ -24,6 +24,7 @@ from StockLogic import (
     normalize_codes,
     normalize_price_alert,
     normalize_price_alerts,
+    normalize_strategy_action_rule,
     normalize_strategy_alert_config,
     normalize_strategy_position,
     strategy_rules_for_position,
@@ -49,7 +50,7 @@ class SettingsDialog(QDialog):
             1: QSize(440, 420),
             2: QSize(520, 240),
             3: QSize(500, 520),
-            4: QSize(560, 660),
+            4: QSize(760, 660),
             5: QSize(360, 350),
             6: QSize(300, 220),
         }
@@ -883,7 +884,7 @@ class SettingsDialog(QDialog):
         template_action_layout = QVBoxLayout(self.template_action_group)
         template_action_layout.setContentsMargins(6, 14, 6, 6)
         template_action_layout.setSpacing(4)
-        self.lbl_template_action_hint = QLabel("该模板使用动作规则展示，参数计算后续由策略引擎统一处理。")
+        self.lbl_template_action_hint = QLabel("每行都是可保存的结构化规则：指标 + 比较 + 参数 + 计提单位 + 动作。")
         self.lbl_template_action_hint.setStyleSheet("color: #666666;")
         turtle_param_layout = QGridLayout()
         turtle_param_layout.setHorizontalSpacing(6)
@@ -925,10 +926,31 @@ class SettingsDialog(QDialog):
         turtle_param_layout.addWidget(self.spin_turtle_max_units, 2, 1)
         turtle_param_layout.addWidget(QLabel("计提方式："), 2, 3)
         turtle_param_layout.addWidget(self.cmb_turtle_sizing, 2, 4, 1, 2)
+        self.table_template_action_rules = QTableWidget(0, 7)
+        self.table_template_action_rules.setHorizontalHeaderLabels(["启用", "指标", "比较", "参数", "计提单位", "动作", "附加"])
+        self.table_template_action_rules.setMinimumHeight(190)
+        self.table_template_action_rules.verticalHeader().setVisible(False)
+        self.table_template_action_rules.setAlternatingRowColors(True)
+        self.table_template_action_rules.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_template_action_rules.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        header = self.table_template_action_rules.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.Stretch)
         self.list_template_action_rules = QListWidget()
-        self.list_template_action_rules.setMinimumHeight(160)
+        self.list_template_action_rules.setVisible(False)
         template_action_layout.addWidget(self.lbl_template_action_hint)
         template_action_layout.addLayout(turtle_param_layout)
+        for i in range(turtle_param_layout.count()):
+            item = turtle_param_layout.itemAt(i)
+            widget = item.widget() if item else None
+            if widget is not None:
+                widget.setVisible(False)
+        template_action_layout.addWidget(self.table_template_action_rules)
         template_action_layout.addWidget(self.list_template_action_rules)
         self.template_action_group.setVisible(False)
         template_edit_layout.addWidget(self.template_action_group)
@@ -2716,9 +2738,10 @@ class SettingsDialog(QDialog):
         profile["name"] = self.edit_template_name.text().strip() or profile.get("name", "未命名")
         profile["desc"] = self.edit_template_desc.text().strip()
         if profile.get("strategy_type") == "turtle":
-            params = self._collect_turtle_params_from_editor()
+            action_rules = self._collect_template_action_rules_from_table()
+            params = self._turtle_params_from_action_rules(action_rules, profile.get("turtle_params", {}))
             profile["turtle_params"] = params
-            profile["action_rules"] = default_turtle_action_rules(params)
+            profile["action_rules"] = action_rules
         else:
             profile["rules"] = self._collect_template_rules_from_editor()
         self._strategy_config["strategy_profiles"] = profiles
@@ -2775,29 +2798,150 @@ class SettingsDialog(QDialog):
         self.spin_template_stale_days.setValue(int(rules.get("stale_position_days", 12)))
 
     def _format_template_action_rule(self, rule):
+        rule = normalize_strategy_action_rule(rule)
         condition = rule.get("condition") if isinstance(rule.get("condition"), dict) else {}
         threshold = condition.get("threshold") if isinstance(condition.get("threshold"), dict) else {}
         action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+        parameter = rule.get("parameter") if isinstance(rule.get("parameter"), dict) else {}
         name = str(rule.get("name") or rule.get("id") or "动作规则")
         action_type = str(action.get("type") or "-")
         threshold_type = str(threshold.get("type") or "")
-        if threshold_type == "donchian_high":
-            detail = f"{int(threshold.get('period', 0))}日新高"
-        elif threshold_type == "donchian_low":
-            detail = f"{int(threshold.get('period', 0))}日低点"
-        elif threshold_type == "atr_offset":
-            detail = f"{float(threshold.get('multiple', 0.0)):.1f}ATR"
-        else:
-            detail = threshold_type or "-"
-        return f"{name}  |  条件：{detail}  |  动作：{action_type}"
+        unit_labels = {
+            "percent": "%",
+            "price": "元",
+            "atr": "ATR",
+            "day_high": "日新高",
+            "day_low": "日低点",
+            "ma_days": "日线MA",
+            "days": "天",
+            "trend": "趋势",
+        }
+        action_labels = {
+            "entry_signal": "提醒观察/买入",
+            "clear_position": "提醒清仓",
+            "add_position": "提醒加仓",
+            "reduce_position": "提醒减仓",
+            "update_stop_line": "提醒止盈线变化",
+            "limit_position": "限制仓位",
+            "block_open": "禁止新开仓",
+        }
+        try:
+            value_text = f"{float(parameter.get('value', 0.0)):g}"
+        except Exception:
+            value_text = "0"
+        unit_text = unit_labels.get(parameter.get("unit"), parameter.get("unit") or threshold_type or "-")
+        return f"{name} | {condition.get('metric', '-')} {condition.get('operator', '-')} {value_text}{unit_text} -> {action_labels.get(action_type, action_type)}"
+
+    def _combo_with_data(self, pairs, current_data):
+        combo = QComboBox()
+        for label, data in pairs:
+            combo.addItem(label, data)
+        idx = combo.findData(current_data)
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        return combo
 
     def _load_template_action_rules(self, action_rules):
+        self._template_action_rules = [normalize_strategy_action_rule(rule) for rule in (action_rules or []) if isinstance(rule, dict)]
         self.list_template_action_rules.clear()
-        for rule in action_rules or []:
-            if isinstance(rule, dict) and rule.get("enabled", True):
+        for rule in self._template_action_rules:
+            if rule.get("enabled", True):
                 self.list_template_action_rules.addItem(QListWidgetItem(self._format_template_action_rule(rule)))
         if self.list_template_action_rules.count() == 0:
             self.list_template_action_rules.addItem(QListWidgetItem("暂无动作规则"))
+        self._load_template_action_rule_table(self._template_action_rules)
+
+    def _load_template_action_rule_table(self, action_rules):
+        self.table_template_action_rules.blockSignals(True)
+        self.table_template_action_rules.setRowCount(0)
+        metric_options = [
+            ("浮盈/浮亏", "profit_pct"),
+            ("最高浮盈", "peak_profit_pct"),
+            ("当前价", "stock_price"),
+            ("大盘价", "index_price"),
+            ("仓位", "position_pct"),
+            ("持仓天数", "holding_days"),
+            ("大盘趋势", "index_ma_trend"),
+        ]
+        operator_options = [("达到/大于等于", ">="), ("小于等于", "<="), ("大于", ">"), ("小于", "<"), ("等于", "is")]
+        unit_options = [
+            ("%", "percent"),
+            ("元", "price"),
+            ("ATR", "atr"),
+            ("日新高", "day_high"),
+            ("日低点", "day_low"),
+            ("日线MA", "ma_days"),
+            ("天", "days"),
+            ("趋势", "trend"),
+        ]
+        action_options = [
+            ("提醒观察/买入", "entry_signal"),
+            ("提醒清仓", "clear_position"),
+            ("提醒加仓", "add_position"),
+            ("提醒减仓", "reduce_position"),
+            ("提醒止盈线变化", "update_stop_line"),
+            ("限制仓位", "limit_position"),
+            ("禁止新开仓", "block_open"),
+        ]
+        for rule in action_rules:
+            row = self.table_template_action_rules.rowCount()
+            self.table_template_action_rules.insertRow(row)
+            chk = QCheckBox()
+            chk.setChecked(bool(rule.get("enabled", True)))
+            self.table_template_action_rules.setCellWidget(row, 0, chk)
+            condition = rule.get("condition") if isinstance(rule.get("condition"), dict) else {}
+            parameter = rule.get("parameter") if isinstance(rule.get("parameter"), dict) else {}
+            action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+            self.table_template_action_rules.setCellWidget(row, 1, self._combo_with_data(metric_options, condition.get("metric", "stock_price")))
+            self.table_template_action_rules.setCellWidget(row, 2, self._combo_with_data(operator_options, condition.get("operator", ">=")))
+            spin = QDoubleSpinBox()
+            spin.setRange(-100000.0, 100000.0)
+            spin.setDecimals(2)
+            spin.setFixedWidth(82)
+            try:
+                spin.setValue(float(parameter.get("value", 0.0)))
+            except Exception:
+                spin.setValue(0.0)
+            self.table_template_action_rules.setCellWidget(row, 3, spin)
+            self.table_template_action_rules.setCellWidget(row, 4, self._combo_with_data(unit_options, parameter.get("unit", "percent")))
+            self.table_template_action_rules.setCellWidget(row, 5, self._combo_with_data(action_options, action.get("type", "clear_position")))
+            extra = QSpinBox()
+            extra.setRange(0, 999)
+            extra.setFixedWidth(70)
+            extra.setToolTip("加仓规则使用最大份数，其他规则可留 0")
+            extra.setValue(int(action.get("max_units", 0) or 0))
+            self.table_template_action_rules.setCellWidget(row, 6, extra)
+            item = QTableWidgetItem(str(rule.get("id") or ""))
+            item.setData(Qt.UserRole, rule)
+            self.table_template_action_rules.setVerticalHeaderItem(row, item)
+        self.table_template_action_rules.blockSignals(False)
+
+    def _collect_template_action_rules_from_table(self):
+        result = []
+        for row in range(self.table_template_action_rules.rowCount()):
+            header = self.table_template_action_rules.verticalHeaderItem(row)
+            original = header.data(Qt.UserRole) if header is not None else {}
+            original = original if isinstance(original, dict) else {}
+            enabled = self.table_template_action_rules.cellWidget(row, 0).isChecked()
+            metric = self.table_template_action_rules.cellWidget(row, 1).currentData()
+            operator = self.table_template_action_rules.cellWidget(row, 2).currentData()
+            value = self.table_template_action_rules.cellWidget(row, 3).value()
+            unit = self.table_template_action_rules.cellWidget(row, 4).currentData()
+            action_type = self.table_template_action_rules.cellWidget(row, 5).currentData()
+            max_units = self.table_template_action_rules.cellWidget(row, 6).value()
+            rule = dict(original)
+            rule["enabled"] = enabled
+            old_condition = original.get("condition") if isinstance(original.get("condition"), dict) else {}
+            rule["condition"] = {"metric": metric, "operator": operator, "threshold": dict(old_condition.get("threshold") or {})}
+            rule["parameter"] = {"value": value, "unit": unit}
+            action = dict(original.get("action") or {})
+            action["type"] = action_type
+            if action_type == "add_position":
+                action["max_units"] = max_units
+            else:
+                action.pop("max_units", None)
+            rule["action"] = action
+            result.append(normalize_strategy_action_rule(rule))
+        return result
 
     def _load_turtle_params_to_editor(self, params):
         params = params if isinstance(params, dict) else {}
@@ -2819,6 +2963,25 @@ class SettingsDialog(QDialog):
             "max_units": self.spin_turtle_max_units.value(),
             "position_sizing": self.cmb_turtle_sizing.currentData() or "atr_risk",
         }
+
+    def _turtle_params_from_action_rules(self, action_rules, fallback=None):
+        params = dict(fallback or {})
+        for rule in action_rules or []:
+            parameter = rule.get("parameter") if isinstance(rule.get("parameter"), dict) else {}
+            action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+            value = parameter.get("value", 0)
+            rule_id = rule.get("id")
+            if rule_id == "turtle_entry_20d":
+                params["entry_days"] = int(value)
+            elif rule_id == "turtle_exit_10d":
+                params["exit_days"] = int(value)
+            elif rule_id == "turtle_atr_stop":
+                params["atr_stop_multiple"] = float(value)
+            elif rule_id == "turtle_pyramid_0_5atr":
+                params["pyramid_atr_multiple"] = float(value)
+                params["max_units"] = int(action.get("max_units", params.get("max_units", 4)) or 4)
+        params.setdefault("position_sizing", self.cmb_turtle_sizing.currentData() or "atr_risk")
+        return params
 
     def _on_template_copy(self):
         row = self.list_strategy_templates.currentRow()

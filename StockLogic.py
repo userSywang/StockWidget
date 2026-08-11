@@ -40,6 +40,27 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
 
 STRATEGY_ACTION_RULE_SCHEMA_VERSION = 1
 
+ACTION_RULE_UNITS = {
+    "percent": "%",
+    "price": "元",
+    "atr": "ATR",
+    "day_high": "日新高",
+    "day_low": "日低点",
+    "ma_days": "日线MA",
+    "days": "天",
+    "trend": "趋势",
+}
+
+ACTION_RULE_ACTIONS = {
+    "entry_signal": "提醒观察/买入",
+    "clear_position": "提醒清仓",
+    "add_position": "提醒加仓",
+    "reduce_position": "提醒减仓",
+    "update_stop_line": "提醒止盈线变化",
+    "limit_position": "限制仓位",
+    "block_open": "禁止新开仓",
+}
+
 
 DEFAULT_TURTLE_PARAMS = {
     "entry_days": 20,
@@ -520,7 +541,91 @@ def _normalize_strategy_rules(source_rules, fallback=None):
     }
 
 
+def _action_rule_parameter_from_condition(condition):
+    condition = condition if isinstance(condition, dict) else {}
+    threshold = condition.get("threshold") if isinstance(condition.get("threshold"), dict) else {}
+    threshold_type = str(threshold.get("type") or "")
+    if threshold_type == "percent":
+        return {"value": float(threshold.get("value", 0.0)), "unit": "percent"}
+    if threshold_type == "days":
+        return {"value": int(threshold.get("value", 0)), "unit": "days"}
+    if threshold_type == "moving_average":
+        return {"value": int(threshold.get("period", 0)), "unit": "ma_days"}
+    if threshold_type == "donchian_high":
+        return {"value": int(threshold.get("period", 0)), "unit": "day_high"}
+    if threshold_type == "donchian_low":
+        return {"value": int(threshold.get("period", 0)), "unit": "day_low"}
+    if threshold_type == "atr_offset":
+        return {"value": float(threshold.get("multiple", 0.0)), "unit": "atr"}
+    if threshold_type == "trend":
+        return {"value": int(threshold.get("period", 0)), "unit": "trend"}
+    return {"value": 0.0, "unit": threshold_type or "price"}
+
+
+def _condition_from_action_parameter(metric, operator, parameter, old_condition=None):
+    old_condition = old_condition if isinstance(old_condition, dict) else {}
+    old_threshold = old_condition.get("threshold") if isinstance(old_condition.get("threshold"), dict) else {}
+    unit = str((parameter or {}).get("unit") or "").strip()
+    value = (parameter or {}).get("value", 0.0)
+    if unit == "percent":
+        threshold = {"type": "percent", "value": float(value)}
+    elif unit == "days":
+        threshold = {"type": "days", "value": int(value)}
+    elif unit == "ma_days":
+        threshold = {"type": "moving_average", "scope": old_threshold.get("scope", "stock"), "period": int(value)}
+    elif unit == "day_high":
+        threshold = {"type": "donchian_high", "period": int(value)}
+    elif unit == "day_low":
+        threshold = {"type": "donchian_low", "period": int(value)}
+    elif unit == "atr":
+        threshold = {
+            "type": "atr_offset",
+            "basis": old_threshold.get("basis", "entry_price"),
+            "multiple": float(value),
+            "direction": old_threshold.get("direction", "down"),
+        }
+    elif unit == "trend":
+        threshold = {"type": "trend", "scope": old_threshold.get("scope", "index"), "period": int(value), "value": old_threshold.get("value", "down")}
+    else:
+        threshold = {"type": "price", "value": float(value)}
+    return {"metric": metric or old_condition.get("metric", "stock_price"), "operator": operator or old_condition.get("operator", ">="), "threshold": threshold}
+
+
+def normalize_strategy_action_rule(rule):
+    rule = rule if isinstance(rule, dict) else {}
+    condition = rule.get("condition") if isinstance(rule.get("condition"), dict) else {}
+    action = rule.get("action") if isinstance(rule.get("action"), dict) else {}
+    parameter = rule.get("parameter") if isinstance(rule.get("parameter"), dict) else _action_rule_parameter_from_condition(condition)
+    unit = str(parameter.get("unit") or "").strip()
+    if unit not in ACTION_RULE_UNITS:
+        unit = _action_rule_parameter_from_condition(condition).get("unit", "price")
+    try:
+        value = float(parameter.get("value", 0.0))
+    except Exception:
+        value = 0.0
+    if unit in ("day_high", "day_low", "ma_days", "days", "trend"):
+        value = int(max(1, round(value)))
+    normalized_parameter = {"value": value, "unit": unit}
+    normalized_condition = _condition_from_action_parameter(
+        condition.get("metric", "stock_price"),
+        condition.get("operator", ">="),
+        normalized_parameter,
+        condition,
+    )
+    return {
+        "id": str(rule.get("id") or "custom_rule").strip(),
+        "schema_version": STRATEGY_ACTION_RULE_SCHEMA_VERSION,
+        "source": str(rule.get("source") or "custom"),
+        "name": str(rule.get("name") or rule.get("id") or "动作规则"),
+        "enabled": bool(rule.get("enabled", True)),
+        "condition": normalized_condition,
+        "parameter": normalized_parameter,
+        "action": dict(action),
+    }
+
+
 def _action_rule(rule_id, name, enabled, condition, action, source="legacy"):
+    parameter = _action_rule_parameter_from_condition(condition)
     return {
         "id": rule_id,
         "schema_version": STRATEGY_ACTION_RULE_SCHEMA_VERSION,
@@ -528,6 +633,7 @@ def _action_rule(rule_id, name, enabled, condition, action, source="legacy"):
         "name": name,
         "enabled": bool(enabled),
         "condition": condition,
+        "parameter": parameter,
         "action": action,
     }
 
@@ -674,7 +780,7 @@ def strategy_action_rules_for_position(config, position):
             for rule in action_rules:
                 if not isinstance(rule, dict):
                     continue
-                item = dict(rule)
+                item = normalize_strategy_action_rule(rule)
                 item["source"] = "resolved"
                 resolved.append(item)
             return resolved
@@ -735,7 +841,7 @@ def normalize_strategy_alert_config(config):
         profile_action_rules = raw_profile.get("action_rules") if isinstance(raw_profile.get("action_rules"), list) else []
         strategy_type = str(raw_profile.get("strategy_type") or "legacy").strip() or "legacy"
         turtle_params = _normalize_turtle_params(raw_profile.get("turtle_params")) if strategy_type == "turtle" else {}
-        if strategy_type == "turtle":
+        if strategy_type == "turtle" and not profile_action_rules:
             profile_action_rules = default_turtle_action_rules(turtle_params)
         profiles.append({
             "id": profile_id,
@@ -744,7 +850,7 @@ def normalize_strategy_alert_config(config):
             "strategy_type": strategy_type,
             "turtle_params": turtle_params,
             "rules": _normalize_strategy_rules(raw_profile.get("rules"), normalized_rules),
-            "action_rules": [dict(rule) for rule in profile_action_rules if isinstance(rule, dict)],
+            "action_rules": [normalize_strategy_action_rule(rule) for rule in profile_action_rules if isinstance(rule, dict)],
         })
 
     if not profiles:
