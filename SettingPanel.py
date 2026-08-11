@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton, QTimeEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QStyledItemDelegate
+    QTableWidget, QTableWidgetItem, QHeaderView, QStyledItemDelegate, QStyleOptionViewItem
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -37,12 +37,16 @@ PRICE_ALERT_TREE_STATUS_ROLE = Qt.UserRole + 3
 
 class PriceAlertTreeDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
-        super().paint(painter, option, index)
         status = index.data(PRICE_ALERT_TREE_STATUS_ROLE)
-        if status not in ("configured", "triggered"):
+        if status in ("configured", "triggered"):
+            text_option = QStyleOptionViewItem(option)
+            text_option.rect = option.rect.adjusted(0, 0, -18, 0)
+            super().paint(painter, text_option, index)
+        else:
+            super().paint(painter, option, index)
             return
         size = max(10, min(14, option.rect.height() - 4))
-        rect = QRect(option.rect.left() + 2, option.rect.top() + (option.rect.height() - size) // 2, size, size)
+        rect = QRect(option.rect.right() - size - 2, option.rect.top() + (option.rect.height() - size) // 2, size, size)
         color = QColor("#f0c36a") if status == "triggered" else option.palette.text().color()
         if status != "triggered":
             color.setAlpha(130)
@@ -99,7 +103,6 @@ class SettingsDialog(QDialog):
         self.tree_codes.setMinimumWidth(300)
         self.tree_codes.setMinimumHeight(250)
         self.tree_codes.setIndentation(18)
-        self.tree_codes.setStyleSheet("QTreeView::indicator { margin-left: 16px; }")
         self.tree_codes.setItemDelegate(PriceAlertTreeDelegate(self.tree_codes))
         self._load_code_tree()
         # 1.2 操作按钮

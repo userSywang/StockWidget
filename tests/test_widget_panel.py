@@ -1099,6 +1099,46 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._http.posts[0][0], "https://example.test/webhook")
         self.assertIn("触发止损", win._http.posts[0][1]["markdown"]["content"])
 
+    def test_strategy_pushes_respect_today_ignore_for_desktop_and_webhook(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_push_sent_keys = set()
+        win._strategy_push_sent_at = {}
+        win._desktop_alert_ignored_today = {"sh603259|触发止损": "2026-08-10"}
+        win._now = lambda: datetime(2026, 8, 10, 10, 0)
+        desktop_alerts = []
+        win.show_desktop_alert = lambda text, ignore_key=None: desktop_alerts.append((text, ignore_key))
+        win.strategy_alert_history = []
+        win.strategy_alert_config = {
+            "notifications": {
+                "desktop_popup": True,
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+        state = {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -5.2,
+            "locked_profit_pct": 0.0,
+            "triggered": True,
+            "status": "触发止损",
+        }
+
+        FloatLabel._send_strategy_pushes(win, [state])
+
+        self.assertEqual(win._http.posts, [])
+        self.assertEqual(desktop_alerts, [])
+        self.assertEqual(win.strategy_alert_history, [])
+
     def test_price_alert_pushes_triggered_alerts_to_webhook(self):
         class FakeHttp:
             def __init__(self):

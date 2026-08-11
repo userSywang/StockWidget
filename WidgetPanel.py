@@ -1679,6 +1679,8 @@ class FloatLabel(QWidget):
             if not state.get("triggered"):
                 continue
             key = f"{state.get('code')}|{state.get('status')}"
+            if self._is_desktop_alert_ignored(key, now_dt):
+                continue
             last_ts = float(sent_at.get(key, 0.0) or 0.0)
             if key in sent_keys and now_ts - last_ts < cooldown_seconds:
                 continue
@@ -1689,7 +1691,7 @@ class FloatLabel(QWidget):
                         pushed = True
                 except Exception:
                     pass
-            if desktop and not self._is_desktop_alert_ignored(key, now_dt):
+            if desktop:
                 try:
                     self.show_desktop_alert(self._strategy_push_text_for_state(state), ignore_key=key)
                     pushed = True
