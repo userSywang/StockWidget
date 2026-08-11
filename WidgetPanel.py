@@ -96,6 +96,7 @@ class FloatLabel(QWidget):
         self._strategy_push_sent_at = {}
         self.strategy_alert_history = self._normalize_strategy_alert_history(cfg.get("strategy_alert_history", []))
         self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
+        self._latest_strategy_states = []
         self._daily_kline_cache = {}
 
         # 设置初值
@@ -1023,6 +1024,9 @@ class FloatLabel(QWidget):
         codes = []
         if any(getattr(self, attr, False) for attr in ("ma5_visible", "ma10_visible", "ma20_visible")):
             codes.extend(getattr(self, "checked_codes", []))
+        for alert in normalize_price_alerts(getattr(self, "price_alerts", [])):
+            if isinstance(alert, dict) and alert.get("direction") == "below_ma5":
+                codes.append(alert.get("code"))
         config = getattr(self, "strategy_alert_config", {})
         if normalize_strategy_alert_config(config).get("enabled"):
             codes.extend(strategy_daily_request_codes(config))
@@ -1848,6 +1852,9 @@ class FloatLabel(QWidget):
         if getattr(self, "_refresh_future", None) is not None and not self._refresh_future.done():
             self._refresh_again_requested = True
             return
+        if not self._is_market_fetch_time():
+            self._check_strategy_daily_summary()
+            return
         try:
             request_codes = self._refresh_request_codes()
             self._refresh_previous_quotes = dict(getattr(self, "_latest_quotes", {}))
@@ -1869,6 +1876,34 @@ class FloatLabel(QWidget):
             except Exception:
                 self._show_error(str(e))
             return
+
+    def _is_market_fetch_time(self, now=None):
+        now_provider = getattr(self, "_now", None)
+        now = now or (now_provider() if callable(now_provider) else datetime.now())
+        if hasattr(now, "weekday") and now.weekday() >= 5:
+            return False
+        current_minutes = int(now.hour) * 60 + int(now.minute)
+        return 9 * 60 <= current_minutes <= 15 * 60
+
+    def _strategy_summary_states(self):
+        states = list(getattr(self, "_latest_strategy_states", []) or [])
+        if states:
+            return states
+        config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
+        if not config.get("enabled"):
+            return []
+        quotes = dict(getattr(self, "_latest_quotes", {}) or {})
+        for position in config.get("positions", []):
+            code = position.get("code")
+            if code and code not in quotes:
+                quotes[code] = {"name": self.code_names.get(code, code), "price": 0.0}
+        return evaluate_strategy_alerts(config, quotes, {})
+
+    def _check_strategy_daily_summary(self):
+        config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
+        if not config.get("enabled"):
+            return False
+        return self._send_strategy_daily_summary(self._strategy_summary_states())
 
     def _poll_refresh_future(self):
         future = getattr(self, "_refresh_future", None)
@@ -1900,7 +1935,7 @@ class FloatLabel(QWidget):
 
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
-        price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code)
+        price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
         config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
         if config.get("enabled"):
@@ -1908,12 +1943,14 @@ class FloatLabel(QWidget):
             if strategy_changed:
                 self.strategy_alert_config = updated_config
             strategy_states = evaluate_strategy_alerts(self.strategy_alert_config, quote_by_code, daily_by_code or {})
+            self._latest_strategy_states = list(strategy_states or [])
             self._send_strategy_pushes(strategy_states)
             daily_summary_sent = self._send_strategy_daily_summary(strategy_states)
         else:
             strategy_changed = False
             daily_summary_sent = False
             strategy_states = []
+            self._latest_strategy_states = []
         full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code, daily_by_code, strategy_states)
         self._latest_quotes = quote_by_code
         learned_names = False

@@ -365,14 +365,14 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.list_price_alerts.count(), 1)
 
         dlg.edit_price_alert_code.setText("512000")
-        dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below"))
+        dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.spin_price_alert_price.setValue(1.234)
         dlg.edit_price_alert_message.setText("跌破提醒")
         dlg._on_price_alert_editor_changed()
 
         self.assertEqual(win.price_alerts[0]["code"], "sh512000")
-        self.assertEqual(win.price_alerts[0]["direction"], "below")
-        self.assertEqual(win.price_alerts[0]["price"], 1.234)
+        self.assertEqual(win.price_alerts[0]["direction"], "below_ma5")
+        self.assertFalse(dlg.spin_price_alert_price.isEnabled())
         self.assertEqual(win.price_alerts[0]["message"], "跌破提醒")
 
         dlg._del_price_alert()
@@ -473,6 +473,22 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(len(action_rows), 4)
         self.assertTrue(any("20日新高" in row for row in action_rows))
         self.assertTrue(any("2.0ATR" in row for row in action_rows))
+
+        dlg.spin_turtle_entry_days.setValue(55)
+        dlg.spin_turtle_exit_days.setValue(20)
+        dlg.spin_turtle_atr_stop.setValue(3.0)
+        dlg.spin_turtle_pyramid_atr.setValue(1.0)
+        dlg.spin_turtle_max_units.setValue(3)
+        dlg.cmb_turtle_sizing.setCurrentIndex(dlg.cmb_turtle_sizing.findData("fixed_percent"))
+        dlg._on_template_save()
+
+        profile = next(item for item in win.strategy_alert_config["strategy_profiles"] if item["id"] == "turtle:classic")
+        rules = {rule["id"]: rule for rule in profile["action_rules"]}
+        self.assertEqual(profile["turtle_params"]["entry_days"], 55)
+        self.assertEqual(profile["turtle_params"]["position_sizing"], "fixed_percent")
+        self.assertEqual(rules["turtle_entry_20d"]["condition"]["threshold"]["period"], 55)
+        self.assertEqual(rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 3.0)
+        self.assertEqual(rules["turtle_pyramid_0_5atr"]["action"]["max_units"], 3)
         dlg.close()
 
     def test_strategy_rule_edits_do_not_change_other_default_positions(self):

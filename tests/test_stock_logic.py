@@ -144,6 +144,17 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(alert["direction"], "above")
         self.assertEqual(alert["price"], 0.0)
 
+    def test_price_alert_triggers_when_below_ma5(self):
+        alerts = [{"enabled": True, "code": "603259", "direction": "below_ma5", "message": "低吸观察"}]
+        quotes = {"sh603259": {"price": 9.0, "name": "药明康德"}}
+        daily_by_code = {"sh603259": [{"close": value} for value in [10, 10, 10, 10, 10]]}
+
+        result = evaluate_price_alerts(alerts, quotes, daily_by_code)
+
+        self.assertTrue(result["sh603259"][0]["triggered"])
+        self.assertEqual(result["sh603259"][0]["direction"], "below_ma5")
+        self.assertEqual(result["sh603259"][0]["price"], 10.0)
+
     def test_strategy_alert_config_normalizes_positions_and_rules(self):
         config = normalize_strategy_alert_config({
             "enabled": True,
@@ -185,11 +196,38 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertIn("turtle:classic", profiles)
         self.assertEqual(profiles["turtle:classic"]["strategy_type"], "turtle")
+        self.assertEqual(profiles["turtle:classic"]["turtle_params"]["position_sizing"], "atr_risk")
         turtle_rules = {rule["id"]: rule for rule in profiles["turtle:classic"]["action_rules"]}
         self.assertEqual(turtle_rules["turtle_entry_20d"]["condition"]["threshold"]["period"], 20)
         self.assertEqual(turtle_rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 2.0)
         self.assertEqual(turtle_rules["turtle_pyramid_0_5atr"]["condition"]["threshold"]["multiple"], 0.5)
         self.assertEqual(turtle_rules["turtle_exit_10d"]["condition"]["threshold"]["period"], 10)
+
+    def test_turtle_template_params_drive_action_rules(self):
+        config = normalize_strategy_alert_config({
+            "strategy_profiles": [{
+                "id": "turtle:custom",
+                "name": "自定义海龟",
+                "strategy_type": "turtle",
+                "turtle_params": {
+                    "entry_days": 55,
+                    "exit_days": 20,
+                    "atr_stop_multiple": 3.0,
+                    "pyramid_atr_multiple": 1.0,
+                    "max_units": 3,
+                    "position_sizing": "fixed_percent",
+                },
+            }],
+        })
+
+        profile = next(item for item in config["strategy_profiles"] if item["id"] == "turtle:custom")
+        rules = {rule["id"]: rule for rule in profile["action_rules"]}
+
+        self.assertEqual(profile["turtle_params"]["position_sizing"], "fixed_percent")
+        self.assertEqual(rules["turtle_entry_20d"]["condition"]["threshold"]["period"], 55)
+        self.assertEqual(rules["turtle_exit_10d"]["condition"]["threshold"]["period"], 20)
+        self.assertEqual(rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 3.0)
+        self.assertEqual(rules["turtle_pyramid_0_5atr"]["action"]["max_units"], 3)
 
     def test_strategy_alert_config_normalizes_push_cooldown(self):
         config = normalize_strategy_alert_config({

@@ -16,6 +16,7 @@ from StockLogic import (
     DEFAULT_WARNING_TEXT,
     default_alert_rule,
     default_price_alert,
+    default_turtle_action_rules,
     normalize_alert_rule,
     normalize_alert_rules,
     normalize_alert_target,
@@ -394,13 +395,14 @@ class SettingsDialog(QDialog):
 
         left_price = QVBoxLayout()
         self.list_price_alerts = QListWidget()
-        self.list_price_alerts.setFixedWidth(130)
+        self.list_price_alerts.setFixedWidth(185)
+        self.list_price_alerts.setMinimumHeight(96)
         left_price.addWidget(self.list_price_alerts)
         price_btns = QHBoxLayout()
         self.btn_price_alert_add = QPushButton("添加")
         self.btn_price_alert_del = QPushButton("删除")
-        self.btn_price_alert_add.setFixedWidth(58)
-        self.btn_price_alert_del.setFixedWidth(58)
+        self.btn_price_alert_add.setFixedWidth(82)
+        self.btn_price_alert_del.setFixedWidth(82)
         price_btns.addWidget(self.btn_price_alert_add)
         price_btns.addWidget(self.btn_price_alert_del)
         left_price.addLayout(price_btns)
@@ -411,12 +413,16 @@ class SettingsDialog(QDialog):
         form_price.setVerticalSpacing(6)
         self.chk_price_alert_enabled = QCheckBox("启用")
         self.edit_price_alert_code = QLineEdit()
+        self.edit_price_alert_code.setMinimumWidth(90)
         self.cmb_price_alert_direction = QComboBox()
+        self.cmb_price_alert_direction.setMinimumWidth(105)
         self.cmb_price_alert_direction.addItem("高于/等于", userData="above")
         self.cmb_price_alert_direction.addItem("低于/等于", userData="below")
         self.spin_price_alert_price = QDoubleSpinBox()
         self.spin_price_alert_price.setRange(0.0, 99999.999)
         self.spin_price_alert_price.setDecimals(3)
+        self.spin_price_alert_price.setFixedWidth(92)
+        self.cmb_price_alert_direction.addItem("低于5日线", userData="below_ma5")
         self.edit_price_alert_message = QLineEdit()
 
         form_price.addWidget(self.chk_price_alert_enabled, 0, 0)
@@ -879,9 +885,50 @@ class SettingsDialog(QDialog):
         template_action_layout.setSpacing(4)
         self.lbl_template_action_hint = QLabel("该模板使用动作规则展示，参数计算后续由策略引擎统一处理。")
         self.lbl_template_action_hint.setStyleSheet("color: #666666;")
+        turtle_param_layout = QGridLayout()
+        turtle_param_layout.setHorizontalSpacing(6)
+        turtle_param_layout.setVerticalSpacing(4)
+        self.spin_turtle_entry_days = QSpinBox()
+        self.spin_turtle_entry_days.setRange(2, 250)
+        self.spin_turtle_entry_days.setFixedWidth(72)
+        self.spin_turtle_exit_days = QSpinBox()
+        self.spin_turtle_exit_days.setRange(2, 250)
+        self.spin_turtle_exit_days.setFixedWidth(72)
+        self.spin_turtle_atr_stop = QDoubleSpinBox()
+        self.spin_turtle_atr_stop.setRange(0.1, 20.0)
+        self.spin_turtle_atr_stop.setDecimals(1)
+        self.spin_turtle_atr_stop.setSuffix("ATR")
+        self.spin_turtle_atr_stop.setFixedWidth(82)
+        self.spin_turtle_pyramid_atr = QDoubleSpinBox()
+        self.spin_turtle_pyramid_atr.setRange(0.1, 20.0)
+        self.spin_turtle_pyramid_atr.setDecimals(1)
+        self.spin_turtle_pyramid_atr.setSuffix("ATR")
+        self.spin_turtle_pyramid_atr.setFixedWidth(82)
+        self.spin_turtle_max_units = QSpinBox()
+        self.spin_turtle_max_units.setRange(1, 20)
+        self.spin_turtle_max_units.setFixedWidth(72)
+        self.cmb_turtle_sizing = QComboBox()
+        self.cmb_turtle_sizing.addItem("ATR风险计提", "atr_risk")
+        self.cmb_turtle_sizing.addItem("固定百分比", "fixed_percent")
+        self.cmb_turtle_sizing.addItem("仅动作提醒", "manual")
+        turtle_param_layout.addWidget(QLabel("入场突破："), 0, 0)
+        turtle_param_layout.addWidget(self.spin_turtle_entry_days, 0, 1)
+        turtle_param_layout.addWidget(QLabel("日新高"), 0, 2)
+        turtle_param_layout.addWidget(QLabel("离场："), 0, 3)
+        turtle_param_layout.addWidget(self.spin_turtle_exit_days, 0, 4)
+        turtle_param_layout.addWidget(QLabel("日低点"), 0, 5)
+        turtle_param_layout.addWidget(QLabel("止损："), 1, 0)
+        turtle_param_layout.addWidget(self.spin_turtle_atr_stop, 1, 1)
+        turtle_param_layout.addWidget(QLabel("加仓："), 1, 3)
+        turtle_param_layout.addWidget(self.spin_turtle_pyramid_atr, 1, 4)
+        turtle_param_layout.addWidget(QLabel("最大份数："), 2, 0)
+        turtle_param_layout.addWidget(self.spin_turtle_max_units, 2, 1)
+        turtle_param_layout.addWidget(QLabel("计提方式："), 2, 3)
+        turtle_param_layout.addWidget(self.cmb_turtle_sizing, 2, 4, 1, 2)
         self.list_template_action_rules = QListWidget()
         self.list_template_action_rules.setMinimumHeight(160)
         template_action_layout.addWidget(self.lbl_template_action_hint)
+        template_action_layout.addLayout(turtle_param_layout)
         template_action_layout.addWidget(self.list_template_action_rules)
         self.template_action_group.setVisible(False)
         template_edit_layout.addWidget(self.template_action_group)
@@ -1799,9 +1846,14 @@ class SettingsDialog(QDialog):
     # —— 价格提醒 —— #
     def _format_price_alert(self, alert):
         code = alert.get("code", "")
-        direction = "高于" if alert.get("direction") == "above" else "低于"
+        if alert.get("direction") == "below_ma5":
+            direction = "低于5日线"
+            price_text = ""
+        else:
+            direction = "高于" if alert.get("direction") == "above" else "低于"
+            price_text = f" {float(alert.get('price', 0.0)):.3f}"
         suffix = "" if alert.get("enabled", True) else "（停用）"
-        return f"{self._format_code_item_text(code)} {direction} {float(alert.get('price', 0.0)):.3f}{suffix}"
+        return f"{self._format_code_item_text(code)} {direction}{price_text}{suffix}"
 
     def _load_price_alert_list(self, current_row=0):
         self.list_price_alerts.blockSignals(True)
@@ -1831,6 +1883,7 @@ class SettingsDialog(QDialog):
             self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
             self.spin_price_alert_price.setValue(float(alert.get("price", 0.0)))
             self.edit_price_alert_message.setText(alert.get("message", ""))
+            self._sync_price_alert_direction_controls()
         finally:
             self._loading_price_alert_editor = False
 
@@ -1843,9 +1896,14 @@ class SettingsDialog(QDialog):
             "message": self.edit_price_alert_message.text(),
         })
 
+    def _sync_price_alert_direction_controls(self):
+        is_ma_alert = self.cmb_price_alert_direction.currentData() == "below_ma5"
+        self.spin_price_alert_price.setEnabled(not is_ma_alert)
+
     def _on_price_alert_editor_changed(self, *_args):
         if getattr(self, "_loading_price_alert_editor", False):
             return
+        self._sync_price_alert_direction_controls()
         row = self._current_price_alert_row()
         if row < 0:
             return
@@ -2621,6 +2679,7 @@ class SettingsDialog(QDialog):
         if action_rules:
             self.template_rules_scroll.setVisible(False)
             self.template_action_group.setVisible(True)
+            self._load_turtle_params_to_editor(profile.get("turtle_params", {}))
             self._load_template_action_rules(action_rules)
         else:
             self.template_rules_scroll.setVisible(True)
@@ -2656,7 +2715,12 @@ class SettingsDialog(QDialog):
         profile = profiles[row]
         profile["name"] = self.edit_template_name.text().strip() or profile.get("name", "未命名")
         profile["desc"] = self.edit_template_desc.text().strip()
-        profile["rules"] = self._collect_template_rules_from_editor()
+        if profile.get("strategy_type") == "turtle":
+            params = self._collect_turtle_params_from_editor()
+            profile["turtle_params"] = params
+            profile["action_rules"] = default_turtle_action_rules(params)
+        else:
+            profile["rules"] = self._collect_template_rules_from_editor()
         self._strategy_config["strategy_profiles"] = profiles
         self.win.set_strategy_alert_config(self._strategy_config)
         self._refresh_strategy_template_list()
@@ -2734,6 +2798,27 @@ class SettingsDialog(QDialog):
                 self.list_template_action_rules.addItem(QListWidgetItem(self._format_template_action_rule(rule)))
         if self.list_template_action_rules.count() == 0:
             self.list_template_action_rules.addItem(QListWidgetItem("暂无动作规则"))
+
+    def _load_turtle_params_to_editor(self, params):
+        params = params if isinstance(params, dict) else {}
+        self.spin_turtle_entry_days.setValue(int(params.get("entry_days", 20)))
+        self.spin_turtle_exit_days.setValue(int(params.get("exit_days", 10)))
+        self.spin_turtle_atr_stop.setValue(float(params.get("atr_stop_multiple", 2.0)))
+        self.spin_turtle_pyramid_atr.setValue(float(params.get("pyramid_atr_multiple", 0.5)))
+        self.spin_turtle_max_units.setValue(int(params.get("max_units", 4)))
+        sizing = str(params.get("position_sizing") or "atr_risk")
+        index = self.cmb_turtle_sizing.findData(sizing)
+        self.cmb_turtle_sizing.setCurrentIndex(index if index >= 0 else 0)
+
+    def _collect_turtle_params_from_editor(self):
+        return {
+            "entry_days": self.spin_turtle_entry_days.value(),
+            "exit_days": self.spin_turtle_exit_days.value(),
+            "atr_stop_multiple": self.spin_turtle_atr_stop.value(),
+            "pyramid_atr_multiple": self.spin_turtle_pyramid_atr.value(),
+            "max_units": self.spin_turtle_max_units.value(),
+            "position_sizing": self.cmb_turtle_sizing.currentData() or "atr_risk",
+        }
 
     def _on_template_copy(self):
         row = self.list_strategy_templates.currentRow()

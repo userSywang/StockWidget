@@ -41,52 +41,78 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
 STRATEGY_ACTION_RULE_SCHEMA_VERSION = 1
 
 
-def default_turtle_action_rules():
+DEFAULT_TURTLE_PARAMS = {
+    "entry_days": 20,
+    "exit_days": 10,
+    "atr_stop_multiple": 2.0,
+    "pyramid_atr_multiple": 0.5,
+    "max_units": 4,
+    "position_sizing": "atr_risk",
+}
+
+
+def _normalize_turtle_params(params):
+    params = params if isinstance(params, dict) else {}
+    sizing = str(params.get("position_sizing") or DEFAULT_TURTLE_PARAMS["position_sizing"]).strip()
+    if sizing not in ("atr_risk", "fixed_percent", "manual"):
+        sizing = DEFAULT_TURTLE_PARAMS["position_sizing"]
+    return {
+        "entry_days": _bounded_int(params.get("entry_days"), DEFAULT_TURTLE_PARAMS["entry_days"], 2, 250),
+        "exit_days": _bounded_int(params.get("exit_days"), DEFAULT_TURTLE_PARAMS["exit_days"], 2, 250),
+        "atr_stop_multiple": _bounded_float(params.get("atr_stop_multiple"), DEFAULT_TURTLE_PARAMS["atr_stop_multiple"], 0.1, 20.0),
+        "pyramid_atr_multiple": _bounded_float(params.get("pyramid_atr_multiple"), DEFAULT_TURTLE_PARAMS["pyramid_atr_multiple"], 0.1, 20.0),
+        "max_units": _bounded_int(params.get("max_units"), DEFAULT_TURTLE_PARAMS["max_units"], 1, 20),
+        "position_sizing": sizing,
+    }
+
+
+def default_turtle_action_rules(params=None):
+    params = _normalize_turtle_params(params)
     return [
         _action_rule(
             "turtle_entry_20d",
-            "20日新高突破买入提醒",
+            f"{params['entry_days']}日新高突破买入提醒",
             True,
             {
                 "metric": "stock_price",
                 "operator": ">",
-                "threshold": {"type": "donchian_high", "period": 20},
+                "threshold": {"type": "donchian_high", "period": params["entry_days"]},
             },
-            {"type": "entry_signal", "reason": "donchian_breakout"},
+            {"type": "entry_signal", "reason": "donchian_breakout", "position_sizing": params["position_sizing"]},
             "turtle",
         ),
         _action_rule(
             "turtle_atr_stop",
-            "2ATR止损提醒",
+            f"{params['atr_stop_multiple']:.1f}ATR止损提醒",
             True,
             {
                 "metric": "stock_price",
                 "operator": "<=",
-                "threshold": {"type": "atr_offset", "basis": "entry_price", "multiple": 2.0, "direction": "down"},
+                "threshold": {"type": "atr_offset", "basis": "entry_price", "multiple": params["atr_stop_multiple"], "direction": "down"},
             },
             {"type": "clear_position", "reason": "atr_stop"},
             "turtle",
         ),
         _action_rule(
             "turtle_pyramid_0_5atr",
-            "0.5ATR浮盈加仓提醒",
+            f"{params['pyramid_atr_multiple']:.1f}ATR浮盈加仓提醒",
             True,
             {
                 "metric": "stock_price",
                 "operator": ">=",
-                "threshold": {"type": "atr_offset", "basis": "last_entry_price", "multiple": 0.5, "direction": "up"},
+                "threshold": {"type": "atr_offset", "basis": "last_entry_price", "multiple": params["pyramid_atr_multiple"], "direction": "up"},
             },
-            {"type": "add_position", "max_units": 4, "reason": "pyramid_on_profit"},
+            {"type": "add_position", "max_units": params["max_units"], "reason": "pyramid_on_profit"},
             "turtle",
         ),
         _action_rule(
             "turtle_exit_10d",
-            "10日低点离场提醒",
+            f"{params['exit_days']}日低点离场提醒",
             True,
             {
                 "metric": "stock_price",
                 "operator": "<",
-                "threshold": {"type": "donchian_low", "period": 10},
+                "threshold": {"type": "donchian_low", "period": params["exit_days"]},
             },
             {"type": "clear_position", "reason": "donchian_exit"},
             "turtle",
@@ -96,6 +122,7 @@ def default_turtle_action_rules():
 
 def default_strategy_profiles(normalized_rules=None):
     rules = dict(normalized_rules or DEFAULT_STRATEGY_ALERT_CONFIG["rules"])
+    turtle_params = _normalize_turtle_params({})
     turtle_rules = _normalize_strategy_rules({
         "max_loss_enabled": False,
         "stock_ma5_break_enabled": False,
@@ -114,8 +141,9 @@ def default_strategy_profiles(normalized_rules=None):
             "name": "海龟策略模板",
             "desc": "20日新高突破、2ATR止损、0.5ATR浮盈加仓、10日低点离场。当前作为动作提醒模板，不自动交易。",
             "strategy_type": "turtle",
+            "turtle_params": turtle_params,
             "rules": turtle_rules,
-            "action_rules": default_turtle_action_rules(),
+            "action_rules": default_turtle_action_rules(turtle_params),
         },
     ]
 
@@ -340,7 +368,7 @@ def normalize_price_alert(alert):
     if not isinstance(alert, dict):
         alert = {}
     code = normalize_code_or_none(alert.get("code")) or "sh000001"
-    direction = alert.get("direction") if alert.get("direction") in ("above", "below") else "above"
+    direction = alert.get("direction") if alert.get("direction") in ("above", "below", "below_ma5") else "above"
     try:
         price = float(alert.get("price", 0.0))
     except Exception:
@@ -358,8 +386,9 @@ def normalize_price_alerts(alerts):
     return [normalize_price_alert(alert) for alert in (alerts or []) if isinstance(alert, dict)]
 
 
-def evaluate_price_alerts(alerts, quotes):
+def evaluate_price_alerts(alerts, quotes, daily_by_code=None):
     triggered_by_code = {}
+    daily_by_code = daily_by_code or {}
     for alert in normalize_price_alerts(alerts):
         if not alert.get("enabled"):
             continue
@@ -370,11 +399,19 @@ def evaluate_price_alerts(alerts, quotes):
             continue
         if current_price <= 0:
             continue
-        if alert["direction"] == "above":
-            triggered = current_price >= alert["price"]
+        threshold_price = alert["price"]
+        if alert["direction"] == "below_ma5":
+            average = moving_average(daily_by_code.get(alert["code"]), 5)
+            if average is None:
+                continue
+            threshold_price = float(average)
+            triggered = current_price <= threshold_price
+            direction_text = "低于MA5"
+        elif alert["direction"] == "above":
+            triggered = current_price >= threshold_price
             direction_text = "高于"
         else:
-            triggered = current_price <= alert["price"]
+            triggered = current_price <= threshold_price
             direction_text = "低于"
         name = str(quote.get("name") or alert["code"])
         message = alert.get("message") or "价格提醒触发"
@@ -383,13 +420,13 @@ def evaluate_price_alerts(alerts, quotes):
             f"{name} {alert['code']}\n"
             f"状态：{status_text}\n"
             f"当前价：{current_price:.3f}\n"
-            f"条件：{direction_text} {alert['price']:.3f}\n"
+            f"条件：{direction_text} {threshold_price:.3f}\n"
             f"提示：{message}"
         )
         triggered_by_code.setdefault(alert["code"], []).append({
             "triggered": triggered,
             "direction": alert["direction"],
-            "price": alert["price"],
+            "price": threshold_price,
             "current_price": current_price,
             "message": message,
             "detail": detail,
@@ -696,11 +733,16 @@ def normalize_strategy_alert_config(config):
             continue
         seen_profile_ids.add(profile_id)
         profile_action_rules = raw_profile.get("action_rules") if isinstance(raw_profile.get("action_rules"), list) else []
+        strategy_type = str(raw_profile.get("strategy_type") or "legacy").strip() or "legacy"
+        turtle_params = _normalize_turtle_params(raw_profile.get("turtle_params")) if strategy_type == "turtle" else {}
+        if strategy_type == "turtle":
+            profile_action_rules = default_turtle_action_rules(turtle_params)
         profiles.append({
             "id": profile_id,
             "name": str(raw_profile.get("name") or profile_id).strip(),
             "desc": str(raw_profile.get("desc") or "").strip(),
-            "strategy_type": str(raw_profile.get("strategy_type") or "legacy").strip() or "legacy",
+            "strategy_type": strategy_type,
+            "turtle_params": turtle_params,
             "rules": _normalize_strategy_rules(raw_profile.get("rules"), normalized_rules),
             "action_rules": [dict(rule) for rule in profile_action_rules if isinstance(rule, dict)],
         })

@@ -205,6 +205,74 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh600000", "sh512000", "sh000001", "sz399001"])
 
+    def test_daily_request_codes_include_price_alert_below_ma5(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000"]
+        win.price_alerts = [{"enabled": True, "code": "sh603259", "direction": "below_ma5"}]
+        win.ma5_visible = False
+        win.ma10_visible = False
+        win.ma20_visible = False
+        win.strategy_alert_config = {"enabled": False}
+
+        codes = FloatLabel._daily_request_codes(win)
+
+        self.assertEqual(codes, ["sh603259"])
+
+    def test_market_fetch_time_only_allows_9_to_15_on_weekdays(self):
+        win = FloatLabel.__new__(FloatLabel)
+
+        self.assertTrue(FloatLabel._is_market_fetch_time(win, datetime(2026, 8, 11, 9, 0)))
+        self.assertTrue(FloatLabel._is_market_fetch_time(win, datetime(2026, 8, 11, 15, 0)))
+        self.assertFalse(FloatLabel._is_market_fetch_time(win, datetime(2026, 8, 11, 23, 0)))
+        self.assertFalse(FloatLabel._is_market_fetch_time(win, datetime(2026, 8, 15, 10, 0)))
+
+    def test_refresh_outside_market_skips_network_but_checks_daily_summary(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._refresh_future = None
+        win._refresh_again_requested = False
+        calls = []
+        win._get_refresh_data = lambda *_args: (_ for _ in ()).throw(AssertionError("network fetch should be skipped"))
+        win._check_strategy_daily_summary = lambda: calls.append("summary") or True
+
+        FloatLabel._refresh_from_function(win)
+
+        self.assertEqual(calls, ["summary"])
+
+    def test_daily_summary_check_uses_latest_strategy_states_outside_market(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._strategy_daily_summary_sent_date = ""
+        win.strategy_alert_config = {
+            "enabled": True,
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+                "daily_summary_time": "23:00",
+            },
+        }
+        win._latest_strategy_states = [
+            {"code": "sh603259", "name": "药明康德", "profit_pct": 1.0, "locked_profit_pct": 0.0, "status": "未触发"},
+            {"code": "sh600584", "name": "长电科技", "profit_pct": -1.0, "locked_profit_pct": 0.0, "status": "未触发"},
+        ]
+
+        sent = FloatLabel._check_strategy_daily_summary(win)
+
+        self.assertTrue(sent)
+        self.assertEqual(len(win._http.posts), 1)
+        content = win._http.posts[0][1]["markdown"]["content"]
+        self.assertIn("sh603259", content)
+        self.assertIn("sh600584", content)
+
     def test_get_daily_klines_uses_baostock_rows_first(self):
         win = FloatLabel.__new__(FloatLabel)
         win._get_baostock_daily_klines = lambda *_args: [
