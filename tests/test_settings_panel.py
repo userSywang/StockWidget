@@ -36,6 +36,7 @@ class FakeWindow:
         self.warning_visible = False
         self.warning_text = ""
         self.market_amount_visible = False
+        self.price_alert_badge_visible = True
         self.code_names = {"sh000001": "上证指数"}
         self.lookup_names = {}
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
@@ -71,6 +72,9 @@ class FakeWindow:
 
     def set_market_amount_visible(self, visible):
         self.market_amount_visible = visible
+
+    def set_price_alert_badge_visible(self, visible):
+        self.price_alert_badge_visible = bool(visible)
 
     def lookup_code_names(self, codes):
         for code in codes:
@@ -198,6 +202,7 @@ class SettingsPanelTests(unittest.TestCase):
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
         win.codes = ["sh603259"]
         win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
         dlg = SettingsDialog(win, None)
         dlg.show()
         self.app.processEvents()
@@ -219,10 +224,10 @@ class SettingsPanelTests(unittest.TestCase):
         for button in buttons:
             for combo in combos:
                 self.assertFalse(global_rect(button).intersects(global_rect(combo)))
-        panel_rect = global_rect(dlg.current_code_panel)
-        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_holding)))
-        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_cycle)))
-        self.assertTrue(panel_rect.contains(global_rect(dlg.cmb_code_priority)))
+        list_rect = global_rect(dlg.tree_codes)
+        for combo in combos:
+            combo_rect = global_rect(combo)
+            self.assertGreater(combo_rect.top(), list_rect.bottom())
         dlg.close()
 
     def test_self_selected_list_has_expanded_display_area(self):
@@ -257,6 +262,9 @@ class SettingsPanelTests(unittest.TestCase):
         labels = {cb.text() for cb in dlg.cbs}
 
         self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"}.issubset(labels))
+        self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
+        dlg.chk_price_alert_badge_visible.setChecked(False)
+        self.assertFalse(win.price_alert_badge_visible)
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):
@@ -371,6 +379,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.btn_price_alert_del.isVisible())
         self.assertGreaterEqual(del_rect.left(), add_rect.right())
         self.assertEqual(dlg.btn_price_alert_add.text(), "保存提醒")
+        self.assertIn("sh603259", dlg.lbl_price_alert_current.text())
         self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
         dlg.close()
 

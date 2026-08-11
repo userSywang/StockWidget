@@ -147,12 +147,14 @@ class WidgetPanelTests(unittest.TestCase):
             "code_tags": {
                 "sh603259": {"holding": "hold", "cycle": "short", "priority": "focus"}
             },
+            "price_alert_badge_visible": False,
         }
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
             win = FloatLabel(cfg)
         try:
             self.assertEqual(win.code_tags["sh603259"]["holding"], "hold")
             self.assertEqual(win.current_config()["code_tags"]["sh603259"]["cycle"], "short")
+            self.assertFalse(win.current_config()["price_alert_badge_visible"])
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()
@@ -714,6 +716,35 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("[价警]", name_text)
         self.assertTrue(meta[1]["price_alerts"][0]["triggered"])
 
+    def test_compose_display_rows_hides_price_alert_badge_when_disabled(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = STRATEGY_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.price_alert_badge_visible = False
+        win.strategy_alert_config = {"enabled": True}
+        win.code_tags = {}
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {"sh603259": [{"triggered": True, "detail": "价格提醒"}]},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [{"code": "sh603259", "triggered": False, "severity": "neutral", "status": "未触发"}],
+        )
+
+        stock_row = rows[1]
+        name_text = stock_row[STRATEGY_HEADERS.index("名称")]
+        self.assertNotIn("[价警]", name_text)
+        self.assertNotIn("price_alerts", meta[1])
+
     def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = STRATEGY_HEADERS
@@ -1208,6 +1239,32 @@ class WidgetPanelTests(unittest.TestCase):
             self.assertLess(win.width(), width_with_order_book)
             self.assertNotIn("买一", win.model._headers)
             self.assertNotIn("卖一", win.model._headers)
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_project_columns_keeps_stock_identifier_when_code_and_name_are_hidden(self):
+        cfg = {
+            "groups": [{"name": "指数", "codes": ["sh000001"]}],
+            "checked_codes": ["sh000001"],
+            "code_visible": False,
+            "name_visible": False,
+            "price_visible": True,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            full_rows = [[
+                "sh000001", "上证指数", "3864.37", "+0.00", "+0.00%",
+                "3864.00", "3864.50", "0.00%", "0", "0", "3864.37", "",
+            ]]
+            win._project_columns(full_rows, [{}])
+
+            self.assertIn("名称", win.model._headers)
+            self.assertIn("现价", win.model._headers)
+            self.assertEqual(win.model._rows[0][0], "上证指数")
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

@@ -117,37 +117,23 @@ class SettingsDialog(QDialog):
         self.cmb_code_priority.addItem("普通", userData="normal")
         self.cmb_code_priority.addItem("低优先", userData="low")
 
-        list_area = QHBoxLayout()
-        list_area.setSpacing(6)
-        list_area.addWidget(self.tree_codes, 1)
-        list_area.addLayout(btn_col)
-        lay_codes.addLayout(list_area, 1)
-
-        self.current_code_panel = QGroupBox("当前标的")
-        self.current_code_panel.setFixedWidth(300)
-        self.current_code_panel.setContentsMargins(3, 12, 3, 6)
-        current_code_lay = QVBoxLayout(self.current_code_panel)
-        current_code_lay.setContentsMargins(8, 8, 8, 8)
-        current_code_lay.setSpacing(8)
-        self.lbl_current_code_title = QLabel("未选择")
-        self.lbl_current_code_title.setStyleSheet("font-weight: 600; color: #222222;")
-        current_code_lay.addWidget(self.lbl_current_code_title)
-
         g_code_tags = QGroupBox("标的标识")
         g_code_tags.setContentsMargins(3, 12, 3, 6)
-        tag_lay = QGridLayout(g_code_tags)
+        tag_lay = QHBoxLayout(g_code_tags)
         tag_lay.setContentsMargins(6, 6, 6, 6)
         tag_lay.setSpacing(6)
-        tag_lay.addWidget(QLabel("状态"), 0, 0)
-        tag_lay.addWidget(self.cmb_code_holding, 0, 1)
-        tag_lay.addWidget(QLabel("周期"), 1, 0)
-        tag_lay.addWidget(self.cmb_code_cycle, 1, 1)
-        tag_lay.addWidget(QLabel("级别"), 2, 0)
-        tag_lay.addWidget(self.cmb_code_priority, 2, 1)
-        current_code_lay.addWidget(g_code_tags)
-        current_code_lay.addStretch(1)
-        lay_codes.addWidget(self.current_code_panel)
+        tag_lay.addWidget(QLabel("状态"))
+        tag_lay.addWidget(self.cmb_code_holding)
+        tag_lay.addWidget(QLabel("周期"))
+        tag_lay.addWidget(self.cmb_code_cycle)
+        tag_lay.addWidget(QLabel("级别"))
+        tag_lay.addWidget(self.cmb_code_priority)
+        tag_lay.addStretch(1)
+
+        lay_codes.addWidget(self.tree_codes, 1)
+        lay_codes.addLayout(btn_col)
         code_settings.addWidget(g_codes, 1)
+        code_settings.addWidget(g_code_tags)
 
         self.tabs.addTab(tab_0, "自选列表")
 
@@ -268,6 +254,9 @@ class SettingsDialog(QDialog):
             cb.stateChanged.connect(partial(self._on_cb_changed, cb_texts[i]))
             self.cbs.append(cb)
             gl_flag_other.addWidget(cb, i-11, 0)
+        self.chk_price_alert_badge_visible = QCheckBox("价格提醒标识")
+        self.chk_price_alert_badge_visible.setChecked(bool(getattr(self.win, "price_alert_badge_visible", True)))
+        gl_flag_other.addWidget(self.chk_price_alert_badge_visible, 1, 0)
         gl_flags.addWidget(g_flag_other, 2, 0)
 
         g_flag_strategy = QGroupBox("均线/策略")
@@ -442,17 +431,16 @@ class SettingsDialog(QDialog):
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setMinimumWidth(180)
 
-        form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 5)
-        form_price.addWidget(self.chk_price_alert_enabled, 1, 0)
-        form_price.addWidget(QLabel("代码："), 1, 1)
-        form_price.addWidget(self.edit_price_alert_code, 1, 2, 1, 2)
-        form_price.addWidget(self.cmb_price_alert_direction, 2, 0, 1, 2)
-        form_price.addWidget(self.spin_price_alert_price, 2, 2, 1, 2)
-        form_price.addWidget(QLabel("提示："), 3, 0)
-        form_price.addWidget(self.edit_price_alert_message, 3, 1, 1, 3)
+        form_price.addWidget(self.lbl_price_alert_current, 0, 0)
+        form_price.addWidget(self.chk_price_alert_enabled, 0, 1)
+        form_price.addWidget(self.edit_price_alert_code, 0, 2)
+        form_price.addWidget(self.cmb_price_alert_direction, 0, 3)
+        form_price.addWidget(self.spin_price_alert_price, 0, 4)
+        form_price.addWidget(QLabel("提示："), 1, 0)
+        form_price.addWidget(self.edit_price_alert_message, 1, 1, 1, 3)
         lay_price_alert.addLayout(form_price)
         lay_price_alert.addLayout(price_btns)
-        current_code_lay.insertWidget(2, g_price_alert)
+        code_settings.addWidget(g_price_alert)
 
         g_warning = QGroupBox("警醒标语")
         g_warning.setContentsMargins(3,12,3,6)
@@ -1326,6 +1314,7 @@ class SettingsDialog(QDialog):
         self.chk_warning_visible.toggled.connect(self._on_warning_changed)
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
+        self.chk_price_alert_badge_visible.toggled.connect(self._on_price_alert_badge_visible_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
         self.cmb_data_source_mode.currentIndexChanged.connect(self._on_data_source_changed)
@@ -1617,10 +1606,8 @@ class SettingsDialog(QDialog):
         if not code or not hasattr(self, "list_price_alerts"):
             return
         code_text = self._format_code_item_text(code)
-        if hasattr(self, "lbl_current_code_title"):
-            self.lbl_current_code_title.setText(code_text)
         if hasattr(self, "lbl_price_alert_current"):
-            self.lbl_price_alert_current.setText("价格提醒")
+            self.lbl_price_alert_current.setText(code_text)
         alerts = list(getattr(self, "_price_alerts", normalize_price_alerts(getattr(self.win, "price_alerts", []))))
         for row, alert in enumerate(alerts):
             if normalize_price_alert(alert).get("code") == code:
@@ -3180,6 +3167,11 @@ class SettingsDialog(QDialog):
 
     def _on_market_amount_changed(self, *_args):
         self.win.set_market_amount_visible(self.chk_market_amount_visible.isChecked())
+
+    def _on_price_alert_badge_visible_changed(self, *_args):
+        setter = getattr(self.win, "set_price_alert_badge_visible", None)
+        if callable(setter):
+            setter(self.chk_price_alert_badge_visible.isChecked())
 
     # —— 其它槽 —— #
     def _on_interval_changed(self, idx):

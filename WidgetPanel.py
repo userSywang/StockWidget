@@ -83,6 +83,7 @@ class FloatLabel(QWidget):
         self.warning_visible    = bool(cfg.get("warning_visible", False))
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
+        self.price_alert_badge_visible = bool(cfg.get("price_alert_badge_visible", True))
         self.code_names         = dict(cfg.get("code_names", {})) if isinstance(cfg.get("code_names"), dict) else {}
         self.code_tags          = self._normalize_code_tags(cfg.get("code_tags", {}))
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
@@ -252,6 +253,7 @@ class FloatLabel(QWidget):
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
+            "price_alert_badge_visible": bool(getattr(self, "price_alert_badge_visible", True)),
             "code_names": self.code_names,
             "code_tags": self.code_tags,
             "code_visible": bool(getattr(self, 'code_visible', False)),
@@ -1282,13 +1284,13 @@ class FloatLabel(QWidget):
                     if strategy_state:
                         meta["strategy"] = True
                         meta["severity"] = strategy_state.get("severity", "neutral")
-                    if code in price_alerts_by_code:
+                    if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
                         meta["price_alerts"] = price_alerts_by_code[code]
                     badges = []
                     strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
                     if strategy_triggered:
                         badges.append("策略")
-                    elif any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
+                    elif getattr(self, "price_alert_badge_visible", True) and any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
                         badges.append("价警")
                     full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code, badges))
                     meta_rows.append(meta)
@@ -1876,6 +1878,11 @@ class FloatLabel(QWidget):
         cols = [i for i, h in enumerate(self.ALL_HEADERS) if self.header_is_visible(h)]
         if not cols:
             cols = [1]
+        elif "代码" in self.ALL_HEADERS and "名称" in self.ALL_HEADERS:
+            code_idx = self.ALL_HEADERS.index("代码")
+            name_idx = self.ALL_HEADERS.index("名称")
+            if code_idx not in cols and name_idx not in cols:
+                cols.insert(0, name_idx)
         headers = [self.ALL_HEADERS[i] for i in cols]
 
         proj_rows, proj_meta = [], []
@@ -2111,6 +2118,11 @@ class FloatLabel(QWidget):
 
     def set_market_amount_visible(self, visible: bool):
         self.market_amount_visible = bool(visible)
+        self._notify_change()
+        self._refresh_from_function()
+
+    def set_price_alert_badge_visible(self, visible: bool):
+        self.price_alert_badge_visible = bool(visible)
         self._notify_change()
         self._refresh_from_function()
 
