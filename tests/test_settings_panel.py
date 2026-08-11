@@ -461,7 +461,6 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.edit_strategy_code.setText("512000")
         dlg.spin_strategy_cost.setValue(1.234)
         dlg.edit_strategy_buy_date.setText("2026-08-05")
-        dlg.spin_strategy_position_pct.setValue(18.0)
         dlg.edit_strategy_note.setText("测试持仓")
         dlg._on_strategy_position_editor_changed()
         dlg.chk_strategy_enabled.setChecked(True)
@@ -478,7 +477,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(win.strategy_alert_config["enabled"])
         self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh512000")
         self.assertEqual(win.strategy_alert_config["positions"][0]["cost_price"], 1.234)
-        self.assertEqual(win.strategy_alert_config["positions"][0]["position_pct"], 18.0)
+        self.assertNotIn("position_pct", win.strategy_alert_config["positions"][0])
         self.assertEqual(win.strategy_alert_config["positions"][0]["note"], "测试持仓")
         self.assertTrue(win.strategy_alert_config["notifications"]["desktop_popup"])
         self.assertTrue(win.strategy_alert_config["notifications"]["panel_highlight"])
@@ -496,6 +495,17 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_strategy_position()
         self.assertEqual(win.strategy_alert_config["positions"], [])
+        dlg.close()
+
+    def test_strategy_pages_remove_position_size_and_cap_controls(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        self.assertFalse(hasattr(dlg, "spin_strategy_position_pct"))
+        self.assertFalse(hasattr(dlg, "spin_strategy_max_position"))
+        self.assertFalse(hasattr(dlg, "chk_strategy_block_heavy"))
+        self.assertFalse(hasattr(dlg, "spin_template_max_position"))
+        self.assertFalse(hasattr(dlg, "chk_template_block_heavy"))
         dlg.close()
 
     def test_strategy_rules_follow_selected_position_and_save_to_position(self):
@@ -954,7 +964,7 @@ class SettingsPanelTests(unittest.TestCase):
         win.checked_codes = ["sh603259"]
         win.strategy_alert_config = {
             "enabled": True,
-            "positions": [{"code": "sh603259", "cost_price": 149.448, "buy_date": "2026-08-05", "position_pct": 33.0}],
+            "positions": [{"code": "sh603259", "cost_price": 149.448, "buy_date": "2026-08-05"}],
         }
         dlg = SettingsDialog(win, None)
         dlg.tabs.setCurrentIndex(2)
@@ -967,7 +977,6 @@ class SettingsPanelTests(unittest.TestCase):
             dlg.edit_strategy_code,
             dlg.spin_strategy_cost,
             dlg.edit_strategy_buy_date,
-            dlg.spin_strategy_position_pct,
             dlg.cmb_strategy_profile,
             dlg.btn_strategy_profile_clone,
             *dlg.spin_strategy_tier_profit,

@@ -566,11 +566,6 @@ class SettingsDialog(QDialog):
         self.spin_strategy_cost.setFixedWidth(92)
         self.edit_strategy_buy_date = QLineEdit()
         self.edit_strategy_buy_date.setPlaceholderText("YYYY-MM-DD")
-        self.spin_strategy_position_pct = QDoubleSpinBox()
-        self.spin_strategy_position_pct.setRange(0.0, 100.0)
-        self.spin_strategy_position_pct.setDecimals(1)
-        self.spin_strategy_position_pct.setSuffix("%")
-        self.spin_strategy_position_pct.setFixedWidth(92)
         self.edit_strategy_note = QLineEdit()
         self.cmb_strategy_profile = QComboBox()
         self.cmb_strategy_profile.setMinimumWidth(120)
@@ -584,8 +579,6 @@ class SettingsDialog(QDialog):
         form_strategy_position.addWidget(self.spin_strategy_cost, 0, 3)
         form_strategy_position.addWidget(QLabel("买入日期："), 1, 0)
         form_strategy_position.addWidget(self.edit_strategy_buy_date, 1, 1)
-        form_strategy_position.addWidget(QLabel("仓位："), 1, 2)
-        form_strategy_position.addWidget(self.spin_strategy_position_pct, 1, 3)
         form_strategy_position.addWidget(QLabel("备注："), 2, 0)
         form_strategy_position.addWidget(self.edit_strategy_note, 2, 1, 1, 3)
         form_strategy_position.addWidget(QLabel("策略模板："), 3, 0)
@@ -666,11 +659,6 @@ class SettingsDialog(QDialog):
         self.spin_strategy_reduce_half.setRange(0.0, 1000.0)
         self.spin_strategy_reduce_half.setDecimals(1)
         self.spin_strategy_reduce_half.setSuffix("%")
-        self.spin_strategy_max_position = QDoubleSpinBox()
-        self.spin_strategy_max_position.setRange(0.0, 100.0)
-        self.spin_strategy_max_position.setDecimals(1)
-        self.spin_strategy_max_position.setSuffix("%")
-        self.chk_strategy_block_heavy = QCheckBox("大盘5日线向下禁止新开重仓")
         self.chk_strategy_stale = QCheckBox("持仓满")
         self.spin_strategy_stale_days = QSpinBox()
         self.spin_strategy_stale_days.setRange(1, 3650)
@@ -712,16 +700,13 @@ class SettingsDialog(QDialog):
         loss_layout.addWidget(self.chk_strategy_index_ma10)
         loss_layout.addWidget(self.chk_strategy_skip_volume_drop)
 
-        g_position_rules = QGroupBox("仓位风控")
+        g_position_rules = QGroupBox("持仓时间提醒")
         position_layout = QGridLayout(g_position_rules)
         position_layout.setHorizontalSpacing(6)
         position_layout.setVerticalSpacing(4)
-        position_layout.addWidget(QLabel("单票仓位上限："), 0, 0)
-        position_layout.addWidget(self.spin_strategy_max_position, 0, 1)
-        position_layout.addWidget(self.chk_strategy_block_heavy, 0, 2, 1, 2)
-        position_layout.addWidget(self.chk_strategy_stale, 1, 0)
-        position_layout.addWidget(self.spin_strategy_stale_days, 1, 1)
-        position_layout.addWidget(QLabel("天不上涨提醒卖出"), 1, 2, 1, 2)
+        position_layout.addWidget(self.chk_strategy_stale, 0, 0)
+        position_layout.addWidget(self.spin_strategy_stale_days, 0, 1)
+        position_layout.addWidget(QLabel("天不上涨提醒卖出"), 0, 2, 1, 2)
 
         params_editor_layout.addWidget(g_profit_rules)
         params_editor_layout.addWidget(g_loss_rules)
@@ -902,25 +887,17 @@ class SettingsDialog(QDialog):
         template_loss_layout.addWidget(self.chk_template_index_ma10)
         template_loss_layout.addWidget(self.chk_template_skip_volume_drop)
 
-        # 仓位风控
-        g_template_position = QGroupBox("仓位风控")
+        # 持仓时间提醒
+        g_template_position = QGroupBox("持仓时间提醒")
         template_position_layout = QGridLayout(g_template_position)
         template_position_layout.setHorizontalSpacing(6)
         template_position_layout.setVerticalSpacing(4)
-        self.spin_template_max_position = QDoubleSpinBox()
-        self.spin_template_max_position.setRange(0.0, 100.0)
-        self.spin_template_max_position.setDecimals(1)
-        self.spin_template_max_position.setSuffix("%")
-        self.chk_template_block_heavy = QCheckBox("大盘5日线向下禁止新开重仓")
         self.chk_template_stale = QCheckBox("持仓满")
         self.spin_template_stale_days = QSpinBox()
         self.spin_template_stale_days.setRange(1, 3650)
-        template_position_layout.addWidget(QLabel("单票仓位上限："), 0, 0)
-        template_position_layout.addWidget(self.spin_template_max_position, 0, 1)
-        template_position_layout.addWidget(self.chk_template_block_heavy, 0, 2, 1, 2)
-        template_position_layout.addWidget(self.chk_template_stale, 1, 0)
-        template_position_layout.addWidget(self.spin_template_stale_days, 1, 1)
-        template_position_layout.addWidget(QLabel("天不上涨提醒卖出"), 1, 2, 1, 2)
+        template_position_layout.addWidget(self.chk_template_stale, 0, 0)
+        template_position_layout.addWidget(self.spin_template_stale_days, 0, 1)
+        template_position_layout.addWidget(QLabel("天不上涨提醒卖出"), 0, 2, 1, 2)
 
         template_rules_layout.addWidget(g_template_profit)
         template_rules_layout.addWidget(g_template_loss)
@@ -1289,7 +1266,6 @@ class SettingsDialog(QDialog):
         self.edit_strategy_code.editingFinished.connect(self._on_strategy_position_editor_changed)
         self.spin_strategy_cost.valueChanged.connect(self._on_strategy_position_editor_changed)
         self.edit_strategy_buy_date.editingFinished.connect(self._on_strategy_position_editor_changed)
-        self.spin_strategy_position_pct.valueChanged.connect(self._on_strategy_position_editor_changed)
         self.edit_strategy_note.editingFinished.connect(self._on_strategy_position_editor_changed)
         for checkbox in (
             self.chk_strategy_loss,
@@ -1299,14 +1275,12 @@ class SettingsDialog(QDialog):
             self.chk_strategy_trailing,
             self.chk_strategy_skip_volume_drop,
             self.chk_strategy_reduce_half,
-            self.chk_strategy_block_heavy,
             self.chk_strategy_stale,
         ):
             checkbox.toggled.connect(self._on_strategy_config_changed)
         for spin in (
             self.spin_strategy_loss,
             self.spin_strategy_reduce_half,
-            self.spin_strategy_max_position,
             self.spin_strategy_stale_days,
             *self.spin_strategy_tier_profit,
             *self.spin_strategy_tier_lock,
@@ -1331,14 +1305,12 @@ class SettingsDialog(QDialog):
             self.chk_template_trailing,
             self.chk_template_skip_volume_drop,
             self.chk_template_reduce_half,
-            self.chk_template_block_heavy,
             self.chk_template_stale,
         ):
             checkbox.toggled.connect(self._on_template_rules_changed)
         for spin in (
             self.spin_template_loss,
             self.spin_template_reduce_half,
-            self.spin_template_max_position,
             self.spin_template_stale_days,
             *self.spin_template_tier_profit,
             *self.spin_template_tier_lock,
@@ -1715,7 +1687,6 @@ class SettingsDialog(QDialog):
                 "strategy_id": "default",
                 "cost_price": 0.0,
                 "buy_date": "",
-                "position_pct": 0.0,
                 "note": "",
                 "rules": {},
             })
@@ -2088,10 +2059,9 @@ class SettingsDialog(QDialog):
     def _format_strategy_position(self, position):
         code = position.get("code", "")
         cost = float(position.get("cost_price", 0.0))
-        pct = float(position.get("position_pct", 0.0))
         date = position.get("buy_date", "")
         date_part = f" {date}" if date else ""
-        return f"{self._format_code_item_text(code)} 成本 {cost:.3f} 仓位 {pct:.1f}%{date_part}"
+        return f"{self._format_code_item_text(code)} 成本 {cost:.3f}{date_part}"
 
     def _load_strategy_config(self, current_row=None):
         original_config = normalize_strategy_alert_config(getattr(self.win, "strategy_alert_config", {}))
@@ -2125,8 +2095,6 @@ class SettingsDialog(QDialog):
             self.chk_strategy_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
             self.chk_strategy_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
             self.spin_strategy_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
-            self.spin_strategy_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
-            self.chk_strategy_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
             self.chk_strategy_stale.setChecked(bool(rules.get("stale_position_enabled")))
             self.spin_strategy_stale_days.setValue(int(rules.get("stale_position_days", 12)))
 
@@ -2162,7 +2130,6 @@ class SettingsDialog(QDialog):
         self.edit_strategy_code.clear()
         self.spin_strategy_cost.setValue(0.0)
         self.edit_strategy_buy_date.clear()
-        self.spin_strategy_position_pct.setValue(0.0)
         self.edit_strategy_note.clear()
         self.cmb_strategy_profile.clear()
 
@@ -2222,8 +2189,6 @@ class SettingsDialog(QDialog):
         self.chk_strategy_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
         self.chk_strategy_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
         self.spin_strategy_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
-        self.spin_strategy_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
-        self.chk_strategy_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
         self.chk_strategy_stale.setChecked(bool(rules.get("stale_position_enabled")))
         self.spin_strategy_stale_days.setValue(int(rules.get("stale_position_days", 12)))
 
@@ -2242,7 +2207,6 @@ class SettingsDialog(QDialog):
             self.edit_strategy_code.setText(position.get("code", ""))
             self.spin_strategy_cost.setValue(float(position.get("cost_price", 0.0)))
             self.edit_strategy_buy_date.setText(position.get("buy_date", ""))
-            self.spin_strategy_position_pct.setValue(float(position.get("position_pct", 0.0)))
             self.edit_strategy_note.setText(position.get("note", ""))
             profile_id = position.get("strategy_id") or "default"
             self._load_strategy_profile_options(profile_id)
@@ -2274,8 +2238,6 @@ class SettingsDialog(QDialog):
             "skip_raise_on_volume_drop": self.chk_strategy_skip_volume_drop.isChecked(),
             "reduce_half_enabled": self.chk_strategy_reduce_half.isChecked(),
             "reduce_half_profit_pct": self.spin_strategy_reduce_half.value(),
-            "max_position_pct": self.spin_strategy_max_position.value(),
-            "block_heavy_position_on_index_ma5_down": self.chk_strategy_block_heavy.isChecked(),
             "stale_position_enabled": self.chk_strategy_stale.isChecked(),
             "stale_position_days": self.spin_strategy_stale_days.value(),
         }
@@ -2608,10 +2570,6 @@ class SettingsDialog(QDialog):
             status = "启用" if new_rules.get("index_ma10_break_enabled") else "禁用"
             changes.append(f"大盘破10日线风控：{status}")
         
-        # 仓位相关
-        if old_rules.get("max_position_pct") != new_rules.get("max_position_pct"):
-            changes.append(f"单票仓位上限：{old_rules.get('max_position_pct', 0):.1f}% → {new_rules.get('max_position_pct', 0):.1f}%")
-        
         if old_rules.get("stale_position_enabled") != new_rules.get("stale_position_enabled"):
             status = "启用" if new_rules.get("stale_position_enabled") else "禁用"
             changes.append(f"持仓时间提醒：{status}")
@@ -2737,7 +2695,6 @@ class SettingsDialog(QDialog):
             "strategy_id": self.cmb_strategy_profile.currentData() or previous.get("strategy_id", "default"),
             "cost_price": self.spin_strategy_cost.value(),
             "buy_date": self.edit_strategy_buy_date.text(),
-            "position_pct": self.spin_strategy_position_pct.value(),
             "note": self.edit_strategy_note.text(),
             "peak_profit_pct": previous.get("peak_profit_pct", 0.0),
             "locked_profit_pct": previous.get("locked_profit_pct", 0.0),
@@ -2765,7 +2722,6 @@ class SettingsDialog(QDialog):
             "strategy_id": "default",
             "cost_price": 0.0,
             "buy_date": "",
-            "position_pct": 0.0,
             "note": "",
             "rules": {},
         })
@@ -2898,8 +2854,6 @@ class SettingsDialog(QDialog):
             "skip_raise_on_volume_drop": self.chk_template_skip_volume_drop.isChecked(),
             "reduce_half_enabled": self.chk_template_reduce_half.isChecked(),
             "reduce_half_profit_pct": self.spin_template_reduce_half.value(),
-            "max_position_pct": self.spin_template_max_position.value(),
-            "block_heavy_position_on_index_ma5_down": self.chk_template_block_heavy.isChecked(),
             "stale_position_enabled": self.chk_template_stale.isChecked(),
             "stale_position_days": self.spin_template_stale_days.value(),
         }
@@ -2920,8 +2874,6 @@ class SettingsDialog(QDialog):
         self.chk_template_skip_volume_drop.setChecked(bool(rules.get("skip_raise_on_volume_drop")))
         self.chk_template_reduce_half.setChecked(bool(rules.get("reduce_half_enabled")))
         self.spin_template_reduce_half.setValue(float(rules.get("reduce_half_profit_pct", 45.0)))
-        self.spin_template_max_position.setValue(float(rules.get("max_position_pct", 20.0)))
-        self.chk_template_block_heavy.setChecked(bool(rules.get("block_heavy_position_on_index_ma5_down")))
         self.chk_template_stale.setChecked(bool(rules.get("stale_position_enabled")))
         self.spin_template_stale_days.setValue(int(rules.get("stale_position_days", 12)))
 
@@ -2950,7 +2902,6 @@ class SettingsDialog(QDialog):
             "add_position": "提醒加仓",
             "reduce_position": "提醒减仓",
             "update_stop_line": "提醒止盈线变化",
-            "limit_position": "限制仓位",
             "block_open": "禁止新开仓",
         }
         try:
@@ -2987,7 +2938,6 @@ class SettingsDialog(QDialog):
             ("最高浮盈", "peak_profit_pct"),
             ("当前价", "stock_price"),
             ("大盘价", "index_price"),
-            ("仓位", "position_pct"),
             ("持仓天数", "holding_days"),
             ("大盘趋势", "index_ma_trend"),
         ]
@@ -3008,7 +2958,6 @@ class SettingsDialog(QDialog):
             ("提醒加仓", "add_position"),
             ("提醒减仓", "reduce_position"),
             ("提醒止盈线变化", "update_stop_line"),
-            ("限制仓位", "limit_position"),
             ("禁止新开仓", "block_open"),
         ]
         for rule in action_rules:
@@ -3196,7 +3145,6 @@ class SettingsDialog(QDialog):
             ("大盘5日线风控", "启用" if rules.get("index_ma5_break_enabled") else "禁用", param_status("index_ma5_break_enabled", rules.get("index_ma5_break_enabled"), base_rules.get("index_ma5_break_enabled"))),
             ("大盘10日线风控", "启用" if rules.get("index_ma10_break_enabled") else "禁用", param_status("index_ma10_break_enabled", rules.get("index_ma10_break_enabled"), base_rules.get("index_ma10_break_enabled"))),
             ("放量保护", "启用" if rules.get("skip_raise_on_volume_drop") else "禁用", param_status("skip_raise_on_volume_drop", rules.get("skip_raise_on_volume_drop"), base_rules.get("skip_raise_on_volume_drop"))),
-            ("单票仓位上限", f"{rules.get('max_position_pct', 0):.1f}%", param_status("max_position_pct", rules.get("max_position_pct"), base_rules.get("max_position_pct"))),
             ("持仓时间提醒", f"{rules.get('stale_position_days', 0)}天", param_status("stale_position_days", rules.get("stale_position_days"), base_rules.get("stale_position_days"))),
         ]
         for name, value, status in params:

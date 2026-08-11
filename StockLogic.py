@@ -31,8 +31,6 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "skip_raise_on_volume_drop": True,
         "reduce_half_enabled": True,
         "reduce_half_profit_pct": 45.0,
-        "max_position_pct": 20.0,
-        "block_heavy_position_on_index_ma5_down": True,
         "stale_position_enabled": True,
         "stale_position_days": 12,
     },
@@ -57,7 +55,6 @@ ACTION_RULE_ACTIONS = {
     "add_position": "提醒加仓",
     "reduce_position": "提醒减仓",
     "update_stop_line": "提醒止盈线变化",
-    "limit_position": "限制仓位",
     "block_open": "禁止新开仓",
 }
 
@@ -151,8 +148,6 @@ def default_strategy_profiles(normalized_rules=None):
         "index_ma10_break_enabled": False,
         "trailing_profit_enabled": False,
         "reduce_half_enabled": False,
-        "max_position_pct": 20.0,
-        "block_heavy_position_on_index_ma5_down": False,
         "stale_position_enabled": False,
     }, rules)
     return [
@@ -496,7 +491,6 @@ def normalize_strategy_position(position):
         "strategy_id": str(position.get("strategy_id") or position.get("profile_id") or "").strip(),
         "cost_price": _bounded_float(position.get("cost_price"), 0.0, 0.0, 99999.999),
         "buy_date": str(position.get("buy_date") or "").strip(),
-        "position_pct": _bounded_float(position.get("position_pct"), 0.0, 0.0, 100.0),
         "peak_profit_pct": _bounded_float(position.get("peak_profit_pct"), 0.0, -100.0, 10000.0),
         "locked_profit_pct": _bounded_float(position.get("locked_profit_pct"), 0.0, 0.0, 10000.0),
         "lock_raised": bool(position.get("lock_raised", False)),
@@ -535,8 +529,6 @@ def _normalize_strategy_rules(source_rules, fallback=None):
         "skip_raise_on_volume_drop": bool(source_rules.get("skip_raise_on_volume_drop", default_rules["skip_raise_on_volume_drop"])),
         "reduce_half_enabled": bool(source_rules.get("reduce_half_enabled", default_rules["reduce_half_enabled"])),
         "reduce_half_profit_pct": _bounded_float(source_rules.get("reduce_half_profit_pct"), default_rules["reduce_half_profit_pct"], 0.0, 1000.0),
-        "max_position_pct": _bounded_float(source_rules.get("max_position_pct"), default_rules["max_position_pct"], 0.0, 100.0),
-        "block_heavy_position_on_index_ma5_down": bool(source_rules.get("block_heavy_position_on_index_ma5_down", default_rules["block_heavy_position_on_index_ma5_down"])),
         "stale_position_enabled": bool(source_rules.get("stale_position_enabled", default_rules["stale_position_enabled"])),
         "stale_position_days": _bounded_int(source_rules.get("stale_position_days"), default_rules["stale_position_days"], 1, 3650),
     }
@@ -731,30 +723,6 @@ def strategy_action_rules_from_rules(rules, source="legacy"):
             source,
         ),
         _action_rule(
-            "position_cap",
-            "单票仓位上限",
-            True,
-            {
-                "metric": "position_pct",
-                "operator": "<=",
-                "threshold": {"type": "percent", "value": float(rules.get("max_position_pct", 0.0))},
-            },
-            {"type": "limit_position", "reason": "position_cap"},
-            source,
-        ),
-        _action_rule(
-            "block_heavy_on_index_ma5_down",
-            "大盘5日线向下禁开重仓",
-            rules.get("block_heavy_position_on_index_ma5_down"),
-            {
-                "metric": "index_ma_trend",
-                "operator": "is",
-                "threshold": {"type": "trend", "scope": "index", "period": 5, "value": "down"},
-            },
-            {"type": "block_open", "reason": "index_ma_down"},
-            source,
-        ),
-        _action_rule(
             "stale_position",
             "持仓天数清仓",
             rules.get("stale_position_enabled"),
@@ -915,7 +883,6 @@ def strategy_daily_request_codes(config):
     if any(
         rules.get("index_ma5_break_enabled")
         or rules.get("index_ma10_break_enabled")
-        or rules.get("block_heavy_position_on_index_ma5_down")
         for rules in rules_list
     ):
         codes.extend(["sh000001", "sz399001"])
@@ -1007,8 +974,6 @@ def strategy_enabled_rule_labels(rules):
         labels.append("移动止盈")
     if rules.get("reduce_half_enabled"):
         labels.append("减半仓")
-    if rules.get("block_heavy_position_on_index_ma5_down"):
-        labels.append("限重仓")
     if rules.get("stale_position_enabled"):
         labels.append("持仓天数")
     return labels
@@ -1271,18 +1236,6 @@ def evaluate_strategy_actions(config, position, quote, daily_by_code=None, conte
                     },
                 ))
 
-    block_rule = action_rules.get("block_heavy_on_index_ma5_down")
-    if block_rule and block_rule.get("enabled") and bool(context.get("index_ma5_down")):
-        actions.append(_strategy_action(
-            block_rule,
-            position,
-            stock_name,
-            action_type="block_open",
-            severity="warning",
-            message="大盘5日线向下，禁止新开重仓",
-            details={"period": 5},
-        ))
-
     return actions
 
 
@@ -1382,8 +1335,6 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             severity = "danger"
         elif index_daily_errors:
             status_parts.append("大盘" + "/".join(index_daily_errors))
-        if rules.get("block_heavy_position_on_index_ma5_down") and index_ma5_down:
-            status_parts.append("大盘5日线向下")
         if not status_parts:
             status_parts.append("未触发")
 

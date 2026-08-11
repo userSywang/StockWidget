@@ -176,7 +176,7 @@ class StockLogicTests(unittest.TestCase):
         self.assertTrue(config["enabled"])
         self.assertEqual(config["positions"][0]["code"], "sh512000")
         self.assertEqual(config["positions"][0]["cost_price"], 1.234)
-        self.assertEqual(config["positions"][0]["position_pct"], 100.0)
+        self.assertNotIn("position_pct", config["positions"][0])
         self.assertFalse(config["notifications"]["desktop_popup"])
         self.assertTrue(config["notifications"]["panel_highlight"])
         self.assertTrue(config["notifications"]["remote_push"])
@@ -293,7 +293,6 @@ class StockLogicTests(unittest.TestCase):
             ],
             "reduce_half_enabled": True,
             "reduce_half_profit_pct": 45,
-            "max_position_pct": 20,
             "stale_position_enabled": True,
             "stale_position_days": 12,
         })
@@ -304,7 +303,8 @@ class StockLogicTests(unittest.TestCase):
         self.assertFalse(by_id["index_ma5_break"]["enabled"])
         self.assertEqual(by_id["trailing_profit"]["condition"]["threshold"]["tiers"][1]["lock_pct"], 30.0)
         self.assertEqual(by_id["reduce_half"]["action"]["type"], "reduce_position")
-        self.assertEqual(by_id["position_cap"]["condition"]["threshold"]["value"], 20.0)
+        self.assertNotIn("position_cap", by_id)
+        self.assertNotIn("block_heavy_on_index_ma5_down", by_id)
         self.assertEqual(by_id["stale_position"]["condition"]["threshold"]["value"], 12)
 
     def test_strategy_action_rules_for_position_use_resolved_position_rules(self):
