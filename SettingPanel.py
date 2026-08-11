@@ -393,30 +393,29 @@ class SettingsDialog(QDialog):
 
         g_price_alert = QGroupBox("价格提醒")
         g_price_alert.setContentsMargins(3,12,3,6)
-        lay_price_alert = QHBoxLayout(g_price_alert)
+        lay_price_alert = QVBoxLayout(g_price_alert)
         lay_price_alert.setSpacing(6)
 
-        left_price = QVBoxLayout()
         self.list_price_alerts = QListWidget()
-        self.list_price_alerts.setFixedWidth(220)
-        self.list_price_alerts.setMinimumHeight(120)
-        left_price.addWidget(self.list_price_alerts)
+        self.list_price_alerts.setVisible(False)
         price_btns = QHBoxLayout()
-        self.btn_price_alert_add = QPushButton("添加")
-        self.btn_price_alert_del = QPushButton("删除")
+        self.btn_price_alert_add = QPushButton("保存提醒")
+        self.btn_price_alert_del = QPushButton("删除提醒")
         self.btn_price_alert_add.setFixedWidth(82)
         self.btn_price_alert_del.setFixedWidth(82)
+        price_btns.addStretch(1)
         price_btns.addWidget(self.btn_price_alert_add)
         price_btns.addWidget(self.btn_price_alert_del)
-        left_price.addLayout(price_btns)
-        lay_price_alert.addLayout(left_price)
 
         form_price = QGridLayout()
         form_price.setHorizontalSpacing(6)
         form_price.setVerticalSpacing(6)
+        self.lbl_price_alert_current = QLabel("当前标的：-")
+        self.lbl_price_alert_current.setStyleSheet("color: #666666;")
         self.chk_price_alert_enabled = QCheckBox("启用")
         self.edit_price_alert_code = QLineEdit()
         self.edit_price_alert_code.setMinimumWidth(90)
+        self.edit_price_alert_code.setReadOnly(True)
         self.cmb_price_alert_direction = QComboBox()
         self.cmb_price_alert_direction.setMinimumWidth(105)
         self.cmb_price_alert_direction.addItem("高于/等于", userData="above")
@@ -429,14 +428,16 @@ class SettingsDialog(QDialog):
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setMinimumWidth(300)
 
-        form_price.addWidget(self.chk_price_alert_enabled, 0, 0)
-        form_price.addWidget(QLabel("代码："), 0, 1)
-        form_price.addWidget(self.edit_price_alert_code, 0, 2)
-        form_price.addWidget(self.cmb_price_alert_direction, 0, 3)
-        form_price.addWidget(self.spin_price_alert_price, 0, 4)
-        form_price.addWidget(QLabel("提示："), 1, 0)
-        form_price.addWidget(self.edit_price_alert_message, 1, 1, 1, 4)
-        lay_price_alert.addLayout(form_price, 1)
+        form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 5)
+        form_price.addWidget(self.chk_price_alert_enabled, 1, 0)
+        form_price.addWidget(QLabel("代码："), 1, 1)
+        form_price.addWidget(self.edit_price_alert_code, 1, 2)
+        form_price.addWidget(self.cmb_price_alert_direction, 1, 3)
+        form_price.addWidget(self.spin_price_alert_price, 1, 4)
+        form_price.addWidget(QLabel("提示："), 2, 0)
+        form_price.addWidget(self.edit_price_alert_message, 2, 1, 1, 4)
+        lay_price_alert.addLayout(form_price)
+        lay_price_alert.addLayout(price_btns)
         code_settings.addWidget(g_price_alert)
 
         g_warning = QGroupBox("警醒标语")
@@ -462,6 +463,14 @@ class SettingsDialog(QDialog):
         self._loading_price_alert_editor = False
         self._load_alert_list()
         self._load_price_alert_list()
+        if self.tree_codes.currentItem() is None and self.tree_codes.topLevelItemCount() > 0:
+            group = self.tree_codes.topLevelItem(0)
+            if group is not None and group.childCount() > 0:
+                self.tree_codes.setCurrentItem(group.child(0))
+        initial_code = self._current_code_from_tree()
+        if initial_code:
+            self._load_code_tag_editor()
+            self._select_price_alert_for_code(initial_code)
         self._refresh_code_action_buttons()
         self.tab_alert_legacy = tab_alert
 
@@ -1593,6 +1602,8 @@ class SettingsDialog(QDialog):
     def _select_price_alert_for_code(self, code):
         if not code or not hasattr(self, "list_price_alerts"):
             return
+        if hasattr(self, "lbl_price_alert_current"):
+            self.lbl_price_alert_current.setText(f"当前标的：{self._format_code_item_text(code)}")
         alerts = list(getattr(self, "_price_alerts", normalize_price_alerts(getattr(self.win, "price_alerts", []))))
         for row, alert in enumerate(alerts):
             if normalize_price_alert(alert).get("code") == code:
@@ -1943,7 +1954,7 @@ class SettingsDialog(QDialog):
     def _collect_price_alert_from_editor(self):
         return normalize_price_alert({
             "enabled": self.chk_price_alert_enabled.isChecked(),
-            "code": self.edit_price_alert_code.text(),
+            "code": self._current_code_from_tree() or self.edit_price_alert_code.text(),
             "direction": self.cmb_price_alert_direction.currentData(),
             "price": self.spin_price_alert_price.value(),
             "message": self.edit_price_alert_message.text(),
@@ -1968,26 +1979,35 @@ class SettingsDialog(QDialog):
         self.win.set_price_alerts(self._price_alerts)
 
     def _add_price_alert(self):
-        alerts = list(getattr(self, "_price_alerts", normalize_price_alerts([])))
-        alert = default_price_alert()
         current_code = self._current_code_from_tree()
-        if current_code:
-            alert["code"] = current_code
-        elif getattr(self.win, "codes", None):
-            alert["code"] = self.win.codes[0]
-        alerts.append(alert)
+        if not current_code:
+            return
+        alerts = list(getattr(self, "_price_alerts", normalize_price_alerts(getattr(self.win, "price_alerts", []))))
+        alert = self._collect_price_alert_from_editor()
+        alert["code"] = current_code
+        target_row = -1
+        for row, existing in enumerate(alerts):
+            if normalize_price_alert(existing).get("code") == current_code:
+                target_row = row
+                break
+        if target_row >= 0:
+            alerts[target_row] = alert
+        else:
+            alerts.append(alert)
+            target_row = len(alerts) - 1
         self.win.set_price_alerts(alerts)
-        self._load_price_alert_list(len(alerts) - 1)
+        self._load_price_alert_list(target_row)
+        self._select_price_alert_for_code(current_code)
 
     def _del_price_alert(self):
-        row = self._current_price_alert_row()
-        if row < 0:
+        current_code = self._current_code_from_tree()
+        if not current_code:
             return
         alerts = list(getattr(self, "_price_alerts", []))
-        if 0 <= row < len(alerts):
-            alerts.pop(row)
+        alerts = [alert for alert in alerts if normalize_price_alert(alert).get("code") != current_code]
         self.win.set_price_alerts(alerts)
-        self._load_price_alert_list(max(0, row - 1))
+        self._load_price_alert_list()
+        self._select_price_alert_for_code(current_code)
 
     # —— 策略提醒 —— #
     def _format_strategy_position(self, position):

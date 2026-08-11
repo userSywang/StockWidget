@@ -358,16 +358,17 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.show()
         self.app.processEvents()
 
-        price_rect = dlg.list_price_alerts.rect().translated(dlg.list_price_alerts.mapToGlobal(QPoint(0, 0)))
         add_rect = dlg.btn_price_alert_add.rect().translated(dlg.btn_price_alert_add.mapToGlobal(QPoint(0, 0)))
         del_rect = dlg.btn_price_alert_del.rect().translated(dlg.btn_price_alert_del.mapToGlobal(QPoint(0, 0)))
 
         self.assertEqual(dlg.tabs.currentIndex(), 0)
         self.assertTrue(dlg.btn_code_to_alert.isHidden())
-        self.assertGreaterEqual(add_rect.top(), price_rect.bottom() - 2)
-        self.assertGreaterEqual(del_rect.top(), price_rect.bottom() - 2)
-        self.assertFalse(price_rect.intersects(add_rect))
-        self.assertFalse(price_rect.intersects(del_rect))
+        self.assertTrue(dlg.list_price_alerts.isHidden())
+        self.assertTrue(dlg.btn_price_alert_add.isVisible())
+        self.assertTrue(dlg.btn_price_alert_del.isVisible())
+        self.assertGreaterEqual(del_rect.left(), add_rect.right())
+        self.assertEqual(dlg.btn_price_alert_add.text(), "保存提醒")
+        self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
         dlg.close()
 
     def test_self_selected_page_contains_price_alert_editor_and_no_alert_tab(self):
@@ -380,7 +381,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(tab_names[-1], "数据源")
         self.assertGreaterEqual(dlg.tab_sizes[0].width(), 720)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
-        self.assertGreaterEqual(dlg.list_price_alerts.width(), 220)
+        self.assertTrue(dlg.list_price_alerts.isHidden())
         self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 300)
         dlg.close()
 
@@ -397,13 +398,12 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
 
-        dlg.edit_price_alert_code.setText("512000")
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.spin_price_alert_price.setValue(1.234)
         dlg.edit_price_alert_message.setText("跌破提醒")
         dlg._on_price_alert_editor_changed()
 
-        self.assertEqual(win.price_alerts[0]["code"], "sh512000")
+        self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertEqual(win.price_alerts[0]["direction"], "below_ma5")
         self.assertFalse(dlg.spin_price_alert_price.isEnabled())
         self.assertEqual(win.price_alerts[0]["message"], "跌破提醒")
