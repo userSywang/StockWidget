@@ -1651,9 +1651,9 @@ class FloatLabel(QWidget):
                         pushed = True
                 except Exception:
                     pass
-            if desktop:
+            if desktop and not self._is_desktop_alert_ignored(key, now_dt):
                 try:
-                    self.show_desktop_alert(self._strategy_push_text_for_state(state))
+                    self.show_desktop_alert(self._strategy_push_text_for_state(state), ignore_key=key)
                     pushed = True
                 except Exception:
                     pass
@@ -1687,7 +1687,26 @@ class FloatLabel(QWidget):
                 break
         self.strategy_alert_history = history
 
-    def _create_alert_toast(self, plain):
+    def _desktop_alert_ignore_date(self, now=None):
+        now_provider = getattr(self, "_now", None)
+        now = now or (now_provider() if callable(now_provider) else datetime.now())
+        return now.strftime("%Y-%m-%d") if hasattr(now, "strftime") else str(now)[:10]
+
+    def _is_desktop_alert_ignored(self, key, now=None):
+        if not key:
+            return False
+        ignored = getattr(self, "_desktop_alert_ignored_today", {})
+        return ignored.get(str(key)) == self._desktop_alert_ignore_date(now)
+
+    def _ignore_desktop_alert_today(self, key, toast=None):
+        if key:
+            ignored = dict(getattr(self, "_desktop_alert_ignored_today", {}) or {})
+            ignored[str(key)] = self._desktop_alert_ignore_date()
+            self._desktop_alert_ignored_today = ignored
+        if toast is not None:
+            self._close_alert_toast(toast)
+
+    def _create_alert_toast(self, plain, ignore_key=None):
         toast = QFrame(self)
         toast.setObjectName("alert_toast")
         toast.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -1699,19 +1718,31 @@ class FloatLabel(QWidget):
         label.setWordWrap(True)
         label.setMinimumWidth(220)
         label.setMaximumWidth(340)
+        ignore_btn = QPushButton("忽略今日", toast)
+        ignore_btn.setObjectName("alert_toast_ignore")
+        ignore_btn.setFixedHeight(24)
         close_btn = QPushButton("×", toast)
         close_btn.setObjectName("alert_toast_close")
         close_btn.setFixedSize(20, 20)
         close_btn.clicked.connect(lambda _checked=False, item=toast: self._close_alert_toast(item))
+        ignore_btn.clicked.connect(lambda _checked=False, key=ignore_key, item=toast: self._ignore_desktop_alert_today(key, item))
         layout.addWidget(label, 1)
+        if ignore_key:
+            layout.addWidget(ignore_btn, 0, Qt.AlignTop)
+        else:
+            ignore_btn.hide()
         layout.addWidget(close_btn, 0, Qt.AlignTop)
         toast.setStyleSheet(
             "QFrame#alert_toast{background:#1f2937;color:#f9fafb;border:1px solid #60a5fa;border-radius:6px;}"
             "QLabel#alert_toast_label{color:#f9fafb;font-size:12px;}"
+            "QPushButton#alert_toast_ignore{background:#374151;color:#f9fafb;border:1px solid #4b5563;border-radius:3px;padding:1px 8px;font-size:12px;}"
+            "QPushButton#alert_toast_ignore:hover{background:#4b5563;}"
             "QPushButton#alert_toast_close{background:transparent;color:#f9fafb;border:none;font-size:16px;font-weight:700;}"
             "QPushButton#alert_toast_close:hover{background:#374151;border-radius:3px;}"
         )
         toast._message_label = label
+        toast._ignore_button = ignore_btn
+        toast._ignore_key = ignore_key
         label.setText(plain)
         toast.hide()
         return toast
@@ -1766,12 +1797,14 @@ class FloatLabel(QWidget):
                 break
         return "\n".join(picked)
 
-    def show_desktop_alert(self, text):
+    def show_desktop_alert(self, text, ignore_key=None):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
         if not notifications.get("desktop_popup"):
             return
+        if ignore_key and self._is_desktop_alert_ignored(ignore_key):
+            return
         plain = self._compact_desktop_alert_text(text)
-        toast = self._create_alert_toast(plain)
+        toast = self._create_alert_toast(plain, ignore_key=ignore_key)
         toasts = list(getattr(self, "_alert_toasts", []))
         toasts.append(toast)
         while len(toasts) > 3:

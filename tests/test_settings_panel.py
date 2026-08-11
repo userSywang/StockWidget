@@ -373,6 +373,20 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertFalse(target_rect.intersects(del_rect))
         dlg.close()
 
+    def test_alert_page_has_expanded_editing_area(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.tabs.setCurrentIndex(3)
+
+        self.assertGreaterEqual(dlg.width(), 720)
+        self.assertGreater(dlg.maximumWidth(), dlg.width())
+        self.assertGreaterEqual(dlg.list_alerts.width(), 185)
+        self.assertGreaterEqual(dlg.list_alert_targets.minimumHeight(), 112)
+        self.assertGreaterEqual(dlg.list_price_alerts.width(), 220)
+        self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 300)
+        dlg.close()
+
     def test_price_alerts_can_be_added_edited_and_deleted(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

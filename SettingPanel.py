@@ -50,7 +50,7 @@ class SettingsDialog(QDialog):
             0: QSize(460, 420),
             1: QSize(440, 420),
             2: QSize(520, 240),
-            3: QSize(500, 520),
+            3: QSize(720, 620),
             4: QSize(980, 720),
             5: QSize(360, 350),
             6: QSize(300, 220),
@@ -321,13 +321,14 @@ class SettingsDialog(QDialog):
 
         left_alert = QVBoxLayout()
         self.list_alerts = QListWidget()
-        self.list_alerts.setFixedWidth(130)
+        self.list_alerts.setFixedWidth(185)
+        self.list_alerts.setMinimumHeight(120)
         left_alert.addWidget(self.list_alerts)
         alert_btns = QHBoxLayout()
         self.btn_alert_add = QPushButton("添加")
         self.btn_alert_del = QPushButton("删除")
-        self.btn_alert_add.setFixedWidth(58)
-        self.btn_alert_del.setFixedWidth(58)
+        self.btn_alert_add.setFixedWidth(82)
+        self.btn_alert_del.setFixedWidth(82)
         alert_btns.addWidget(self.btn_alert_add)
         alert_btns.addWidget(self.btn_alert_del)
         left_alert.addLayout(alert_btns)
@@ -348,7 +349,7 @@ class SettingsDialog(QDialog):
         self.cmb_alert_mode.addItem("触发时显示", userData="on_trigger")
         self.cmb_alert_mode.addItem("常显状态", userData="always")
         self.list_alert_targets = QListWidget()
-        self.list_alert_targets.setFixedHeight(72)
+        self.list_alert_targets.setMinimumHeight(112)
         self.btn_target_add = QPushButton("添加标的")
         self.btn_target_del = QPushButton("删除标的")
         self.btn_target_add.setFixedWidth(72)
@@ -363,6 +364,7 @@ class SettingsDialog(QDialog):
         self.spin_target_pct.setSuffix("%")
         self.chk_target_volume = QCheckBox("放量")
         self.edit_alert_message = QLineEdit()
+        self.edit_alert_message.setMinimumWidth(260)
 
         form_alert.addWidget(self.chk_alert_enabled, 0, 0)
         form_alert.addWidget(QLabel("名称："), 0, 1)
@@ -397,8 +399,8 @@ class SettingsDialog(QDialog):
 
         left_price = QVBoxLayout()
         self.list_price_alerts = QListWidget()
-        self.list_price_alerts.setFixedWidth(185)
-        self.list_price_alerts.setMinimumHeight(96)
+        self.list_price_alerts.setFixedWidth(220)
+        self.list_price_alerts.setMinimumHeight(120)
         left_price.addWidget(self.list_price_alerts)
         price_btns = QHBoxLayout()
         self.btn_price_alert_add = QPushButton("添加")
@@ -426,6 +428,7 @@ class SettingsDialog(QDialog):
         self.spin_price_alert_price.setFixedWidth(92)
         self.cmb_price_alert_direction.addItem("低于5日线", userData="below_ma5")
         self.edit_price_alert_message = QLineEdit()
+        self.edit_price_alert_message.setMinimumWidth(300)
 
         form_price.addWidget(self.chk_price_alert_enabled, 0, 0)
         form_price.addWidget(QLabel("代码："), 0, 1)
@@ -3182,7 +3185,7 @@ class SettingsDialog(QDialog):
 
     def _apply_tab_size(self, index: int):
         size = self.tab_sizes.get(index, QSize(400, 400))
-        if index == 4:
+        if index in (3, 4):
             self.setMinimumSize(size)
             self.setMaximumSize(16777215, 16777215)
             self.resize(size)

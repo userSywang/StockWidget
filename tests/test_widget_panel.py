@@ -797,6 +797,36 @@ class WidgetPanelTests(unittest.TestCase):
                 toast.deleteLater()
             win.close()
 
+    def test_desktop_alert_ignore_today_suppresses_same_key(self):
+        win = FloatLabel({
+            "codes": ["sh603259"],
+            "checked_codes": ["sh603259"],
+            "strategy_alerts": {
+                "notifications": {"desktop_popup": True},
+            },
+        })
+        try:
+            win.setGeometry(100, 200, 260, 80)
+            win.show_desktop_alert("## 药明康德止损触发\n>代码：sh603259", ignore_key="sh603259|止损")
+
+            toasts = getattr(win, "_alert_toasts", [])
+            self.assertEqual(len(toasts), 1)
+            self.assertFalse(toasts[0]._ignore_button.isHidden())
+
+            toasts[0]._ignore_button.click()
+            self.assertEqual(len(getattr(win, "_alert_toasts", [])), 0)
+
+            win.show_desktop_alert("## 药明康德止损触发\n>代码：sh603259", ignore_key="sh603259|止损")
+            self.assertEqual(len(getattr(win, "_alert_toasts", [])), 0)
+
+            win.show_desktop_alert("## 药明康德止盈触发\n>代码：sh603259", ignore_key="sh603259|止盈")
+            self.assertEqual(len(getattr(win, "_alert_toasts", [])), 1)
+        finally:
+            for toast in list(getattr(win, "_alert_toasts", [])):
+                toast.hide()
+                toast.deleteLater()
+            win.close()
+
     def test_strategy_push_text_includes_stop_price_and_raised_status(self):
         win = FloatLabel.__new__(FloatLabel)
         text = FloatLabel._strategy_push_text_for_state(win, {
