@@ -119,7 +119,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertEqual(dlg.list_price_alerts.currentRow(), 0)
         self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
-        self.assertTrue(dlg.edit_price_alert_code.hasSelectedText())
+        self.assertTrue(dlg.edit_price_alert_code.isHidden())
         dlg.close()
 
     def test_current_self_selected_code_opens_strategy_position_editor(self):
@@ -377,6 +377,8 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.list_price_alerts.isHidden())
         self.assertTrue(dlg.btn_price_alert_add.isVisible())
         self.assertTrue(dlg.btn_price_alert_del.isVisible())
+        self.assertTrue(dlg.chk_price_alert_enabled.isHidden())
+        self.assertTrue(dlg.edit_price_alert_code.isHidden())
         self.assertGreaterEqual(del_rect.left(), add_rect.right())
         self.assertEqual(dlg.btn_price_alert_add.text(), "保存提醒")
         self.assertIn("sh603259", dlg.lbl_price_alert_current.text())
@@ -394,7 +396,8 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.tab_sizes[0].width(), 720)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertTrue(dlg.list_price_alerts.isHidden())
-        self.assertGreaterEqual(dlg.edit_price_alert_message.minimumWidth(), 180)
+        self.assertLessEqual(dlg.edit_price_alert_message.minimumWidth(), 160)
+        self.assertEqual(dlg.edit_price_alert_message.placeholderText(), "备注，可空")
         dlg.close()
 
     def test_price_alerts_can_be_added_edited_and_deleted(self):
@@ -409,6 +412,7 @@ class SettingsPanelTests(unittest.TestCase):
         dlg._add_price_alert()
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
+        self.assertTrue(win.price_alerts[0]["enabled"])
 
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.spin_price_alert_price.setValue(1.234)

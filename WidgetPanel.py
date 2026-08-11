@@ -1006,6 +1006,14 @@ class FloatLabel(QWidget):
     def _separator_row(self):
         return self._message_row("")
 
+    def _empty_stock_row(self, code: str):
+        row = ["-"] * len(self.ALL_HEADERS)
+        if "代码" in self.ALL_HEADERS:
+            row[self.ALL_HEADERS.index("代码")] = code
+        if "名称" in self.ALL_HEADERS:
+            row[self.ALL_HEADERS.index("名称")] = self.code_names.get(code, code)
+        return row
+
     def _market_amount_request_codes(self):
         return ["sh000001", "sz399001"] if getattr(self, "market_amount_visible", False) else []
 
@@ -1278,22 +1286,25 @@ class FloatLabel(QWidget):
             full_rows.append(self._message_row(str(group.get("name") or "分组")))
             meta_rows.append({"row_type": "group", "text": str(group.get("name") or "分组")})
             for code in group_codes:
-                if code in row_by_code:
-                    meta = dict(sign_by_code.get(code, {}))
-                    strategy_state = strategy_by_code.get(code)
-                    if strategy_state:
-                        meta["strategy"] = True
-                        meta["severity"] = strategy_state.get("severity", "neutral")
-                    if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
-                        meta["price_alerts"] = price_alerts_by_code[code]
-                    badges = []
-                    strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
-                    if strategy_triggered:
-                        badges.append("策略")
-                    elif getattr(self, "price_alert_badge_visible", True) and any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
-                        badges.append("价警")
-                    full_rows.append(self._display_row_with_indicators(row_by_code[code], code, daily_by_code, strategy_by_code, badges))
-                    meta_rows.append(meta)
+                source_row = row_by_code.get(code)
+                meta = dict(sign_by_code.get(code, {}))
+                if source_row is None:
+                    source_row = self._empty_stock_row(code)
+                    meta["quote_missing"] = True
+                strategy_state = strategy_by_code.get(code)
+                if strategy_state:
+                    meta["strategy"] = True
+                    meta["severity"] = strategy_state.get("severity", "neutral")
+                if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
+                    meta["price_alerts"] = price_alerts_by_code[code]
+                badges = []
+                strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
+                if strategy_triggered:
+                    badges.append("策略")
+                elif getattr(self, "price_alert_badge_visible", True) and any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
+                    badges.append("价警")
+                full_rows.append(self._display_row_with_indicators(source_row, code, daily_by_code, strategy_by_code, badges))
+                meta_rows.append(meta)
 
         market_amount_text = self._format_market_amount(quote_by_code or {})
         if market_amount_text:

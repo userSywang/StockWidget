@@ -416,9 +416,11 @@ class SettingsDialog(QDialog):
         self.lbl_price_alert_current = QLabel("当前标的：-")
         self.lbl_price_alert_current.setStyleSheet("color: #666666;")
         self.chk_price_alert_enabled = QCheckBox("启用")
+        self.chk_price_alert_enabled.setVisible(False)
         self.edit_price_alert_code = QLineEdit()
         self.edit_price_alert_code.setFixedWidth(92)
         self.edit_price_alert_code.setReadOnly(True)
+        self.edit_price_alert_code.setVisible(False)
         self.cmb_price_alert_direction = QComboBox()
         self.cmb_price_alert_direction.setFixedWidth(106)
         self.cmb_price_alert_direction.addItem("高于/等于", userData="above")
@@ -429,15 +431,16 @@ class SettingsDialog(QDialog):
         self.spin_price_alert_price.setFixedWidth(92)
         self.cmb_price_alert_direction.addItem("低于5日线", userData="below_ma5")
         self.edit_price_alert_message = QLineEdit()
-        self.edit_price_alert_message.setMinimumWidth(180)
+        self.edit_price_alert_message.setPlaceholderText("备注，可空")
+        self.edit_price_alert_message.setMinimumWidth(140)
 
-        form_price.addWidget(self.lbl_price_alert_current, 0, 0)
-        form_price.addWidget(self.chk_price_alert_enabled, 0, 1)
-        form_price.addWidget(self.edit_price_alert_code, 0, 2)
-        form_price.addWidget(self.cmb_price_alert_direction, 0, 3)
-        form_price.addWidget(self.spin_price_alert_price, 0, 4)
-        form_price.addWidget(QLabel("提示："), 1, 0)
-        form_price.addWidget(self.edit_price_alert_message, 1, 1, 1, 3)
+        form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 4)
+        form_price.addWidget(QLabel("条件："), 1, 0)
+        form_price.addWidget(self.cmb_price_alert_direction, 1, 1)
+        form_price.addWidget(self.spin_price_alert_price, 1, 2)
+        form_price.addWidget(QLabel("备注："), 2, 0)
+        form_price.addWidget(self.edit_price_alert_message, 2, 1, 1, 3)
+        form_price.setColumnStretch(3, 1)
         lay_price_alert.addLayout(form_price)
         lay_price_alert.addLayout(price_btns)
         code_settings.addWidget(g_price_alert)
@@ -1957,7 +1960,7 @@ class SettingsDialog(QDialog):
 
     def _collect_price_alert_from_editor(self):
         return normalize_price_alert({
-            "enabled": self.chk_price_alert_enabled.isChecked(),
+            "enabled": True,
             "code": self._current_code_from_tree() or self.edit_price_alert_code.text(),
             "direction": self.cmb_price_alert_direction.currentData(),
             "price": self.spin_price_alert_price.value(),

@@ -58,6 +58,35 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(meta[1]["price_alerts"][0]["detail"], "价格提醒")
 
+    def test_compose_display_rows_keeps_stock_visible_when_quote_missing(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = BASE_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.price_alert_badge_visible = True
+        win.code_names = {"sh603259": "药明康德"}
+        win.code_tags = {}
+        win.strategy_alert_config = {}
+
+        rows, meta = FloatLabel._compose_display_rows(
+            win,
+            {},
+            {},
+            [],
+            {},
+            {},
+            {},
+            [],
+        )
+
+        self.assertEqual(rows[1][BASE_HEADERS.index("代码")], "sh603259")
+        self.assertEqual(rows[1][BASE_HEADERS.index("名称")], "药明康德")
+        self.assertEqual(rows[1][BASE_HEADERS.index("现价")], "-")
+        self.assertTrue(meta[1]["quote_missing"])
+
     def test_compose_display_rows_adds_market_amount_summary(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
