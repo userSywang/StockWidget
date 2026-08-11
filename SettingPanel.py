@@ -17,6 +17,7 @@ from StockLogic import (
     DEFAULT_WARNING_TEXT,
     default_alert_rule,
     default_price_alert,
+    default_turtle_action_rules,
     normalize_alert_rule,
     normalize_alert_rules,
     normalize_alert_target,
@@ -747,6 +748,7 @@ class SettingsDialog(QDialog):
         template_list_layout.setSpacing(4)
         self.btn_template_new = QPushButton("+ 新建模板")
         self.btn_template_new.setFixedWidth(90)
+        self.btn_template_new.setVisible(False)
         template_list_layout.addWidget(self.btn_template_new)
         self.list_strategy_templates = QListWidget()
         self.list_strategy_templates.setFixedWidth(160)
@@ -884,7 +886,7 @@ class SettingsDialog(QDialog):
         template_action_layout = QVBoxLayout(self.template_action_group)
         template_action_layout.setContentsMargins(6, 14, 6, 6)
         template_action_layout.setSpacing(4)
-        self.lbl_template_action_hint = QLabel("每行都是可保存的结构化规则：指标 + 比较 + 参数 + 计提单位 + 动作。")
+        self.lbl_template_action_hint = QLabel("该策略条件写死，只允许修改触发参数；新增策略需要通过代码加入。")
         self.lbl_template_action_hint.setStyleSheet("color: #666666;")
         turtle_param_layout = QGridLayout()
         turtle_param_layout.setHorizontalSpacing(6)
@@ -945,14 +947,10 @@ class SettingsDialog(QDialog):
         self.table_template_action_rules.setColumnWidth(5, 140)
         self.table_template_action_rules.setColumnWidth(6, 80)
         self.list_template_action_rules = QListWidget()
-        self.list_template_action_rules.setVisible(False)
+        self.list_template_action_rules.setMinimumHeight(110)
         template_action_layout.addWidget(self.lbl_template_action_hint)
         template_action_layout.addLayout(turtle_param_layout)
-        for i in range(turtle_param_layout.count()):
-            item = turtle_param_layout.itemAt(i)
-            widget = item.widget() if item else None
-            if widget is not None:
-                widget.setVisible(False)
+        self.table_template_action_rules.setVisible(False)
         template_action_layout.addWidget(self.table_template_action_rules)
         template_action_layout.addWidget(self.list_template_action_rules)
         self.template_action_group.setVisible(False)
@@ -965,8 +963,10 @@ class SettingsDialog(QDialog):
         self.btn_template_save.setFixedWidth(90)
         self.btn_template_copy = QPushButton("复制模板")
         self.btn_template_copy.setFixedWidth(90)
+        self.btn_template_copy.setVisible(False)
         self.btn_template_delete = QPushButton("删除模板")
         self.btn_template_delete.setFixedWidth(90)
+        self.btn_template_delete.setVisible(False)
         template_btn_layout.addWidget(self.btn_template_save)
         template_btn_layout.addWidget(self.btn_template_copy)
         template_btn_layout.addWidget(self.btn_template_delete)
@@ -978,6 +978,8 @@ class SettingsDialog(QDialog):
 
         # 条件构建器
         g_condition_builder = QGroupBox("条件构建器（自定义规则）")
+        g_condition_builder.setVisible(False)
+        self.condition_builder_group = g_condition_builder
         g_condition_builder.setContentsMargins(6,14,6,8)
         condition_layout = QVBoxLayout(g_condition_builder)
         condition_layout.setSpacing(6)
@@ -2741,10 +2743,9 @@ class SettingsDialog(QDialog):
         profile["name"] = self.edit_template_name.text().strip() or profile.get("name", "未命名")
         profile["desc"] = self.edit_template_desc.text().strip()
         if profile.get("strategy_type") == "turtle":
-            action_rules = self._collect_template_action_rules_from_table()
-            params = self._turtle_params_from_action_rules(action_rules, profile.get("turtle_params", {}))
+            params = self._collect_turtle_params_from_editor()
             profile["turtle_params"] = params
-            profile["action_rules"] = action_rules
+            profile["action_rules"] = default_turtle_action_rules(params)
         else:
             profile["rules"] = self._collect_template_rules_from_editor()
         self._strategy_config["strategy_profiles"] = profiles

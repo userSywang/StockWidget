@@ -233,7 +233,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.tree_codes.minimumHeight(), 250)
         dlg.close()
 
-    def test_strategy_library_rule_table_has_enough_display_area(self):
+    def test_strategy_library_uses_fixed_strategy_editors(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
 
@@ -242,8 +242,11 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertGreaterEqual(dlg.width(), 980)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertLessEqual(dlg.list_strategy_templates.width(), 170)
-        self.assertGreaterEqual(dlg.table_template_action_rules.minimumWidth(), 680)
-        self.assertGreaterEqual(dlg.table_template_action_rules.minimumHeight(), 240)
+        self.assertTrue(dlg.btn_template_new.isHidden())
+        self.assertTrue(dlg.btn_template_copy.isHidden())
+        self.assertTrue(dlg.btn_template_delete.isHidden())
+        self.assertTrue(dlg.condition_builder_group.isHidden())
+        self.assertTrue(dlg.table_template_action_rules.isHidden())
         dlg.close()
 
     def test_display_data_page_includes_ma_and_strategy_columns(self):
@@ -486,18 +489,21 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(len(action_rows), 4)
         self.assertTrue(any("20日新高" in row for row in action_rows))
         self.assertTrue(any("2.0ATR" in row for row in action_rows))
-        self.assertEqual(dlg.table_template_action_rules.rowCount(), 4)
+        self.assertTrue(dlg.table_template_action_rules.isHidden())
+        self.assertFalse(dlg.spin_turtle_entry_days.isHidden())
 
-        dlg.table_template_action_rules.cellWidget(0, 3).setValue(55)
-        dlg.table_template_action_rules.cellWidget(1, 3).setValue(3.0)
-        dlg.table_template_action_rules.cellWidget(2, 3).setValue(1.0)
-        dlg.table_template_action_rules.cellWidget(2, 6).setValue(3)
-        dlg.table_template_action_rules.cellWidget(3, 3).setValue(20)
+        dlg.spin_turtle_entry_days.setValue(55)
+        dlg.spin_turtle_exit_days.setValue(20)
+        dlg.spin_turtle_atr_stop.setValue(3.0)
+        dlg.spin_turtle_pyramid_atr.setValue(1.0)
+        dlg.spin_turtle_max_units.setValue(3)
+        dlg.cmb_turtle_sizing.setCurrentIndex(dlg.cmb_turtle_sizing.findData("fixed_percent"))
         dlg._on_template_save()
 
         profile = next(item for item in win.strategy_alert_config["strategy_profiles"] if item["id"] == "turtle:classic")
         rules = {rule["id"]: rule for rule in profile["action_rules"]}
         self.assertEqual(profile["turtle_params"]["entry_days"], 55)
+        self.assertEqual(profile["turtle_params"]["position_sizing"], "fixed_percent")
         self.assertEqual(rules["turtle_entry_20d"]["parameter"], {"value": 55, "unit": "day_high"})
         self.assertEqual(rules["turtle_entry_20d"]["condition"]["threshold"]["period"], 55)
         self.assertEqual(rules["turtle_exit_10d"]["parameter"], {"value": 20, "unit": "day_low"})
