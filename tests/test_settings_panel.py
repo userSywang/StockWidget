@@ -247,7 +247,8 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg.tabs.setCurrentIndex(2)
 
-        self.assertGreaterEqual(dlg.width(), 980)
+        self.assertGreaterEqual(dlg.width(), 840)
+        self.assertLessEqual(dlg.width(), 900)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertLessEqual(dlg.list_strategy_templates.width(), 170)
         self.assertTrue(dlg.btn_template_new.isHidden())
@@ -378,10 +379,10 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.list_price_alerts.isHidden())
         self.assertTrue(dlg.btn_price_alert_add.isVisible())
         self.assertTrue(dlg.btn_price_alert_del.isVisible())
-        self.assertTrue(dlg.chk_price_alert_enabled.isHidden())
+        self.assertFalse(hasattr(dlg, "chk_price_alert_enabled"))
         self.assertTrue(dlg.edit_price_alert_code.isHidden())
         self.assertGreaterEqual(del_rect.left(), add_rect.right())
-        self.assertEqual(dlg.btn_price_alert_add.text(), "保存提醒")
+        self.assertEqual(dlg.btn_price_alert_add.text(), "保存")
         self.assertIn("sh603259", dlg.lbl_price_alert_current.text())
         self.assertEqual(dlg.edit_price_alert_code.text(), "sh603259")
         dlg.close()
@@ -410,10 +411,12 @@ class SettingsPanelTests(unittest.TestCase):
         code_item = dlg.tree_codes.topLevelItem(0).child(0)
         dlg.tree_codes.setCurrentItem(code_item)
 
+        self.assertTrue(code_item.icon(0).isNull())
         dlg._add_price_alert()
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertTrue(win.price_alerts[0]["enabled"])
+        self.assertFalse(code_item.icon(0).isNull())
 
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.spin_price_alert_price.setValue(1.234)
@@ -427,6 +430,7 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])
+        self.assertTrue(code_item.icon(0).isNull())
         dlg.close()
 
     def test_strategy_page_edits_positions_and_rules(self):

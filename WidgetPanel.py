@@ -96,6 +96,9 @@ class FloatLabel(QWidget):
         self._refresh_again_force = False
         self._strategy_push_sent_keys = set()
         self._strategy_push_sent_at = {}
+        self._desktop_alert_ignored_today = self._normalize_desktop_alert_ignored_today(
+            cfg.get("desktop_alert_ignored_today", {})
+        )
         self.strategy_alert_history = self._normalize_strategy_alert_history(cfg.get("strategy_alert_history", []))
         self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
         self._latest_strategy_states = []
@@ -251,6 +254,9 @@ class FloatLabel(QWidget):
             "strategy_alert_config": self.strategy_alert_config,
             "strategy_alert_history": self.strategy_alert_history,
             "strategy_daily_summary_sent_date": getattr(self, "_strategy_daily_summary_sent_date", ""),
+            "desktop_alert_ignored_today": self._normalize_desktop_alert_ignored_today(
+                getattr(self, "_desktop_alert_ignored_today", {})
+            ),
             "warning_visible": self.warning_visible,
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
@@ -361,6 +367,18 @@ class FloatLabel(QWidget):
                 "severity": str(item.get("severity") or "neutral").strip(),
             })
         return normalized[:50]
+
+    @staticmethod
+    def _normalize_desktop_alert_ignored_today(value):
+        if not isinstance(value, dict):
+            return {}
+        normalized = {}
+        for raw_key, raw_day in value.items():
+            key = str(raw_key or "").strip()
+            day = str(raw_day or "").strip()[:10]
+            if key and day:
+                normalized[key] = day
+        return normalized
 
     def header_is_visible(self, header: str) -> bool:
         """返回指定列标题对应的独立可见属性值（替代旧的 flags 字典）。"""
@@ -1302,8 +1320,6 @@ class FloatLabel(QWidget):
                 strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
                 if strategy_triggered:
                     badges.append("策略")
-                elif getattr(self, "price_alert_badge_visible", True) and any(bool(alert.get("triggered")) for alert in price_alerts_by_code.get(code, []) if isinstance(alert, dict)):
-                    badges.append("价警")
                 full_rows.append(self._display_row_with_indicators(source_row, code, daily_by_code, strategy_by_code, badges))
                 meta_rows.append(meta)
 
@@ -1767,6 +1783,7 @@ class FloatLabel(QWidget):
             ignored = dict(getattr(self, "_desktop_alert_ignored_today", {}) or {})
             ignored[str(key)] = self._desktop_alert_ignore_date()
             self._desktop_alert_ignored_today = ignored
+            self._notify_change()
         if toast is not None:
             self._close_alert_toast(toast)
 

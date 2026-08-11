@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import partial
 
 from PySide6.QtCore import Qt, QSize, QTime, QTimer, QEvent
-from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
+from PySide6.QtGui import QColor, QFontDatabase, QIcon, QKeySequence, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
@@ -49,7 +49,7 @@ class SettingsDialog(QDialog):
         self.tab_sizes = {
             0: QSize(430, 620),
             1: QSize(560, 560),
-            2: QSize(980, 720),
+            2: QSize(860, 700),
             3: QSize(360, 350),
             4: QSize(300, 220),
             5: QSize(520, 240),
@@ -402,10 +402,10 @@ class SettingsDialog(QDialog):
         self.list_price_alerts = QListWidget()
         self.list_price_alerts.setVisible(False)
         price_btns = QHBoxLayout()
-        self.btn_price_alert_add = QPushButton("保存提醒")
-        self.btn_price_alert_del = QPushButton("删除提醒")
-        self.btn_price_alert_add.setFixedWidth(76)
-        self.btn_price_alert_del.setFixedWidth(76)
+        self.btn_price_alert_add = QPushButton("保存")
+        self.btn_price_alert_del = QPushButton("删除")
+        self.btn_price_alert_add.setFixedWidth(64)
+        self.btn_price_alert_del.setFixedWidth(64)
         price_btns.addStretch(1)
         price_btns.addWidget(self.btn_price_alert_add)
         price_btns.addWidget(self.btn_price_alert_del)
@@ -415,24 +415,22 @@ class SettingsDialog(QDialog):
         form_price.setVerticalSpacing(6)
         self.lbl_price_alert_current = QLabel("当前标的：-")
         self.lbl_price_alert_current.setStyleSheet("color: #666666;")
-        self.chk_price_alert_enabled = QCheckBox("启用")
-        self.chk_price_alert_enabled.setVisible(False)
         self.edit_price_alert_code = QLineEdit()
         self.edit_price_alert_code.setFixedWidth(92)
         self.edit_price_alert_code.setReadOnly(True)
         self.edit_price_alert_code.setVisible(False)
         self.cmb_price_alert_direction = QComboBox()
-        self.cmb_price_alert_direction.setFixedWidth(106)
+        self.cmb_price_alert_direction.setFixedWidth(96)
         self.cmb_price_alert_direction.addItem("高于/等于", userData="above")
         self.cmb_price_alert_direction.addItem("低于/等于", userData="below")
         self.spin_price_alert_price = QDoubleSpinBox()
         self.spin_price_alert_price.setRange(0.0, 99999.999)
         self.spin_price_alert_price.setDecimals(3)
-        self.spin_price_alert_price.setFixedWidth(92)
+        self.spin_price_alert_price.setFixedWidth(86)
         self.cmb_price_alert_direction.addItem("低于5日线", userData="below_ma5")
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setPlaceholderText("备注，可空")
-        self.edit_price_alert_message.setMinimumWidth(140)
+        self.edit_price_alert_message.setMinimumWidth(120)
 
         form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 4)
         form_price.addWidget(QLabel("条件："), 1, 0)
@@ -508,7 +506,7 @@ class SettingsDialog(QDialog):
         self.chk_strategy_enabled = QCheckBox("启用策略提醒")
         strategy_left.addWidget(self.chk_strategy_enabled)
         self.list_strategy_positions = QListWidget()
-        self.list_strategy_positions.setMinimumSize(400, 100)
+        self.list_strategy_positions.setMinimumSize(340, 100)
         strategy_left.addWidget(self.list_strategy_positions)
         strategy_btns = QHBoxLayout()
         strategy_btns.setSpacing(6)
@@ -542,7 +540,7 @@ class SettingsDialog(QDialog):
         self.spin_strategy_position_pct.setFixedWidth(92)
         self.edit_strategy_note = QLineEdit()
         self.cmb_strategy_profile = QComboBox()
-        self.cmb_strategy_profile.setMinimumWidth(180)
+        self.cmb_strategy_profile.setMinimumWidth(150)
         self.btn_strategy_profile_clone = QPushButton("复制规则组")
         self.btn_strategy_profile_clone.setFixedWidth(90)
         self.edit_strategy_code.setFixedWidth(126)
@@ -716,11 +714,11 @@ class SettingsDialog(QDialog):
         self.cmb_strategy_remote_channel = QComboBox()
         self.cmb_strategy_remote_channel.addItem("企业微信机器人", userData="wecom")
         self.cmb_strategy_remote_channel.addItem("自定义Webhook", userData="custom")
-        self.cmb_strategy_remote_channel.setFixedWidth(280)
+        self.cmb_strategy_remote_channel.setFixedWidth(240)
         self.edit_strategy_webhook = QLineEdit()
         self.edit_strategy_webhook.setPlaceholderText("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...")
-        self.edit_strategy_webhook.setMinimumWidth(240)
-        self.edit_strategy_webhook.setFixedWidth(280)
+        self.edit_strategy_webhook.setMinimumWidth(220)
+        self.edit_strategy_webhook.setFixedWidth(240)
         self.time_strategy_daily_summary = QTimeEdit()
         self.time_strategy_daily_summary.setDisplayFormat("HH:mm")
         self.time_strategy_daily_summary.setFixedWidth(76)
@@ -1237,7 +1235,6 @@ class SettingsDialog(QDialog):
         self.list_price_alerts.currentRowChanged.connect(self._on_price_alert_selected)
         self.btn_price_alert_add.clicked.connect(self._add_price_alert)
         self.btn_price_alert_del.clicked.connect(self._del_price_alert)
-        self.chk_price_alert_enabled.toggled.connect(self._on_price_alert_editor_changed)
         self.edit_price_alert_code.editingFinished.connect(self._on_price_alert_editor_changed)
         self.cmb_price_alert_direction.currentIndexChanged.connect(self._on_price_alert_editor_changed)
         self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
@@ -1387,6 +1384,56 @@ class SettingsDialog(QDialog):
         text = f"{code}  {short_name}" if short_name else code
         return f"{text}  [{tags}]" if tags else text
 
+    def _price_alert_codes(self):
+        codes = set()
+        for alert in normalize_price_alerts(getattr(self.win, "price_alerts", [])):
+            code = alert.get("code")
+            if code and alert.get("enabled", True):
+                codes.add(code)
+        return codes
+
+    def _price_alert_icon(self):
+        icon = getattr(self, "_price_alert_tree_icon", None)
+        if icon is not None:
+            return icon
+        size = 14
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setBrush(QColor("#fef3c7"))
+        painter.setPen(QPen(QColor("#d97706"), 1))
+        painter.drawEllipse(1, 1, size - 2, size - 2)
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(8)
+        painter.setFont(font)
+        painter.setPen(QColor("#b45309"))
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "!")
+        painter.end()
+        self._price_alert_tree_icon = QIcon(pixmap)
+        return self._price_alert_tree_icon
+
+    def _apply_price_alert_icon(self, item, code):
+        if item is None:
+            return
+        if code and code in self._price_alert_codes():
+            item.setIcon(0, self._price_alert_icon())
+        else:
+            item.setIcon(0, QIcon())
+
+    def _refresh_price_alert_icons(self):
+        if not hasattr(self, "tree_codes"):
+            return
+        for gi in range(self.tree_codes.topLevelItemCount()):
+            group_item = self.tree_codes.topLevelItem(gi)
+            for ci in range(group_item.childCount()):
+                child = group_item.child(ci)
+                if child.data(0, Qt.UserRole) != "code":
+                    continue
+                code = child.data(0, Qt.UserRole + 1) or self._code_from_item_text(child.text(0))
+                self._apply_price_alert_icon(child, normalize_code_or_none(code) or "")
+
     def _code_tag_label(self, code: str):
         tags = getattr(self.win, "code_tags", {})
         if not isinstance(tags, dict):
@@ -1438,6 +1485,8 @@ class SettingsDialog(QDialog):
         item.setData(0, Qt.UserRole, "code")
         item.setData(0, Qt.UserRole + 1, None if pending else code)
         item.setData(0, self._pending_role(), bool(pending))
+        if not pending:
+            self._apply_price_alert_icon(item, code)
         return item
 
     def _load_code_tree(self):
@@ -1496,6 +1545,7 @@ class SettingsDialog(QDialog):
                         child.setText(0, display_text)
                     child.setData(0, Qt.UserRole + 1, norm)
                     child.setData(0, self._pending_role(), False)
+                    self._apply_price_alert_icon(child, norm)
                     if child.checkState(0) == Qt.Checked:
                         checked_codes.append(norm)
                     ci += 1
@@ -1584,6 +1634,7 @@ class SettingsDialog(QDialog):
         item = self.tree_codes.currentItem()
         if item is not None and item.data(0, Qt.UserRole) == "code":
             item.setText(0, self._format_code_item_text(code))
+            self._apply_price_alert_icon(item, code)
 
     def _open_price_alert_for_current_code(self):
         code = self._current_code_from_tree()
@@ -1621,7 +1672,6 @@ class SettingsDialog(QDialog):
         try:
             alert = default_price_alert()
             alert["code"] = code
-            self.chk_price_alert_enabled.setChecked(bool(alert.get("enabled", True)))
             self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
             idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
             self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1934,6 +1984,7 @@ class SettingsDialog(QDialog):
         for alert in self._price_alerts:
             self.list_price_alerts.addItem(QListWidgetItem(self._format_price_alert(alert)))
         self.list_price_alerts.blockSignals(False)
+        self._refresh_price_alert_icons()
         if self.list_price_alerts.count() > 0:
             self.list_price_alerts.setCurrentRow(max(0, min(current_row, self.list_price_alerts.count() - 1)))
             self._on_price_alert_selected(self.list_price_alerts.currentRow())
@@ -1948,7 +1999,6 @@ class SettingsDialog(QDialog):
         alert = normalize_price_alert(self._price_alerts[row])
         self._loading_price_alert_editor = True
         try:
-            self.chk_price_alert_enabled.setChecked(bool(alert.get("enabled", True)))
             self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
             idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
             self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
@@ -1984,6 +2034,7 @@ class SettingsDialog(QDialog):
         if item:
             item.setText(self._format_price_alert(alert))
         self.win.set_price_alerts(self._price_alerts)
+        self._refresh_price_alert_icons()
 
     def _add_price_alert(self):
         current_code = self._current_code_from_tree()

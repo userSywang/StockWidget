@@ -211,6 +211,32 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_current_config_persists_desktop_alert_ignores(self):
+        cfg = {
+            "codes": ["sh603259"],
+            "checked_codes": ["sh603259"],
+            "desktop_alert_ignored_today": {"sh603259|止损": "2026-08-10"},
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            changes = []
+            win._on_change = lambda: changes.append("saved")
+            win._now = lambda: datetime(2026, 8, 10, 10, 0)
+
+            self.assertTrue(win._is_desktop_alert_ignored("sh603259|止损"))
+            win._ignore_desktop_alert_today("sh603259|止盈")
+
+            saved = win.current_config()["desktop_alert_ignored_today"]
+            self.assertEqual(saved["sh603259|止损"], "2026-08-10")
+            self.assertEqual(saved["sh603259|止盈"], "2026-08-10")
+            self.assertEqual(changes, ["saved"])
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_refresh_request_codes_include_market_amount_indexes(self):
         win = FloatLabel.__new__(FloatLabel)
         win.checked_codes = ["sh600000"]
@@ -775,7 +801,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         stock_row = rows[1]
         name_text = stock_row[STRATEGY_HEADERS.index("名称")]
-        self.assertIn("[价警]", name_text)
+        self.assertNotIn("[价警]", name_text)
         self.assertTrue(meta[1]["price_alerts"][0]["triggered"])
 
     def test_compose_display_rows_hides_price_alert_badge_when_disabled(self):
