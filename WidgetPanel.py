@@ -30,6 +30,9 @@ from StockLogic import (
     update_strategy_position_state,
 )
 
+STRATEGY_DAILY_SUMMARY_SLOTS = ((9, 0, "09:00"), (18, 0, "18:00"))
+STRATEGY_DAILY_SUMMARY_GRACE_MINUTES = 10
+
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
     def __init__(self, cfg: dict):
@@ -1659,23 +1662,49 @@ class FloatLabel(QWidget):
             ])
         return "\n".join(lines)
 
+    def _strategy_daily_summary_due_slot(self, now):
+        if now.weekday() >= 5:
+            return None
+        for hour, minute, label in STRATEGY_DAILY_SUMMARY_SLOTS:
+            if now.hour != hour:
+                continue
+            elapsed_minutes = now.minute - minute
+            if 0 <= elapsed_minutes < STRATEGY_DAILY_SUMMARY_GRACE_MINUTES:
+                return label
+        return None
+
+    def _strategy_daily_summary_sent_slots(self, today_key):
+        raw = str(getattr(self, "_strategy_daily_summary_sent_date", "") or "")
+        if raw == today_key:
+            return {label for _, _, label in STRATEGY_DAILY_SUMMARY_SLOTS}
+        prefix = f"{today_key}|"
+        if not raw.startswith(prefix):
+            return set()
+        return {part for part in raw[len(prefix):].split(",") if part}
+
+    def _mark_strategy_daily_summary_sent(self, today_key, slot):
+        slots = self._strategy_daily_summary_sent_slots(today_key)
+        slots.add(slot)
+        ordered = [label for _, _, label in STRATEGY_DAILY_SUMMARY_SLOTS if label in slots]
+        self._strategy_daily_summary_sent_date = f"{today_key}|{','.join(ordered)}"
+
     def _send_strategy_daily_summary(self, strategy_states, now=None):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
         if not notifications.get("remote_push") or not notifications.get("webhook_url"):
             return False
         now_provider = getattr(self, "_now", None)
         now = now or (now_provider() if callable(now_provider) else datetime.now())
-        hour, minute = [int(part) for part in str(notifications.get("daily_summary_time", "23:00")).split(":", 1)]
-        if (now.hour, now.minute) < (hour, minute):
+        slot = self._strategy_daily_summary_due_slot(now)
+        if not slot:
             return False
         today_key = now.strftime("%Y-%m-%d")
-        if getattr(self, "_strategy_daily_summary_sent_date", "") == today_key:
+        if slot in self._strategy_daily_summary_sent_slots(today_key):
             return False
         states = list(strategy_states or [])
         if not states:
             return False
         if self._send_strategy_push_text(self._strategy_daily_summary_text(states, now)):
-            self._strategy_daily_summary_sent_date = today_key
+            self._mark_strategy_daily_summary_sent(today_key, slot)
             return True
         return False
 

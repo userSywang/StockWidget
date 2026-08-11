@@ -13,7 +13,7 @@ DEFAULT_STRATEGY_ALERT_CONFIG = {
         "remote_push": False,
         "remote_channel": "wecom",
         "webhook_url": "",
-        "daily_summary_time": "23:00",
+        "daily_summary_time": "09:00,18:00",
         "push_cooldown_minutes": 30,
     },
     "rules": {
@@ -479,6 +479,16 @@ def _normalize_time_text(value, default="23:00"):
     return f"{hour:02d}:{minute:02d}"
 
 
+def _normalize_summary_times_text(value, default="09:00,18:00"):
+    parts = [part.strip() for part in str(value or "").split(",") if part.strip()]
+    normalized = []
+    for part in parts:
+        text = _normalize_time_text(part, "")
+        if text and text not in normalized:
+            normalized.append(text)
+    return ",".join(normalized) if normalized else default
+
+
 def normalize_strategy_position(position):
     if not isinstance(position, dict):
         position = {}
@@ -862,7 +872,7 @@ def normalize_strategy_alert_config(config):
             "remote_push": bool(source_notifications.get("remote_push", default_notifications["remote_push"])),
             "remote_channel": source_notifications.get("remote_channel") if source_notifications.get("remote_channel") in ("wecom", "custom") else default_notifications["remote_channel"],
             "webhook_url": str(source_notifications.get("webhook_url") or "").strip(),
-            "daily_summary_time": _normalize_time_text(source_notifications.get("daily_summary_time"), default_notifications["daily_summary_time"]),
+            "daily_summary_time": _normalize_summary_times_text(source_notifications.get("daily_summary_time"), default_notifications["daily_summary_time"]),
             "push_cooldown_minutes": _bounded_int(source_notifications.get("push_cooldown_minutes"), default_notifications["push_cooldown_minutes"], 1, 1440),
         },
         "rules": normalized_rules,

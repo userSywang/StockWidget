@@ -285,7 +285,7 @@ class WidgetPanelTests(unittest.TestCase):
 
     def test_refresh_outside_market_skips_network_but_checks_daily_summary(self):
         win = FloatLabel.__new__(FloatLabel)
-        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._now = lambda: datetime(2026, 8, 11, 18, 0)
         win._refresh_future = None
         win._refresh_again_requested = False
         calls = []
@@ -298,7 +298,7 @@ class WidgetPanelTests(unittest.TestCase):
 
     def test_forced_refresh_outside_market_fetches_once(self):
         win = FloatLabel.__new__(FloatLabel)
-        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._now = lambda: datetime(2026, 8, 11, 18, 0)
         win._refresh_future = None
         win._refresh_again_requested = False
         win._refresh_again_force = False
@@ -339,7 +339,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         win = FloatLabel.__new__(FloatLabel)
         win._http = FakeHttp()
-        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._now = lambda: datetime(2026, 8, 11, 18, 0)
         win._strategy_daily_summary_sent_date = ""
         win.strategy_alert_config = {
             "enabled": True,
@@ -1264,7 +1264,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("上调止盈线至110.00", content)
         self.assertIn("止盈线：110.00", content)
 
-    def test_strategy_daily_summary_sends_once_after_configured_time(self):
+    def test_strategy_daily_summary_sends_at_9_and_18_on_weekdays(self):
         class FakeHttp:
             def __init__(self):
                 self.posts = []
@@ -1280,7 +1280,7 @@ class WidgetPanelTests(unittest.TestCase):
                 "remote_push": True,
                 "remote_channel": "wecom",
                 "webhook_url": "https://example.test/webhook",
-                "daily_summary_time": "14:30",
+                "daily_summary_time": "23:00",
             },
         }
         states = [{
@@ -1292,24 +1292,30 @@ class WidgetPanelTests(unittest.TestCase):
             "take_profit_price": 110.0,
             "status": "已锁盈10%",
         }]
-        now = datetime(2026, 8, 10, 14, 30)
+        morning = datetime(2026, 8, 10, 9, 0)
+        evening = datetime(2026, 8, 10, 18, 0)
+        late = datetime(2026, 8, 10, 23, 0)
 
-        sent = FloatLabel._send_strategy_daily_summary(win, states, now)
-        repeated = FloatLabel._send_strategy_daily_summary(win, states, now)
+        sent = FloatLabel._send_strategy_daily_summary(win, states, morning)
+        repeated = FloatLabel._send_strategy_daily_summary(win, states, morning)
+        evening_sent = FloatLabel._send_strategy_daily_summary(win, states, evening)
+        late_sent = FloatLabel._send_strategy_daily_summary(win, states, late)
 
         self.assertTrue(sent)
         self.assertFalse(repeated)
-        self.assertEqual(win._strategy_daily_summary_sent_date, "2026-08-10")
-        self.assertEqual(len(win._http.posts), 1)
+        self.assertTrue(evening_sent)
+        self.assertFalse(late_sent)
+        self.assertEqual(win._strategy_daily_summary_sent_date, "2026-08-10|09:00,18:00")
+        self.assertEqual(len(win._http.posts), 2)
         content = win._http.posts[0][1]["markdown"]["content"]
         self.assertIn("策略定时摘要", content)
-        self.assertIn("时间：2026-08-10 14:30", content)
+        self.assertIn("时间：2026-08-10 09:00", content)
         self.assertIn("标的：药明康德", content)
         self.assertIn("代码：sh603259", content)
         self.assertIn("止损线：95.00", content)
         self.assertIn("止盈线：110.00", content)
 
-    def test_strategy_daily_summary_waits_until_configured_time(self):
+    def test_strategy_daily_summary_skips_weekends_and_non_summary_times(self):
         class FakeHttp:
             def post(self, *_args, **_kwargs):
                 raise AssertionError("should not push before 11:00")
@@ -1322,17 +1328,23 @@ class WidgetPanelTests(unittest.TestCase):
                 "remote_push": True,
                 "remote_channel": "wecom",
                 "webhook_url": "https://example.test/webhook",
-                "daily_summary_time": "23:00",
+                "daily_summary_time": "09:00,18:00",
             },
         }
 
-        sent = FloatLabel._send_strategy_daily_summary(
+        late = FloatLabel._send_strategy_daily_summary(
             win,
             [{"code": "sh603259", "name": "药明康德", "status": "未触发"}],
-            datetime(2026, 8, 10, 22, 59),
+            datetime(2026, 8, 10, 23, 0),
+        )
+        weekend = FloatLabel._send_strategy_daily_summary(
+            win,
+            [{"code": "sh603259", "name": "药明康德", "status": "未触发"}],
+            datetime(2026, 8, 15, 9, 0),
         )
 
-        self.assertFalse(sent)
+        self.assertFalse(late)
+        self.assertFalse(weekend)
 
     def test_column_width_sources_ignore_message_rows(self):
         rows = [

@@ -264,12 +264,12 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertEqual(config["notifications"]["push_cooldown_minutes"], 5)
 
-    def test_strategy_alert_config_defaults_daily_summary_to_23_00(self):
+    def test_strategy_alert_config_defaults_daily_summary_to_trading_day_times(self):
         config = normalize_strategy_alert_config({
             "notifications": {"daily_summary_time": "bad"},
         })
 
-        self.assertEqual(config["notifications"]["daily_summary_time"], "23:00")
+        self.assertEqual(config["notifications"]["daily_summary_time"], "09:00,18:00")
 
     def test_strategy_config_does_not_drop_unknown_position_records(self):
         config = normalize_strategy_alert_config({
