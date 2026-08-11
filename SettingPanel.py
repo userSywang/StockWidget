@@ -47,7 +47,7 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         self.tab_sizes = {
-            0: QSize(720, 620),
+            0: QSize(430, 620),
             1: QSize(560, 560),
             2: QSize(980, 720),
             3: QSize(360, 350),
@@ -69,7 +69,7 @@ class SettingsDialog(QDialog):
         self.tree_codes = QTreeWidget()
         self.tree_codes.setHeaderHidden(True)
         self.tree_codes.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.EditKeyPressed)
-        self.tree_codes.setMinimumWidth(360)
+        self.tree_codes.setMinimumWidth(300)
         self.tree_codes.setMinimumHeight(250)
         self._load_code_tree()
         # 1.2 操作按钮

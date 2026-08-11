@@ -93,6 +93,7 @@ class FloatLabel(QWidget):
         self._refresh_future    = None
         self._refresh_previous_quotes = {}
         self._refresh_again_requested = False
+        self._refresh_again_force = False
         self._strategy_push_sent_keys = set()
         self._strategy_push_sent_at = {}
         self.strategy_alert_history = self._normalize_strategy_alert_history(cfg.get("strategy_alert_history", []))
@@ -221,7 +222,7 @@ class FloatLabel(QWidget):
         self.timer.setInterval(max(1, self.refresh_seconds)*1000)
         self.timer.timeout.connect(self._refresh_from_function)
         self.timer.start()
-        self._refresh_from_function()
+        self._refresh_from_function(force=True)
         self._defer_fit()
 
         self._keep_top_timer = QTimer(self)
@@ -1949,11 +1950,12 @@ class FloatLabel(QWidget):
 
         self._fit_to_contents()
 
-    def _refresh_from_function(self):
+    def _refresh_from_function(self, force=False):
         if getattr(self, "_refresh_future", None) is not None and not self._refresh_future.done():
             self._refresh_again_requested = True
+            self._refresh_again_force = bool(getattr(self, "_refresh_again_force", False) or force)
             return
-        if not self._is_market_fetch_time():
+        if not force and not self._is_market_fetch_time():
             self._check_strategy_daily_summary()
             return
         try:
@@ -2070,8 +2072,10 @@ class FloatLabel(QWidget):
             pass
         self._project_columns(full_rows, sign)
         if getattr(self, "_refresh_again_requested", False):
+            force_again = bool(getattr(self, "_refresh_again_force", False))
             self._refresh_again_requested = False
-            QTimer.singleShot(0, self._refresh_from_function)
+            self._refresh_again_force = False
+            QTimer.singleShot(0, lambda: self._refresh_from_function(force=force_again))
 
     # ----- 应用设置 -----
     def set_groups(self, groups):
@@ -2082,7 +2086,7 @@ class FloatLabel(QWidget):
             self.checked_codes = list(self.codes)
         self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
         self._notify_change()
-        self._refresh_from_function()
+        self._refresh_from_function(force=True)
 
     def set_codes(self, codes_list):
         new = normalize_codes(codes_list)
@@ -2092,7 +2096,7 @@ class FloatLabel(QWidget):
         self.groups = [{"name": "默认", "codes": list(new)}]
         self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
         self._notify_change()
-        self._refresh_from_function()
+        self._refresh_from_function(force=True)
 
     def set_checked_codes(self, codes_list):
         new = [c for c in normalize_codes(codes_list) if c in self.codes]
@@ -2100,7 +2104,7 @@ class FloatLabel(QWidget):
             new = [self.codes[0] if self.codes else "sh000001"]
         self.checked_codes = new
         self._notify_change()
-        self._refresh_from_function()
+        self._refresh_from_function(force=True)
 
     def set_alert_rules(self, rules):
         self.alert_rules = normalize_alert_rules(rules)

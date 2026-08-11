@@ -270,6 +270,39 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(calls, ["summary"])
 
+    def test_forced_refresh_outside_market_fetches_once(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._now = lambda: datetime(2026, 8, 11, 23, 0)
+        win._refresh_future = None
+        win._refresh_again_requested = False
+        win._refresh_again_force = False
+        win._latest_quotes = {}
+        calls = []
+        win._refresh_request_codes = lambda: ["sh603259"]
+        win._get_refresh_data = lambda codes: calls.append(list(codes)) or ({}, {}, {}, {})
+        win._apply_refresh_result = lambda *args: calls.append("applied")
+        win._refresh_executor = None
+        win._check_strategy_daily_summary = lambda: calls.append("summary")
+
+        FloatLabel._refresh_from_function(win, force=True)
+
+        self.assertEqual(calls, [["sh603259"], "applied"])
+
+    def test_set_groups_forces_refresh_for_new_codes_outside_market(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.codes = ["sh000001"]
+        win.checked_codes = ["sh000001"]
+        win.code_tags = {}
+        calls = []
+        win._notify_change = lambda: None
+        win._refresh_from_function = lambda force=False: calls.append(force)
+
+        FloatLabel.set_groups(win, [{"name": "默认", "codes": ["sh603259"]}])
+
+        self.assertEqual(win.codes, ["sh603259"])
+        self.assertEqual(win.checked_codes, ["sh603259"])
+        self.assertEqual(calls, [True])
+
     def test_daily_summary_check_uses_latest_strategy_states_outside_market(self):
         class FakeHttp:
             def __init__(self):

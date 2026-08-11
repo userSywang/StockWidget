@@ -234,9 +234,10 @@ class SettingsPanelTests(unittest.TestCase):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
 
-        self.assertGreaterEqual(dlg.tab_sizes[0].width(), 460)
+        self.assertLessEqual(dlg.tab_sizes[0].width(), 460)
+        self.assertGreaterEqual(dlg.tab_sizes[0].width(), 420)
         self.assertGreaterEqual(dlg.tab_sizes[0].height(), 420)
-        self.assertGreaterEqual(dlg.tree_codes.width(), 300)
+        self.assertGreaterEqual(dlg.tree_codes.minimumWidth(), 300)
         self.assertGreaterEqual(dlg.tree_codes.minimumHeight(), 250)
         dlg.close()
 
@@ -393,7 +394,7 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertNotIn("提醒", tab_names)
         self.assertEqual(tab_names[-1], "数据源")
-        self.assertGreaterEqual(dlg.tab_sizes[0].width(), 720)
+        self.assertLessEqual(dlg.tab_sizes[0].width(), 460)
         self.assertGreater(dlg.maximumWidth(), dlg.width())
         self.assertTrue(dlg.list_price_alerts.isHidden())
         self.assertLessEqual(dlg.edit_price_alert_message.minimumWidth(), 160)
