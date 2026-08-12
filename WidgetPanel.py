@@ -2229,7 +2229,7 @@ class FloatLabel(QWidget):
         self.strategy_alert_config = normalize_strategy_alert_config(config)
         self._daily_kline_cache = {}
         self._notify_change()
-        self._refresh_from_function()
+        self._refresh_from_function(force=not self._is_market_fetch_time())
 
     def set_panel_display_mode(self, mode):
         self.panel_display_mode = "quotes"

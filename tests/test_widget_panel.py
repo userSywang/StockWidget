@@ -330,6 +330,23 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win.checked_codes, ["sh603259"])
         self.assertEqual(calls, [True])
 
+    def test_set_strategy_alert_config_forces_refresh_outside_market(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+        win._daily_kline_cache = {"old": []}
+        win._notify_change = lambda: calls.append("saved")
+        win._is_market_fetch_time = lambda: False
+        win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
+
+        FloatLabel.set_strategy_alert_config(win, {
+            "enabled": True,
+            "positions": [{"code": "600186", "cost_price": 11.52, "strategy_id": "default"}],
+        })
+
+        self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh600186")
+        self.assertEqual(win._daily_kline_cache, {})
+        self.assertEqual(calls, ["saved", ("refresh", True)])
+
     def test_daily_summary_check_uses_latest_strategy_states_outside_market(self):
         class FakeHttp:
             def __init__(self):
