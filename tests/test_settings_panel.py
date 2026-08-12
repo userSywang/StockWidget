@@ -270,6 +270,10 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
         dlg.chk_price_alert_badge_visible.setChecked(False)
         self.assertFalse(win.price_alert_badge_visible)
+        self.assertFalse(dlg.chk_price_alert_badge_visible_inline.isChecked())
+        dlg.chk_price_alert_badge_visible_inline.setChecked(True)
+        self.assertTrue(win.price_alert_badge_visible)
+        self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):
@@ -564,12 +568,10 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(len(turtle_items), 1)
         self.assertIn("4条", turtle_items[0])
         dlg.list_strategy_templates.setCurrentRow(turtle_row)
-        self.assertTrue(dlg.template_rules_scroll.isHidden())
-        self.assertFalse(dlg.template_action_group.isHidden())
-        action_rows = [dlg.list_template_action_rules.item(i).text() for i in range(dlg.list_template_action_rules.count())]
-        self.assertEqual(len(action_rows), 4)
-        self.assertTrue(any("20日新高" in row for row in action_rows))
-        self.assertTrue(any("2.0ATR" in row for row in action_rows))
+        self.assertFalse(dlg.template_rules_scroll.isHidden())
+        self.assertTrue(dlg.template_action_group.isHidden())
+        self.assertTrue(dlg.g_template_profit.isHidden())
+        self.assertFalse(dlg.g_template_turtle.isHidden())
         self.assertTrue(dlg.table_template_action_rules.isHidden())
         self.assertFalse(dlg.spin_turtle_entry_days.isHidden())
 

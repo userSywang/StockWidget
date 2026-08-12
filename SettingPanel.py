@@ -468,6 +468,8 @@ class SettingsDialog(QDialog):
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setPlaceholderText("备注，可空")
         self.edit_price_alert_message.setMinimumWidth(120)
+        self.chk_price_alert_badge_visible_inline = QCheckBox("窗口显示价警标识")
+        self.chk_price_alert_badge_visible_inline.setChecked(bool(getattr(self.win, "price_alert_badge_visible", True)))
 
         form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 4)
         form_price.addWidget(QLabel("条件："), 1, 0)
@@ -476,6 +478,7 @@ class SettingsDialog(QDialog):
         form_price.addWidget(self.cmb_price_alert_expire_days, 1, 3)
         form_price.addWidget(QLabel("备注："), 2, 0)
         form_price.addWidget(self.edit_price_alert_message, 2, 1, 1, 3)
+        form_price.addWidget(self.chk_price_alert_badge_visible_inline, 3, 1, 1, 3)
         form_price.setColumnStretch(3, 1)
         lay_price_alert.addLayout(form_price)
         lay_price_alert.addLayout(price_btns)
@@ -904,9 +907,9 @@ class SettingsDialog(QDialog):
         template_rules_layout.addWidget(g_template_profit)
         template_rules_layout.addWidget(g_template_loss)
         template_rules_layout.addWidget(g_template_position)
-        rules_scroll.setWidget(rules_scroll_content)
-        self.template_rules_scroll = rules_scroll
-        template_edit_layout.addWidget(rules_scroll)
+        self.g_template_profit = g_template_profit
+        self.g_template_loss = g_template_loss
+        self.g_template_position = g_template_position
 
         self.template_action_group = QGroupBox("动作规则")
         template_action_layout = QVBoxLayout(self.template_action_group)
@@ -954,6 +957,13 @@ class SettingsDialog(QDialog):
         turtle_param_layout.addWidget(self.spin_turtle_max_units, 2, 1)
         turtle_param_layout.addWidget(QLabel("计提方式："), 2, 3)
         turtle_param_layout.addWidget(self.cmb_turtle_sizing, 2, 4, 1, 2)
+        self.g_template_turtle = QGroupBox("海龟参数")
+        self.g_template_turtle.setLayout(turtle_param_layout)
+        self.g_template_turtle.setVisible(False)
+        template_rules_layout.addWidget(self.g_template_turtle)
+        rules_scroll.setWidget(rules_scroll_content)
+        self.template_rules_scroll = rules_scroll
+        template_edit_layout.addWidget(rules_scroll)
         self.table_template_action_rules = QTableWidget(0, 7)
         self.table_template_action_rules.setHorizontalHeaderLabels(["启用", "指标", "比较", "参数", "计提单位", "动作", "附加"])
         self.table_template_action_rules.setMinimumHeight(240)
@@ -975,7 +985,6 @@ class SettingsDialog(QDialog):
         self.list_template_action_rules = QListWidget()
         self.list_template_action_rules.setMinimumHeight(110)
         template_action_layout.addWidget(self.lbl_template_action_hint)
-        template_action_layout.addLayout(turtle_param_layout)
         self.table_template_action_rules.setVisible(False)
         template_action_layout.addWidget(self.table_template_action_rules)
         template_action_layout.addWidget(self.list_template_action_rules)
@@ -1322,6 +1331,7 @@ class SettingsDialog(QDialog):
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
         self.chk_price_alert_badge_visible.toggled.connect(self._on_price_alert_badge_visible_changed)
+        self.chk_price_alert_badge_visible_inline.toggled.connect(self._on_price_alert_badge_visible_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
         self.cmb_data_source_mode.currentIndexChanged.connect(self._on_data_source_changed)
@@ -2784,6 +2794,7 @@ class SettingsDialog(QDialog):
             self._load_template_action_rules([])
             self.template_rules_scroll.setVisible(True)
             self.template_action_group.setVisible(False)
+            self._set_template_editor_mode("default")
             return
         profile = profiles[row]
         self.edit_template_name.setText(profile.get('name', ''))
@@ -2792,16 +2803,24 @@ class SettingsDialog(QDialog):
         ref_count = sum(1 for p in positions if p.get("strategy_id") == profile.get("id"))
         self.lbl_template_ref_count.setText(f"被引用：{ref_count} 只股票")
         action_rules = profile.get("action_rules") if isinstance(profile.get("action_rules"), list) else []
-        if action_rules:
-            self.template_rules_scroll.setVisible(False)
-            self.template_action_group.setVisible(True)
+        if profile.get("strategy_type") == "turtle":
+            self.template_rules_scroll.setVisible(True)
+            self.template_action_group.setVisible(False)
+            self._set_template_editor_mode("turtle")
             self._load_turtle_params_to_editor(profile.get("turtle_params", {}))
             self._load_template_action_rules(action_rules)
         else:
             self.template_rules_scroll.setVisible(True)
             self.template_action_group.setVisible(False)
+            self._set_template_editor_mode("default")
             self._load_template_action_rules([])
             self._load_template_rules_to_editor(profile.get("rules", {}))
+
+    def _set_template_editor_mode(self, mode):
+        is_turtle = mode == "turtle"
+        for widget in (self.g_template_profit, self.g_template_loss, self.g_template_position):
+            widget.setVisible(not is_turtle)
+        self.g_template_turtle.setVisible(is_turtle)
 
     def _on_template_new(self):
         profiles = self._strategy_config.get("strategy_profiles", [])
@@ -3197,9 +3216,19 @@ class SettingsDialog(QDialog):
         self.win.set_market_amount_visible(self.chk_market_amount_visible.isChecked())
 
     def _on_price_alert_badge_visible_changed(self, *_args):
+        visible = self.sender().isChecked() if self.sender() is not None else self.chk_price_alert_badge_visible.isChecked()
+        for checkbox in (self.chk_price_alert_badge_visible, self.chk_price_alert_badge_visible_inline):
+            if checkbox.isChecked() != visible:
+                checkbox.blockSignals(True)
+                try:
+                    checkbox.setChecked(visible)
+                finally:
+                    checkbox.blockSignals(False)
         setter = getattr(self.win, "set_price_alert_badge_visible", None)
         if callable(setter):
-            setter(self.chk_price_alert_badge_visible.isChecked())
+            setter(visible)
+        else:
+            self.win.price_alert_badge_visible = visible
 
     # —— 其它槽 —— #
     def _on_interval_changed(self, idx):
