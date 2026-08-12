@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLa
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
+from KLineChart import KLineChartDialog
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -107,6 +108,9 @@ class FloatLabel(QWidget):
         self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
         self._latest_strategy_states = []
         self._daily_kline_cache = {}
+        self._latest_daily_by_code = {}
+        self._kline_chart_dialog = None
+        self._kline_chart_code = ""
 
         # 设置初值
         self.groups = normalize_groups(groups_cfg, codes_cfg)
@@ -224,6 +228,9 @@ class FloatLabel(QWidget):
             self.move(scr.right()-self.width()-40, scr.bottom()-self.height()-80)
 
         self._drag_pos = None
+        self._drag_moved = False
+        self._drag_press_global = None
+        self._pressed_kline_code = ""
 
         self.timer = QTimer(self)
         self.timer.setInterval(max(1, self.refresh_seconds)*1000)
@@ -1082,6 +1089,8 @@ class FloatLabel(QWidget):
         codes = []
         if any(getattr(self, attr, False) for attr in ("ma5_visible", "ma10_visible", "ma20_visible")):
             codes.extend(getattr(self, "checked_codes", []))
+        if getattr(self, "_kline_chart_code", ""):
+            codes.append(self._kline_chart_code)
         for alert in normalize_price_alerts(getattr(self, "price_alerts", [])):
             if isinstance(alert, dict) and alert.get("direction") == "below_ma5":
                 codes.append(alert.get("code"))
@@ -1284,7 +1293,8 @@ class FloatLabel(QWidget):
         daily_codes = self._daily_request_codes()
         if daily_codes:
             try:
-                daily_by_code = self._get_daily_klines(daily_codes, limit=20)
+                limit = 60 if getattr(self, "_kline_chart_code", "") else 20
+                daily_by_code = self._get_daily_klines(daily_codes, limit=limit)
             except Exception:
                 daily_by_code = {}
         return row_by_code, sign_by_code, quote_by_code, daily_by_code
@@ -1336,6 +1346,7 @@ class FloatLabel(QWidget):
             for code in group_codes:
                 source_row = row_by_code.get(code)
                 meta = dict(sign_by_code.get(code, {}))
+                meta["code"] = code
                 if source_row is None:
                     source_row = self._empty_stock_row(code)
                     meta["quote_missing"] = True
@@ -2146,6 +2157,13 @@ class FloatLabel(QWidget):
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
+        self._latest_daily_by_code = dict(daily_by_code or {})
+        dialog = getattr(self, "_kline_chart_dialog", None)
+        if dialog is not None and dialog.isVisible() and getattr(dialog, "code", ""):
+            chart_value = self._latest_daily_by_code.get(dialog.code)
+            chart_rows = chart_value if isinstance(chart_value, list) else []
+            status_text = chart_value.get("error", "") if isinstance(chart_value, dict) else ""
+            dialog.chart.set_rows(chart_rows, status_text=status_text)
         price_alerts_changed = self._prune_expired_price_alerts()
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
         self._latest_price_alert_states = price_alert_states
@@ -2462,6 +2480,49 @@ class FloatLabel(QWidget):
         act_badge.toggled.connect(self.set_price_alert_badge_visible)
         sub_cols.addAction(act_badge)
 
+    def _kline_code_at_event(self, obj, event):
+        if obj is not getattr(self.table, "viewport", lambda: None)():
+            return ""
+        try:
+            index = self.table.indexAt(event.position().toPoint())
+            if not index.isValid() or index.column() >= len(self.model._headers):
+                return ""
+            if self.model._headers[index.column()] != "K线":
+                return ""
+            meta = self.model._row_meta[index.row()] if index.row() < len(self.model._row_meta) else {}
+            if meta.get("row_type"):
+                return ""
+            return normalize_code_or_none(meta.get("code")) or ""
+        except Exception:
+            return ""
+
+    def _open_kline_chart(self, code):
+        code = normalize_code_or_none(code)
+        if not code:
+            return False
+        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
+        name = str(quote_data.get("name") or self.code_names.get(code) or code)
+        chart_value = (getattr(self, "_latest_daily_by_code", {}) or {}).get(code)
+        chart_rows = chart_value if isinstance(chart_value, list) else []
+        status_text = chart_value.get("error", "") if isinstance(chart_value, dict) else ""
+        if not chart_rows and not status_text:
+            status_text = "正在加载日线数据..."
+
+        dialog = getattr(self, "_kline_chart_dialog", None)
+        if dialog is None:
+            dialog = KLineChartDialog(self)
+            dialog.finished.connect(self._on_kline_chart_closed)
+            self._kline_chart_dialog = dialog
+        self._kline_chart_code = code
+        self.suspend_keep_top(8.0)
+        dialog.show_stock(code, name, chart_rows, status_text=status_text)
+        if not chart_rows:
+            self._refresh_from_function(force=True)
+        return True
+
+    def _on_kline_chart_closed(self, *_args):
+        self._kline_chart_code = ""
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -2485,19 +2546,42 @@ class FloatLabel(QWidget):
 
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
+            code = self._kline_code_at_event(obj, ev)
+            if code:
+                self._drag_pos = None
+                self._open_kline_chart(code)
+                return True
             self._drag_pos = None
             self.hide()
             return True
         if ev.type() == QEvent.MouseButtonPress and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            self._drag_press_global = ev.globalPosition().toPoint()
+            self._drag_moved = False
+            self._pressed_kline_code = self._kline_code_at_event(obj, ev)
             self.setFocus(Qt.MouseFocusReason)
             return True
         if ev.type() == QEvent.MouseMove and hasattr(ev, "buttons") and (ev.buttons() & Qt.LeftButton) and getattr(self, "_drag_pos", None):
+            press_pos = getattr(self, "_drag_press_global", None)
+            if press_pos is not None:
+                distance = (ev.globalPosition().toPoint() - press_pos).manhattanLength()
+                if distance < QApplication.startDragDistance():
+                    return True
+            self._drag_moved = True
             self.move(ev.globalPosition().toPoint() - self._drag_pos)
             return True
         if ev.type() == QEvent.MouseButtonRelease and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
+            released_code = self._kline_code_at_event(obj, ev)
+            pressed_code = getattr(self, "_pressed_kline_code", "")
+            moved = bool(getattr(self, "_drag_moved", False))
             self._drag_pos = None
-            self._notify_change()
+            self._drag_press_global = None
+            self._drag_moved = False
+            self._pressed_kline_code = ""
+            if not moved and pressed_code and pressed_code == released_code:
+                self._open_kline_chart(pressed_code)
+            elif moved:
+                self._notify_change()
             return True
         return QWidget.eventFilter(self, obj, ev)
 

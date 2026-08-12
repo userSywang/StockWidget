@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QHideEvent
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
 from WidgetPanel import FloatLabel
 
@@ -267,6 +269,7 @@ class WidgetPanelTests(unittest.TestCase):
         win = FloatLabel.__new__(FloatLabel)
         win.checked_codes = ["sh600000"]
         win.price_alerts = [{"enabled": True, "code": "sh603259", "direction": "below_ma5"}]
+        win.kline_visible = False
         win.ma5_visible = False
         win.ma10_visible = False
         win.ma20_visible = False
@@ -275,6 +278,72 @@ class WidgetPanelTests(unittest.TestCase):
         codes = FloatLabel._daily_request_codes(win)
 
         self.assertEqual(codes, ["sh603259"])
+
+    def test_daily_request_codes_include_only_open_kline_stock(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000", "sh512000"]
+        win.price_alerts = []
+        win.kline_visible = True
+        win._kline_chart_code = "sh512000"
+        win.ma5_visible = False
+        win.ma10_visible = False
+        win.ma20_visible = False
+        win.strategy_alert_config = {"enabled": False}
+
+        codes = FloatLabel._daily_request_codes(win)
+
+        self.assertEqual(codes, ["sh512000"])
+
+    def test_kline_price_axis_uses_linear_price_mapping(self):
+        from KLineChart import KLineChartWidget
+
+        top = KLineChartWidget.price_to_y(20.0, 10.0, 210.0, 10.0, 30.0)
+        middle = KLineChartWidget.price_to_y(15.0, 10.0, 210.0, 10.0, 30.0)
+        bottom = KLineChartWidget.price_to_y(10.0, 10.0, 210.0, 10.0, 30.0)
+
+        self.assertAlmostEqual(top - middle, middle - bottom)
+
+    def test_clicking_kline_cell_opens_chart_with_daily_rows(self):
+        cfg = {
+            "groups": [{"name": "ETF", "codes": ["sh512000"]}],
+            "checked_codes": ["sh512000"],
+            "name_visible": True,
+            "kline_visible": True,
+        }
+        daily_rows = [
+            {"date": "2026-08-10", "open": 1.10, "high": 1.13, "low": 1.09, "close": 1.12},
+            {"date": "2026-08-11", "open": 1.12, "high": 1.16, "low": 1.11, "close": 1.15},
+        ]
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            full_rows, meta = win._compose_display_rows(
+                {"sh512000": ["sh512000", "券商ETF", "1.150", "+0.030", "+2.68%", "-", "-", "-", "-", "-", "1.140", ""]},
+                {"sh512000": {"delta": 1}},
+                [],
+                daily_by_code={"sh512000": daily_rows},
+            )
+            win._latest_daily_by_code = {"sh512000": daily_rows}
+            win._project_columns(full_rows, meta)
+            win.show()
+            self.app.processEvents()
+
+            index = win.model.index(1, win.model._headers.index("K线"))
+            QTest.mouseClick(win.table.viewport(), Qt.LeftButton, Qt.NoModifier, win.table.visualRect(index).center())
+            self.app.processEvents()
+
+            dialog = getattr(win, "_kline_chart_dialog", None)
+            self.assertIsNotNone(dialog)
+            self.assertTrue(dialog.isVisible())
+            self.assertEqual(dialog.chart.rows[-1]["close"], 1.15)
+        finally:
+            dialog = getattr(win, "_kline_chart_dialog", None)
+            if dialog is not None:
+                dialog.close()
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.hide()
 
     def test_market_fetch_time_only_allows_9_to_15_on_weekdays(self):
         win = FloatLabel.__new__(FloatLabel)
