@@ -461,6 +461,10 @@ class SettingsDialog(QDialog):
         self.spin_price_alert_price.setDecimals(3)
         self.spin_price_alert_price.setFixedWidth(86)
         self.cmb_price_alert_direction.addItem("低于5日线", userData="below_ma5")
+        self.cmb_price_alert_expire_days = QComboBox()
+        self.cmb_price_alert_expire_days.setFixedWidth(76)
+        for days in (1, 5, 30, 60):
+            self.cmb_price_alert_expire_days.addItem(f"{days}日", userData=days)
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setPlaceholderText("备注，可空")
         self.edit_price_alert_message.setMinimumWidth(120)
@@ -469,6 +473,7 @@ class SettingsDialog(QDialog):
         form_price.addWidget(QLabel("条件："), 1, 0)
         form_price.addWidget(self.cmb_price_alert_direction, 1, 1)
         form_price.addWidget(self.spin_price_alert_price, 1, 2)
+        form_price.addWidget(self.cmb_price_alert_expire_days, 1, 3)
         form_price.addWidget(QLabel("备注："), 2, 0)
         form_price.addWidget(self.edit_price_alert_message, 2, 1, 1, 3)
         form_price.setColumnStretch(3, 1)
@@ -1244,6 +1249,7 @@ class SettingsDialog(QDialog):
         self.btn_price_alert_del.clicked.connect(self._del_price_alert)
         self.edit_price_alert_code.editingFinished.connect(self._on_price_alert_editor_changed)
         self.cmb_price_alert_direction.currentIndexChanged.connect(self._on_price_alert_editor_changed)
+        self.cmb_price_alert_expire_days.currentIndexChanged.connect(self._on_price_alert_editor_changed)
         self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
         self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
         self.chk_strategy_enabled.toggled.connect(self._on_strategy_config_changed)
@@ -1660,6 +1666,8 @@ class SettingsDialog(QDialog):
             self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
             idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
             self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
+            expire_idx = self.cmb_price_alert_expire_days.findData(int(alert.get("expire_days", 30)))
+            self.cmb_price_alert_expire_days.setCurrentIndex(expire_idx if expire_idx >= 0 else self.cmb_price_alert_expire_days.findData(30))
             self.spin_price_alert_price.setValue(float(alert.get("price", 0.0)))
             self.edit_price_alert_message.setText(alert.get("message", ""))
             self._sync_price_alert_direction_controls()
@@ -1958,7 +1966,7 @@ class SettingsDialog(QDialog):
             direction = "高于" if alert.get("direction") == "above" else "低于"
             price_text = f" {float(alert.get('price', 0.0)):.3f}"
         suffix = "" if alert.get("enabled", True) else "（停用）"
-        return f"{self._format_code_item_text(code)} {direction}{price_text}{suffix}"
+        return f"{self._format_code_item_text(code)} {direction}{price_text} {int(alert.get('expire_days', 30))}日{suffix}"
 
     def _load_price_alert_list(self, current_row=0):
         self.list_price_alerts.blockSignals(True)
@@ -1986,6 +1994,8 @@ class SettingsDialog(QDialog):
             self.edit_price_alert_code.setText(alert.get("code", "sh000001"))
             idx = self.cmb_price_alert_direction.findData(alert.get("direction", "above"))
             self.cmb_price_alert_direction.setCurrentIndex(idx if idx >= 0 else 0)
+            expire_idx = self.cmb_price_alert_expire_days.findData(int(alert.get("expire_days", 30)))
+            self.cmb_price_alert_expire_days.setCurrentIndex(expire_idx if expire_idx >= 0 else self.cmb_price_alert_expire_days.findData(30))
             self.spin_price_alert_price.setValue(float(alert.get("price", 0.0)))
             self.edit_price_alert_message.setText(alert.get("message", ""))
             self._sync_price_alert_direction_controls()
@@ -1993,12 +2003,17 @@ class SettingsDialog(QDialog):
             self._loading_price_alert_editor = False
 
     def _collect_price_alert_from_editor(self):
+        row = self._current_price_alert_row()
+        existing = self._price_alerts[row] if row >= 0 else {}
+        created_date = str((existing or {}).get("created_date") or "").strip() or date.today().strftime("%Y-%m-%d")
         return normalize_price_alert({
             "enabled": True,
             "code": self._current_code_from_tree() or self.edit_price_alert_code.text(),
             "direction": self.cmb_price_alert_direction.currentData(),
             "price": self.spin_price_alert_price.value(),
             "message": self.edit_price_alert_message.text(),
+            "created_date": created_date,
+            "expire_days": self.cmb_price_alert_expire_days.currentData() or 30,
         })
 
     def _sync_price_alert_direction_controls(self):

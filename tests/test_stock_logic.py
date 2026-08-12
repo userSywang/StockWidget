@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 
 from StockLogic import (
     evaluate_price_alerts,
@@ -7,6 +8,7 @@ from StockLogic import (
     normalize_code_or_none,
     normalize_alert_rule,
     normalize_price_alert,
+    price_alert_is_expired,
     normalize_groups,
     normalize_strategy_alert_config,
     strategy_action_rules_for_position,
@@ -143,6 +145,17 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(alert["code"], "sh512000")
         self.assertEqual(alert["direction"], "above")
         self.assertEqual(alert["price"], 0.0)
+        self.assertEqual(alert["expire_days"], 30)
+
+    def test_price_alert_expiration_uses_created_date_and_valid_days(self):
+        alert = normalize_price_alert({
+            "code": "512000",
+            "created_date": "2026-08-01",
+            "expire_days": 5,
+        })
+
+        self.assertFalse(price_alert_is_expired(alert, date(2026, 8, 5)))
+        self.assertTrue(price_alert_is_expired(alert, date(2026, 8, 6)))
 
     def test_price_alert_triggers_when_below_ma5(self):
         alerts = [{"enabled": True, "code": "603259", "direction": "below_ma5", "message": "低吸观察"}]

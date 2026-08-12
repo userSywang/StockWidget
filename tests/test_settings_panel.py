@@ -419,9 +419,11 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertTrue(win.price_alerts[0]["enabled"])
+        self.assertEqual(win.price_alerts[0]["expire_days"], 30)
         self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "configured")
 
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
+        dlg.cmb_price_alert_expire_days.setCurrentIndex(dlg.cmb_price_alert_expire_days.findData(5))
         dlg.spin_price_alert_price.setValue(1.234)
         dlg.edit_price_alert_message.setText("跌破提醒")
         dlg._on_price_alert_editor_changed()
@@ -430,6 +432,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.price_alerts[0]["direction"], "below_ma5")
         self.assertFalse(dlg.spin_price_alert_price.isEnabled())
         self.assertEqual(win.price_alerts[0]["message"], "跌破提醒")
+        self.assertEqual(win.price_alerts[0]["expire_days"], 5)
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])

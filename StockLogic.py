@@ -1,4 +1,5 @@
 import re
+from datetime import date, datetime, timedelta
 
 
 DEFAULT_GROUP_NAME = "默认"
@@ -377,6 +378,8 @@ def default_price_alert():
         "direction": "above",
         "price": 0.0,
         "message": "价格提醒触发",
+        "created_date": date.today().strftime("%Y-%m-%d"),
+        "expire_days": 30,
     }
 
 
@@ -389,17 +392,46 @@ def normalize_price_alert(alert):
         price = float(alert.get("price", 0.0))
     except Exception:
         price = 0.0
+    try:
+        expire_days = int(alert.get("expire_days", 30))
+    except Exception:
+        expire_days = 30
+    if expire_days not in (1, 5, 30, 60):
+        expire_days = 30
+    created_date = str(alert.get("created_date") or "").strip()
+    if created_date:
+        try:
+            datetime.strptime(created_date, "%Y-%m-%d")
+        except Exception:
+            created_date = ""
     return {
         "enabled": bool(alert.get("enabled", True)),
         "code": code,
         "direction": direction,
         "price": max(0.0, price),
         "message": str(alert.get("message") or "").strip(),
+        "created_date": created_date,
+        "expire_days": expire_days,
     }
 
 
 def normalize_price_alerts(alerts):
     return [normalize_price_alert(alert) for alert in (alerts or []) if isinstance(alert, dict)]
+
+
+def price_alert_is_expired(alert, today=None):
+    alert = normalize_price_alert(alert)
+    created_text = str(alert.get("created_date") or "").strip()
+    if not created_text:
+        return False
+    try:
+        created = datetime.strptime(created_text, "%Y-%m-%d").date()
+    except Exception:
+        return False
+    today = today or date.today()
+    if isinstance(today, datetime):
+        today = today.date()
+    return today >= created + timedelta(days=int(alert.get("expire_days", 30)))
 
 
 def evaluate_price_alerts(alerts, quotes, daily_by_code=None):

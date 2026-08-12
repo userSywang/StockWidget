@@ -24,6 +24,7 @@ from StockLogic import (
     normalize_groups,
     normalize_codes,
     normalize_price_alerts,
+    price_alert_is_expired,
     normalize_strategy_alert_config,
     strategy_daily_request_codes,
     strategy_request_codes,
@@ -1821,6 +1822,21 @@ class FloatLabel(QWidget):
         self._price_alert_push_sent_at = sent_at
         return pushed_any
 
+    def _prune_expired_price_alerts(self, now=None):
+        now_provider = getattr(self, "_now", None)
+        now = now or (now_provider() if callable(now_provider) else datetime.now())
+        today = now.date() if isinstance(now, datetime) else now
+        active_alerts = []
+        changed = False
+        for alert in normalize_price_alerts(getattr(self, "price_alerts", [])):
+            if price_alert_is_expired(alert, today):
+                changed = True
+                continue
+            active_alerts.append(alert)
+        if changed:
+            self.price_alerts = active_alerts
+        return changed
+
     def _record_strategy_alert_history(self, state, now=None):
         now = now or datetime.now()
         time_text = now.strftime("%Y-%m-%d %H:%M") if hasattr(now, "strftime") else str(now)
@@ -2130,6 +2146,7 @@ class FloatLabel(QWidget):
     def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
+        price_alerts_changed = self._prune_expired_price_alerts()
         price_alert_states = evaluate_price_alerts(self.price_alerts, quote_by_code, daily_by_code or {})
         self._latest_price_alert_states = price_alert_states
         price_alert_pushed = self._send_price_alert_pushes(price_alert_states)
@@ -2155,7 +2172,7 @@ class FloatLabel(QWidget):
             if name and self.code_names.get(code) != name:
                 self.code_names[code] = name
                 learned_names = True
-        if learned_names or strategy_changed or daily_summary_sent or price_alert_pushed:
+        if learned_names or strategy_changed or daily_summary_sent or price_alert_pushed or price_alerts_changed:
             self._notify_change()
 
         try:

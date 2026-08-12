@@ -1184,6 +1184,20 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("当前价：144.500", content)
         self.assertIn("条件：低于/等于 145.000", content)
 
+    def test_prune_expired_price_alerts_removes_old_alerts(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.price_alerts = [
+            {"enabled": True, "code": "sh603259", "direction": "below", "price": 145.0, "created_date": "2026-08-01", "expire_days": 5},
+            {"enabled": True, "code": "sh515880", "direction": "above", "price": 0.7, "created_date": "2026-08-10", "expire_days": 5},
+            {"enabled": True, "code": "sz000938", "direction": "above", "price": 30.0},
+        ]
+        win._now = lambda: datetime(2026, 8, 6, 9, 0)
+
+        changed = FloatLabel._prune_expired_price_alerts(win)
+
+        self.assertTrue(changed)
+        self.assertEqual([alert["code"] for alert in win.price_alerts], ["sh515880", "sz000938"])
+
     def test_strategy_pushes_once_per_status_per_day_and_records_history(self):
         class FakeHttp:
             def __init__(self):
