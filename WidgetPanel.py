@@ -1688,6 +1688,20 @@ class FloatLabel(QWidget):
         ordered = [label for _, _, label in STRATEGY_DAILY_SUMMARY_SLOTS if label in slots]
         self._strategy_daily_summary_sent_date = f"{today_key}|{','.join(ordered)}"
 
+    def _strategy_push_recorded_today(self, key, today_key):
+        try:
+            code, status = key.split("|", 1)
+        except ValueError:
+            return False
+        for item in getattr(self, "strategy_alert_history", []) or []:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("time") or "")[:10] != today_key:
+                continue
+            if str(item.get("code") or "") == code and str(item.get("status") or "") == status:
+                return True
+        return False
+
     def _send_strategy_daily_summary(self, strategy_states, now=None):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
         if not notifications.get("remote_push") or not notifications.get("webhook_url"):
@@ -1720,12 +1734,16 @@ class FloatLabel(QWidget):
         now_provider = getattr(self, "_now", None)
         now_dt = now_provider() if callable(now_provider) else datetime.now()
         now_ts = now_dt.timestamp() if hasattr(now_dt, "timestamp") else time.time()
+        today_key = now_dt.strftime("%Y-%m-%d") if hasattr(now_dt, "strftime") else date.today().strftime("%Y-%m-%d")
         history_changed = False
         for state in strategy_states or []:
             if not state.get("triggered"):
                 continue
             key = f"{state.get('code')}|{state.get('status')}"
             if self._is_desktop_alert_ignored(key, now_dt):
+                continue
+            daily_key = f"{today_key}|{key}"
+            if daily_key in sent_keys or self._strategy_push_recorded_today(key, today_key):
                 continue
             last_ts = float(sent_at.get(key, 0.0) or 0.0)
             if key in sent_keys and now_ts - last_ts < cooldown_seconds:
@@ -1744,7 +1762,7 @@ class FloatLabel(QWidget):
                 except Exception:
                     pass
             if pushed:
-                sent_keys.add(key)
+                sent_keys.add(daily_key)
                 sent_at[key] = now_ts
                 self._record_strategy_alert_history(state, now_dt)
                 history_changed = True
@@ -2481,8 +2499,6 @@ class FloatLabel(QWidget):
 
     def hideEvent(self, event):
         super().hideEvent(event)
-        if self.timer and self.timer.isActive(): 
-            self.timer.stop()
         if self._keep_top_timer and self._keep_top_timer.isActive():
             self._keep_top_timer.stop()
 

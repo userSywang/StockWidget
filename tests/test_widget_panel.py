@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtGui import QHideEvent
 from PySide6.QtWidgets import QApplication, QHeaderView
 from WidgetPanel import FloatLabel
 
@@ -1183,7 +1184,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("当前价：144.500", content)
         self.assertIn("条件：低于/等于 145.000", content)
 
-    def test_strategy_pushes_respects_cooldown_and_records_history(self):
+    def test_strategy_pushes_once_per_status_per_day_and_records_history(self):
         class FakeHttp:
             def __init__(self):
                 self.posts = []
@@ -1195,6 +1196,7 @@ class WidgetPanelTests(unittest.TestCase):
         win._http = FakeHttp()
         win._strategy_push_sent_keys = set()
         win._strategy_push_sent_at = {}
+        win._desktop_alert_ignored_today = {}
         win.strategy_alert_history = []
         changes = []
         win._on_change = lambda: changes.append("saved")
@@ -1222,10 +1224,72 @@ class WidgetPanelTests(unittest.TestCase):
         win._now = lambda: datetime(2026, 8, 10, 10, 31)
         FloatLabel._send_strategy_pushes(win, [state])
 
-        self.assertEqual(len(win._http.posts), 2)
-        self.assertEqual(win.strategy_alert_history[0]["time"], "2026-08-10 10:31")
+        self.assertEqual(len(win._http.posts), 1)
+        self.assertEqual(win.strategy_alert_history[0]["time"], "2026-08-10 10:00")
         self.assertEqual(win.strategy_alert_history[0]["name"], "药明康德")
-        self.assertEqual(changes, ["saved", "saved"])
+        self.assertEqual(changes, ["saved"])
+
+    def test_strategy_pushes_history_prevents_repeat_after_restart(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._strategy_push_sent_keys = set()
+        win._strategy_push_sent_at = {}
+        win._desktop_alert_ignored_today = {}
+        win.strategy_alert_history = [{
+            "time": "2026-08-10 09:31",
+            "code": "sh603259",
+            "name": "药明康德",
+            "status": "触发止损",
+            "severity": "danger",
+        }]
+        win._now = lambda: datetime(2026, 8, 10, 10, 31)
+        desktop_alerts = []
+        win.show_desktop_alert = lambda text, ignore_key=None: desktop_alerts.append((text, ignore_key))
+        win.strategy_alert_config = {
+            "notifications": {
+                "desktop_popup": True,
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+            },
+        }
+        state = {
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": -5.2,
+            "locked_profit_pct": 0.0,
+            "triggered": True,
+            "severity": "danger",
+            "status": "触发止损",
+        }
+
+        FloatLabel._send_strategy_pushes(win, [state])
+
+        self.assertEqual(win._http.posts, [])
+        self.assertEqual(desktop_alerts, [])
+
+    def test_hide_event_keeps_refresh_timer_running_for_background_summary(self):
+        cfg = {"groups": [{"name": "默认", "codes": ["sh000001"]}], "checked_codes": ["sh000001"]}
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            self.assertTrue(win.timer.isActive())
+            FloatLabel.hideEvent(win, QHideEvent())
+
+            self.assertTrue(win.timer.isActive())
+            self.assertFalse(win._keep_top_timer.isActive())
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
 
     def test_strategy_pushes_raised_stop_line_state(self):
         class FakeHttp:

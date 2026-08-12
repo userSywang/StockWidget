@@ -512,6 +512,33 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(states[0]["ma20"], 10.5)
         self.assertEqual(states[0]["enabled_rules"], ["止损", "个股MA5", "大盘MA5", "移动止盈"])
 
+    def test_strategy_stop_line_uses_stock_ma5_when_ma_clearance_enabled(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0, "locked_profit_pct": 0.0}],
+            "rules": {
+                "max_loss_enabled": True,
+                "max_loss_pct": 10.0,
+                "stock_ma5_break_enabled": True,
+                "index_ma5_break_enabled": False,
+                "index_ma10_break_enabled": False,
+                "trailing_profit_enabled": False,
+                "reduce_half_enabled": False,
+                "stale_position_enabled": False,
+            },
+        })
+        daily_rows = [{"close": value} for value in [100.0, 101.0, 102.0, 103.0, 104.0]]
+
+        states = evaluate_strategy_alerts(
+            config,
+            {"sh603259": {"price": 103.0, "name": "药明康德"}},
+            {"sh603259": daily_rows},
+        )
+
+        self.assertEqual(states[0]["ma5"], 102.0)
+        self.assertEqual(states[0]["stop_loss_price"], 102.0)
+        self.assertEqual(states[0]["stop_price"], 102.0)
+
     def test_strategy_alert_reports_raised_stop_line_and_price(self):
         config = normalize_strategy_alert_config({
             "enabled": True,

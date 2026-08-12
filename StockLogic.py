@@ -942,6 +942,26 @@ def strategy_stop_price(cost, rules, locked_profit_pct):
     return round(max(stop_prices), 4)
 
 
+def strategy_stock_ma_stop_price(rules, daily_rows):
+    if not (rules or {}).get("stock_ma5_break_enabled"):
+        return None
+    average = moving_average(daily_rows, 5)
+    return None if average is None else round(average, 4)
+
+
+def strategy_effective_stop_price(cost, rules, locked_profit_pct, daily_rows=None):
+    stop_prices = []
+    base_stop = strategy_stop_price(cost, rules, locked_profit_pct)
+    ma_stop = strategy_stock_ma_stop_price(rules, daily_rows)
+    if base_stop is not None:
+        stop_prices.append(float(base_stop))
+    if ma_stop is not None:
+        stop_prices.append(float(ma_stop))
+    if not stop_prices:
+        return None
+    return round(max(stop_prices), 4)
+
+
 def strategy_loss_price(cost, rules):
     try:
         cost = float(cost)
@@ -956,6 +976,19 @@ def strategy_loss_price(cost, rules):
     if max_loss_pct <= 0:
         return None
     return round(cost * (1.0 - max_loss_pct / 100.0), 4)
+
+
+def strategy_effective_loss_price(cost, rules, daily_rows=None):
+    stop_prices = []
+    loss_price = strategy_loss_price(cost, rules)
+    ma_stop = strategy_stock_ma_stop_price(rules, daily_rows)
+    if loss_price is not None:
+        stop_prices.append(float(loss_price))
+    if ma_stop is not None:
+        stop_prices.append(float(ma_stop))
+    if not stop_prices:
+        return None
+    return round(max(stop_prices), 4)
 
 
 def strategy_take_profit_price(cost, locked_profit_pct):
@@ -1155,7 +1188,7 @@ def evaluate_strategy_actions(config, position, quote, daily_by_code=None, conte
             details={
                 "profit_pct": profit_pct,
                 "threshold_pct": -float(rules.get("max_loss_pct", 0.0)),
-                "stop_loss_price": strategy_loss_price(cost, rules),
+                "stop_loss_price": strategy_effective_loss_price(cost, rules, daily_by_code.get(position.get("code"))),
             },
         ))
 
@@ -1283,8 +1316,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "lock_raised": bool(position.get("lock_raised", False)),
                 "stop_line_changed": bool(position.get("stop_line_changed", False)),
                 "stop_line_previous_price": float(position.get("stop_line_previous_price", 0.0)),
-                "stop_price": strategy_stop_price(cost, rules, lock_pct),
-                "stop_loss_price": strategy_loss_price(cost, rules),
+                "stop_price": strategy_effective_stop_price(cost, rules, lock_pct, daily_rows),
+                "stop_loss_price": strategy_effective_loss_price(cost, rules, daily_rows),
                 "take_profit_price": strategy_take_profit_price(cost, lock_pct),
                 "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
                 "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
@@ -1364,8 +1397,8 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
             "lock_raised": bool(position.get("lock_raised", False)),
             "stop_line_changed": bool(position.get("stop_line_changed", False)),
             "stop_line_previous_price": float(position.get("stop_line_previous_price", 0.0)),
-            "stop_price": strategy_stop_price(cost, rules, lock_pct),
-            "stop_loss_price": strategy_loss_price(cost, rules),
+            "stop_price": strategy_effective_stop_price(cost, rules, lock_pct, daily_rows),
+            "stop_loss_price": strategy_effective_loss_price(cost, rules, daily_rows),
             "take_profit_price": strategy_take_profit_price(cost, lock_pct),
             "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
             "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
