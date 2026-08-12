@@ -6,7 +6,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QHideEvent
-from PySide6.QtWidgets import QApplication, QHeaderView
+from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
 from WidgetPanel import FloatLabel
 
 
@@ -865,6 +865,32 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertFalse(win.price_alert_badge_visible)
         self.assertIsNone(win._last_fit_signature)
         self.assertEqual(calls, ["saved", ("refresh", True)])
+
+    def test_display_indicator_context_menu_includes_price_alert_badge_toggle(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "price_alert_badge_visible": False,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            calls = []
+            win.set_price_alert_badge_visible = lambda visible: calls.append(bool(visible))
+            menu = QMenu()
+
+            win._populate_display_indicator_menu(menu)
+            actions = {action.text(): action for action in menu.actions() if not action.isSeparator()}
+
+            self.assertIn("价格提醒标识", actions)
+            self.assertFalse(actions["价格提醒标识"].isChecked())
+            actions["价格提醒标识"].setChecked(True)
+            self.assertEqual(calls, [True])
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
 
     def test_compose_display_rows_shows_dash_for_undefined_strategy_fields(self):
         win = FloatLabel.__new__(FloatLabel)

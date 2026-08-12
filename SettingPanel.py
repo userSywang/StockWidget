@@ -3,14 +3,14 @@ import os, re
 from datetime import date, datetime
 from functools import partial
 
-from PySide6.QtCore import Qt, QSize, QTimer, QEvent, QRect
-from PySide6.QtGui import QColor, QFontDatabase, QKeySequence, QPainter, QPen
+from PySide6.QtCore import Qt, QSize, QTimer, QEvent
+from PySide6.QtGui import QColor, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QTabWidget, QPushButton, QSlider,
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QStyledItemDelegate, QStyleOptionViewItem
+    QTableWidget, QTableWidgetItem, QHeaderView
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -31,37 +31,6 @@ from StockLogic import (
     strategy_rules_for_position,
     strategy_stop_price,
 )
-
-PRICE_ALERT_TREE_STATUS_ROLE = Qt.UserRole + 3
-
-
-class PriceAlertTreeDelegate(QStyledItemDelegate):
-    def paint(self, painter, option, index):
-        status = index.data(PRICE_ALERT_TREE_STATUS_ROLE)
-        if status in ("configured", "triggered"):
-            text_option = QStyleOptionViewItem(option)
-            text_option.rect = option.rect.adjusted(0, 0, -18, 0)
-            super().paint(painter, text_option, index)
-        else:
-            super().paint(painter, option, index)
-            return
-        size = max(10, min(14, option.rect.height() - 4))
-        rect = QRect(option.rect.right() - size - 2, option.rect.top() + (option.rect.height() - size) // 2, size, size)
-        color = QColor("#f0c36a") if status == "triggered" else option.palette.text().color()
-        if status != "triggered":
-            color.setAlpha(130)
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setPen(QPen(color, 1.2))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(rect.adjusted(1, 1, -1, -1))
-        font = painter.font()
-        font.setBold(True)
-        font.setPointSize(max(7, font.pointSize() - 1))
-        painter.setFont(font)
-        painter.setPen(color)
-        painter.drawText(rect, Qt.AlignCenter, "!")
-        painter.restore()
 
 class SettingsDialog(QDialog):
     def __init__(self, win: FloatLabel, parent: QWidget, app=None):
@@ -103,7 +72,6 @@ class SettingsDialog(QDialog):
         self.tree_codes.setMinimumWidth(300)
         self.tree_codes.setMinimumHeight(250)
         self.tree_codes.setIndentation(18)
-        self.tree_codes.setItemDelegate(PriceAlertTreeDelegate(self.tree_codes))
         self._load_code_tree()
         # 1.2 操作按钮
         btn_col = QVBoxLayout()
@@ -468,8 +436,6 @@ class SettingsDialog(QDialog):
         self.edit_price_alert_message = QLineEdit()
         self.edit_price_alert_message.setPlaceholderText("备注，可空")
         self.edit_price_alert_message.setMinimumWidth(120)
-        self.chk_price_alert_badge_visible_inline = QCheckBox("窗口显示价警标识")
-        self.chk_price_alert_badge_visible_inline.setChecked(bool(getattr(self.win, "price_alert_badge_visible", True)))
 
         form_price.addWidget(self.lbl_price_alert_current, 0, 0, 1, 4)
         form_price.addWidget(QLabel("条件："), 1, 0)
@@ -478,7 +444,6 @@ class SettingsDialog(QDialog):
         form_price.addWidget(self.cmb_price_alert_expire_days, 1, 3)
         form_price.addWidget(QLabel("备注："), 2, 0)
         form_price.addWidget(self.edit_price_alert_message, 2, 1, 1, 3)
-        form_price.addWidget(self.chk_price_alert_badge_visible_inline, 3, 1, 1, 3)
         form_price.setColumnStretch(3, 1)
         lay_price_alert.addLayout(form_price)
         lay_price_alert.addLayout(price_btns)
@@ -917,52 +882,74 @@ class SettingsDialog(QDialog):
         template_action_layout.setSpacing(4)
         self.lbl_template_action_hint = QLabel("该策略条件写死，只允许修改触发参数；新增策略需要通过代码加入。")
         self.lbl_template_action_hint.setStyleSheet("color: #666666;")
-        turtle_param_layout = QGridLayout()
         self.spin_turtle_entry_days = QSpinBox()
         self.spin_turtle_entry_days.setRange(2, 250)
-        self.spin_turtle_entry_days.setFixedWidth(86)
+        self.spin_turtle_entry_days.setFixedWidth(72)
         self.spin_turtle_exit_days = QSpinBox()
         self.spin_turtle_exit_days.setRange(2, 250)
-        self.spin_turtle_exit_days.setFixedWidth(86)
+        self.spin_turtle_exit_days.setFixedWidth(72)
         self.spin_turtle_atr_stop = QDoubleSpinBox()
         self.spin_turtle_atr_stop.setRange(0.1, 20.0)
         self.spin_turtle_atr_stop.setDecimals(1)
         self.spin_turtle_atr_stop.setSuffix(" ATR")
-        self.spin_turtle_atr_stop.setFixedWidth(92)
+        self.spin_turtle_atr_stop.setFixedWidth(82)
         self.spin_turtle_pyramid_atr = QDoubleSpinBox()
         self.spin_turtle_pyramid_atr.setRange(0.1, 20.0)
         self.spin_turtle_pyramid_atr.setDecimals(1)
         self.spin_turtle_pyramid_atr.setSuffix(" ATR")
-        self.spin_turtle_pyramid_atr.setFixedWidth(92)
+        self.spin_turtle_pyramid_atr.setFixedWidth(82)
         self.spin_turtle_max_units = QSpinBox()
         self.spin_turtle_max_units.setRange(1, 20)
-        self.spin_turtle_max_units.setFixedWidth(86)
+        self.spin_turtle_max_units.setFixedWidth(72)
         self.cmb_turtle_sizing = QComboBox()
         self.cmb_turtle_sizing.setFixedWidth(132)
         self.cmb_turtle_sizing.addItem("ATR风险计提", "atr_risk")
         self.cmb_turtle_sizing.addItem("固定百分比", "fixed_percent")
         self.cmb_turtle_sizing.addItem("仅动作提醒", "manual")
-        turtle_param_layout.setContentsMargins(8, 6, 8, 6)
-        turtle_param_layout.setHorizontalSpacing(8)
-        turtle_param_layout.setVerticalSpacing(6)
-        turtle_labels = [
-            ("入场突破", self.spin_turtle_entry_days, "日新高"),
-            ("离场条件", self.spin_turtle_exit_days, "日低点"),
-            ("止损距离", self.spin_turtle_atr_stop, ""),
-            ("浮盈加仓", self.spin_turtle_pyramid_atr, ""),
-            ("最大份数", self.spin_turtle_max_units, "份"),
-            ("计提方式", self.cmb_turtle_sizing, ""),
-        ]
-        for row, (label_text, editor, unit_text) in enumerate(turtle_labels):
-            label = QLabel(label_text)
-            label.setFixedWidth(62)
-            turtle_param_layout.addWidget(label, row, 0, Qt.AlignRight | Qt.AlignVCenter)
-            turtle_param_layout.addWidget(editor, row, 1)
-            if unit_text:
-                turtle_param_layout.addWidget(QLabel(unit_text), row, 2)
-        turtle_param_layout.setColumnStretch(3, 1)
-        self.g_template_turtle = QGroupBox("海龟参数")
-        self.g_template_turtle.setLayout(turtle_param_layout)
+
+        self.g_template_turtle = QWidget()
+        turtle_layout = QVBoxLayout(self.g_template_turtle)
+        turtle_layout.setContentsMargins(0, 0, 0, 0)
+        turtle_layout.setSpacing(4)
+
+        self.g_turtle_entry = QGroupBox("入场策略")
+        turtle_entry_layout = QGridLayout(self.g_turtle_entry)
+        turtle_entry_layout.setHorizontalSpacing(6)
+        turtle_entry_layout.setVerticalSpacing(4)
+        turtle_entry_layout.addWidget(QLabel("突破："), 0, 0)
+        turtle_entry_layout.addWidget(self.spin_turtle_entry_days, 0, 1)
+        turtle_entry_layout.addWidget(QLabel("日新高提醒入场"), 0, 2)
+        turtle_entry_layout.addWidget(QLabel("浮盈："), 1, 0)
+        turtle_entry_layout.addWidget(self.spin_turtle_pyramid_atr, 1, 1)
+        turtle_entry_layout.addWidget(QLabel("提醒加仓"), 1, 2)
+        turtle_entry_layout.addWidget(QLabel("最大："), 2, 0)
+        turtle_entry_layout.addWidget(self.spin_turtle_max_units, 2, 1)
+        turtle_entry_layout.addWidget(QLabel("份"), 2, 2)
+        turtle_entry_layout.addWidget(QLabel("计提："), 3, 0)
+        turtle_entry_layout.addWidget(self.cmb_turtle_sizing, 3, 1, 1, 2)
+        turtle_entry_layout.setColumnStretch(3, 1)
+
+        self.g_turtle_stop = QGroupBox("止损策略")
+        turtle_stop_layout = QGridLayout(self.g_turtle_stop)
+        turtle_stop_layout.setHorizontalSpacing(6)
+        turtle_stop_layout.setVerticalSpacing(4)
+        turtle_stop_layout.addWidget(QLabel("止损："), 0, 0)
+        turtle_stop_layout.addWidget(self.spin_turtle_atr_stop, 0, 1)
+        turtle_stop_layout.addWidget(QLabel("提醒止损"), 0, 2)
+        turtle_stop_layout.setColumnStretch(3, 1)
+
+        self.g_turtle_exit = QGroupBox("止盈/退出策略")
+        turtle_exit_layout = QGridLayout(self.g_turtle_exit)
+        turtle_exit_layout.setHorizontalSpacing(6)
+        turtle_exit_layout.setVerticalSpacing(4)
+        turtle_exit_layout.addWidget(QLabel("离场："), 0, 0)
+        turtle_exit_layout.addWidget(self.spin_turtle_exit_days, 0, 1)
+        turtle_exit_layout.addWidget(QLabel("日低点提醒止盈/退出"), 0, 2)
+        turtle_exit_layout.setColumnStretch(3, 1)
+
+        turtle_layout.addWidget(self.g_turtle_entry)
+        turtle_layout.addWidget(self.g_turtle_stop)
+        turtle_layout.addWidget(self.g_turtle_exit)
         self.g_template_turtle.setVisible(False)
         template_rules_layout.addWidget(self.g_template_turtle)
         rules_scroll.setWidget(rules_scroll_content)
@@ -1335,7 +1322,6 @@ class SettingsDialog(QDialog):
         self.edit_warning_text.editingFinished.connect(self._on_warning_changed)
         self.chk_market_amount_visible.toggled.connect(self._on_market_amount_changed)
         self.chk_price_alert_badge_visible.toggled.connect(self._on_price_alert_badge_visible_changed)
-        self.chk_price_alert_badge_visible_inline.toggled.connect(self._on_price_alert_badge_visible_changed)
         # 连接：其它设置
         self.cmb_interval.currentIndexChanged.connect(self._on_interval_changed)
         self.cmb_data_source_mode.currentIndexChanged.connect(self._on_data_source_changed)
@@ -1405,40 +1391,6 @@ class SettingsDialog(QDialog):
         text = f"{code}  {short_name}" if short_name else code
         return f"{text}  [{tags}]" if tags else text
 
-    def _price_alert_codes(self):
-        codes = set()
-        for alert in normalize_price_alerts(getattr(self.win, "price_alerts", [])):
-            code = alert.get("code")
-            if code and alert.get("enabled", True):
-                codes.add(code)
-        return codes
-
-    def _price_alert_status_for_code(self, code):
-        if not code or code not in self._price_alert_codes():
-            return ""
-        states = getattr(self.win, "_latest_price_alert_states", {})
-        for alert in (states or {}).get(code, []):
-            if isinstance(alert, dict) and alert.get("triggered"):
-                return "triggered"
-        return "configured"
-
-    def _apply_price_alert_icon(self, item, code):
-        if item is None:
-            return
-        item.setData(0, PRICE_ALERT_TREE_STATUS_ROLE, self._price_alert_status_for_code(code))
-
-    def _refresh_price_alert_icons(self):
-        if not hasattr(self, "tree_codes"):
-            return
-        for gi in range(self.tree_codes.topLevelItemCount()):
-            group_item = self.tree_codes.topLevelItem(gi)
-            for ci in range(group_item.childCount()):
-                child = group_item.child(ci)
-                if child.data(0, Qt.UserRole) != "code":
-                    continue
-                code = child.data(0, Qt.UserRole + 1) or self._code_from_item_text(child.text(0))
-                self._apply_price_alert_icon(child, normalize_code_or_none(code) or "")
-
     def _code_tag_label(self, code: str):
         tags = getattr(self.win, "code_tags", {})
         if not isinstance(tags, dict):
@@ -1490,8 +1442,6 @@ class SettingsDialog(QDialog):
         item.setData(0, Qt.UserRole, "code")
         item.setData(0, Qt.UserRole + 1, None if pending else code)
         item.setData(0, self._pending_role(), bool(pending))
-        if not pending:
-            self._apply_price_alert_icon(item, code)
         return item
 
     def _load_code_tree(self):
@@ -1550,7 +1500,6 @@ class SettingsDialog(QDialog):
                         child.setText(0, display_text)
                     child.setData(0, Qt.UserRole + 1, norm)
                     child.setData(0, self._pending_role(), False)
-                    self._apply_price_alert_icon(child, norm)
                     if child.checkState(0) == Qt.Checked:
                         checked_codes.append(norm)
                     ci += 1
@@ -1639,7 +1588,6 @@ class SettingsDialog(QDialog):
         item = self.tree_codes.currentItem()
         if item is not None and item.data(0, Qt.UserRole) == "code":
             item.setText(0, self._format_code_item_text(code))
-            self._apply_price_alert_icon(item, code)
 
     def _open_price_alert_for_current_code(self):
         code = self._current_code_from_tree()
@@ -1990,7 +1938,6 @@ class SettingsDialog(QDialog):
         for alert in self._price_alerts:
             self.list_price_alerts.addItem(QListWidgetItem(self._format_price_alert(alert)))
         self.list_price_alerts.blockSignals(False)
-        self._refresh_price_alert_icons()
         if self.list_price_alerts.count() > 0:
             self.list_price_alerts.setCurrentRow(max(0, min(current_row, self.list_price_alerts.count() - 1)))
             self._on_price_alert_selected(self.list_price_alerts.currentRow())
@@ -2047,7 +1994,6 @@ class SettingsDialog(QDialog):
         if item:
             item.setText(self._format_price_alert(alert))
         self.win.set_price_alerts(self._price_alerts)
-        self._refresh_price_alert_icons()
 
     def _add_price_alert(self):
         current_code = self._current_code_from_tree()
@@ -3221,13 +3167,12 @@ class SettingsDialog(QDialog):
 
     def _on_price_alert_badge_visible_changed(self, *_args):
         visible = self.sender().isChecked() if self.sender() is not None else self.chk_price_alert_badge_visible.isChecked()
-        for checkbox in (self.chk_price_alert_badge_visible, self.chk_price_alert_badge_visible_inline):
-            if checkbox.isChecked() != visible:
-                checkbox.blockSignals(True)
-                try:
-                    checkbox.setChecked(visible)
-                finally:
-                    checkbox.blockSignals(False)
+        if self.chk_price_alert_badge_visible.isChecked() != visible:
+            self.chk_price_alert_badge_visible.blockSignals(True)
+            try:
+                self.chk_price_alert_badge_visible.setChecked(visible)
+            finally:
+                self.chk_price_alert_badge_visible.blockSignals(False)
         setter = getattr(self.win, "set_price_alert_badge_visible", None)
         if callable(setter):
             setter(visible)

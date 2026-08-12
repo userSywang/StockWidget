@@ -2415,19 +2415,7 @@ class FloatLabel(QWidget):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         sub_cols = QMenu("显示指标", menu)
-        for name in self.ALL_HEADERS:
-            if name == "卖一":
-                continue
-            if name == "买一":
-                act = QAction("买一/卖一", sub_cols, checkable=True)
-                act.setChecked(self.header_is_visible("买一"))
-                act.toggled.connect(partial(self.set_flag, "买一"))
-                sub_cols.addAction(act)
-                continue
-            act = QAction(name, sub_cols, checkable=True)
-            act.setChecked(self.header_is_visible(name))
-            act.toggled.connect(partial(self.set_flag, name))
-            sub_cols.addAction(act)
+        self._populate_display_indicator_menu(sub_cols)
         menu.addMenu(sub_cols)
 
         act_header = QAction("显示表头", menu, checkable=True)
@@ -2453,6 +2441,26 @@ class FloatLabel(QWidget):
         menu.addSeparator()
         menu.addAction(QAction("隐藏浮窗", menu, triggered=self.hide))
         menu.exec(event.globalPos())
+
+    def _populate_display_indicator_menu(self, sub_cols):
+        for name in self.ALL_HEADERS:
+            if name == "卖一":
+                continue
+            if name == "买一":
+                act = QAction("买一/卖一", sub_cols, checkable=True)
+                act.setChecked(self.header_is_visible("买一"))
+                act.toggled.connect(partial(self.set_flag, "买一"))
+                sub_cols.addAction(act)
+                continue
+            act = QAction(name, sub_cols, checkable=True)
+            act.setChecked(self.header_is_visible(name))
+            act.toggled.connect(partial(self.set_flag, name))
+            sub_cols.addAction(act)
+        sub_cols.addSeparator()
+        act_badge = QAction("价格提醒标识", sub_cols, checkable=True)
+        act_badge.setChecked(bool(getattr(self, "price_alert_badge_visible", True)))
+        act_badge.toggled.connect(self.set_price_alert_badge_visible)
+        sub_cols.addAction(act_badge)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:

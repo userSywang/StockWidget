@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QComboBox, QDoubleSpinBox, QSpinBox
 from PySide6.QtCore import QPoint, Qt, QEvent
 
-from SettingPanel import PRICE_ALERT_TREE_STATUS_ROLE, SettingsDialog
+from SettingPanel import SettingsDialog
 
 
 class FakeWindow:
@@ -270,10 +270,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
         dlg.chk_price_alert_badge_visible.setChecked(False)
         self.assertFalse(win.price_alert_badge_visible)
-        self.assertFalse(dlg.chk_price_alert_badge_visible_inline.isChecked())
-        dlg.chk_price_alert_badge_visible_inline.setChecked(True)
-        self.assertTrue(win.price_alert_badge_visible)
-        self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
+        self.assertFalse(hasattr(dlg, "chk_price_alert_badge_visible_inline"))
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):
@@ -387,6 +384,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.btn_price_alert_add.isVisible())
         self.assertTrue(dlg.btn_price_alert_del.isVisible())
         self.assertFalse(hasattr(dlg, "chk_price_alert_enabled"))
+        self.assertFalse(hasattr(dlg, "chk_price_alert_badge_visible_inline"))
         self.assertTrue(dlg.edit_price_alert_code.isHidden())
         self.assertGreaterEqual(del_rect.left(), add_rect.right())
         self.assertEqual(dlg.btn_price_alert_add.text(), "保存")
@@ -418,13 +416,13 @@ class SettingsPanelTests(unittest.TestCase):
         code_item = dlg.tree_codes.topLevelItem(0).child(0)
         dlg.tree_codes.setCurrentItem(code_item)
 
-        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "")
+        self.assertIsNone(code_item.data(0, Qt.UserRole + 3))
         dlg._add_price_alert()
         self.assertEqual(dlg.list_price_alerts.count(), 1)
         self.assertEqual(win.price_alerts[0]["code"], "sh603259")
         self.assertTrue(win.price_alerts[0]["enabled"])
         self.assertEqual(win.price_alerts[0]["expire_days"], 30)
-        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "configured")
+        self.assertIsNone(code_item.data(0, Qt.UserRole + 3))
 
         dlg.cmb_price_alert_direction.setCurrentIndex(dlg.cmb_price_alert_direction.findData("below_ma5"))
         dlg.cmb_price_alert_expire_days.setCurrentIndex(dlg.cmb_price_alert_expire_days.findData(5))
@@ -440,10 +438,10 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._del_price_alert()
         self.assertEqual(win.price_alerts, [])
-        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "")
+        self.assertIsNone(code_item.data(0, Qt.UserRole + 3))
         dlg.close()
 
-    def test_price_alert_tree_badge_uses_triggered_state(self):
+    def test_self_selected_tree_does_not_show_price_alert_badge(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
         win.codes = ["sh603259"]
@@ -453,7 +451,8 @@ class SettingsPanelTests(unittest.TestCase):
         dlg = SettingsDialog(win, None)
         code_item = dlg.tree_codes.topLevelItem(0).child(0)
 
-        self.assertEqual(code_item.data(0, PRICE_ALERT_TREE_STATUS_ROLE), "triggered")
+        self.assertIsNone(code_item.data(0, Qt.UserRole + 3))
+        self.assertFalse(hasattr(dlg, "_refresh_price_alert_icons"))
         dlg.close()
 
     def test_strategy_page_edits_positions_and_rules(self):
@@ -572,6 +571,12 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.template_action_group.isHidden())
         self.assertTrue(dlg.g_template_profit.isHidden())
         self.assertFalse(dlg.g_template_turtle.isHidden())
+        self.assertFalse(dlg.g_turtle_entry.isHidden())
+        self.assertFalse(dlg.g_turtle_stop.isHidden())
+        self.assertFalse(dlg.g_turtle_exit.isHidden())
+        self.assertEqual(dlg.g_turtle_entry.title(), "入场策略")
+        self.assertEqual(dlg.g_turtle_stop.title(), "止损策略")
+        self.assertEqual(dlg.g_turtle_exit.title(), "止盈/退出策略")
         self.assertTrue(dlg.table_template_action_rules.isHidden())
         self.assertFalse(dlg.spin_turtle_entry_days.isHidden())
 
@@ -593,6 +598,9 @@ class SettingsPanelTests(unittest.TestCase):
             self.assertLessEqual(editor_right, group_right)
             self.assertLess(editor_left - group_left, 170)
         self.assertLessEqual(dlg.g_template_turtle.sizeHint().width(), 360)
+        self.assertLessEqual(dlg.g_turtle_entry.layout().spacing(), 6)
+        self.assertLessEqual(dlg.g_turtle_stop.layout().spacing(), 6)
+        self.assertLessEqual(dlg.g_turtle_exit.layout().spacing(), 6)
 
         dlg.spin_turtle_entry_days.setValue(55)
         dlg.spin_turtle_exit_days.setValue(20)
