@@ -575,6 +575,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.table_template_action_rules.isHidden())
         self.assertFalse(dlg.spin_turtle_entry_days.isHidden())
 
+        dlg.show()
+        self.app.processEvents()
+        group_left = dlg.g_template_turtle.mapToGlobal(QPoint(0, 0)).x()
+        group_right = group_left + dlg.g_template_turtle.width()
+        for editor in (
+            dlg.spin_turtle_entry_days,
+            dlg.spin_turtle_exit_days,
+            dlg.spin_turtle_atr_stop,
+            dlg.spin_turtle_pyramid_atr,
+            dlg.spin_turtle_max_units,
+            dlg.cmb_turtle_sizing,
+        ):
+            editor_left = editor.mapToGlobal(QPoint(0, 0)).x()
+            editor_right = editor_left + editor.width()
+            self.assertGreaterEqual(editor_left, group_left)
+            self.assertLessEqual(editor_right, group_right)
+            self.assertLess(editor_left - group_left, 170)
+        self.assertLessEqual(dlg.g_template_turtle.sizeHint().width(), 360)
+
         dlg.spin_turtle_entry_days.setValue(55)
         dlg.spin_turtle_exit_days.setValue(20)
         dlg.spin_turtle_atr_stop.setValue(3.0)
