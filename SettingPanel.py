@@ -1,6 +1,6 @@
 import json
 import os, re
-from datetime import datetime
+from datetime import date, datetime
 from functools import partial
 
 from PySide6.QtCore import Qt, QSize, QTimer, QEvent, QRect
@@ -1682,7 +1682,7 @@ class SettingsDialog(QDialog):
                 "code": code,
                 "strategy_id": "default",
                 "cost_price": 0.0,
-                "buy_date": "",
+                "buy_date": date.today().strftime("%Y-%m-%d"),
                 "note": "",
                 "rules": {},
             })
@@ -2715,7 +2715,7 @@ class SettingsDialog(QDialog):
             "code": default_code,
             "strategy_id": "default",
             "cost_price": 0.0,
-            "buy_date": "",
+            "buy_date": date.today().strftime("%Y-%m-%d"),
             "note": "",
             "rules": {},
         })

@@ -1,5 +1,7 @@
 import os
 import unittest
+from datetime import date
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -505,6 +507,21 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertFalse(hasattr(dlg, "chk_strategy_block_heavy"))
         self.assertFalse(hasattr(dlg, "spin_template_max_position"))
         self.assertFalse(hasattr(dlg, "chk_template_block_heavy"))
+        dlg.close()
+
+    def test_add_strategy_position_defaults_buy_date_to_today(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh512000"]}]
+        win.codes = ["sh512000"]
+        win.checked_codes = ["sh512000"]
+        dlg = SettingsDialog(win, None)
+
+        with patch("SettingPanel.date") as fake_date:
+            fake_date.today.return_value = date(2026, 8, 12)
+            dlg._add_strategy_position()
+
+        self.assertEqual(dlg.edit_strategy_buy_date.text(), "2026-08-12")
+        self.assertEqual(win.strategy_alert_config["positions"][0]["buy_date"], "2026-08-12")
         dlg.close()
 
     def test_strategy_rules_follow_selected_position_and_save_to_position(self):
