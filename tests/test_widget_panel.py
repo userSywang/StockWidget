@@ -294,17 +294,38 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh512000"])
 
-    def test_intraday_request_codes_do_not_add_extra_network_requests(self):
+    def test_intraday_request_codes_fetch_missing_and_stale_cache_only(self):
         win = FloatLabel.__new__(FloatLabel)
-        win.checked_codes = ["sh600000", "sh512000"]
+        win._today = lambda: date(2026, 8, 13)
+        win.checked_codes = ["sh600000", "sh512000", "sh603259"]
         win.kline_visible = True
+        win._intraday_trend_cache = {
+            "sh600000": {"date": "2026-08-13", "time": 1000.0, "trend": {"points": [{"minute": 0, "price": 10.0}]}},
+            "sh512000": {"date": "2026-08-13", "time": 100.0, "trend": {"points": [{"minute": 0, "price": 1.0}]}},
+        }
+
+        with patch("WidgetPanel.time.monotonic", return_value=1200.0):
+            self.assertEqual(FloatLabel._intraday_request_codes(win), ["sh603259"])
+
+        with patch("WidgetPanel.time.monotonic", return_value=3000.0):
+            self.assertEqual(FloatLabel._intraday_request_codes(win), ["sh600000", "sh512000", "sh603259"])
+
+    def test_intraday_request_codes_disabled_when_kline_hidden(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000"]
+        win.kline_visible = False
+        win._intraday_trend_cache = {}
 
         self.assertEqual(FloatLabel._intraday_request_codes(win), [])
 
-    def test_get_refresh_data_does_not_fetch_intraday_trends(self):
+    def test_get_refresh_data_fetches_due_intraday_trends_only(self):
         win = FloatLabel.__new__(FloatLabel)
         win.kline_visible = True
-        win.checked_codes = ["sh603259"]
+        win.checked_codes = ["sh600000", "sh603259"]
+        win._today = lambda: date(2026, 8, 13)
+        win._intraday_trend_cache = {
+            "sh600000": {"date": "2026-08-13", "time": 1000.0, "trend": {"points": [{"minute": 0, "price": 10.0}]}},
+        }
         win.price_alerts = []
         win.ma5_visible = False
         win.ma10_visible = False
@@ -312,11 +333,14 @@ class WidgetPanelTests(unittest.TestCase):
         win._kline_chart_code = ""
         win.strategy_alert_config = {"enabled": False}
         win._get_price = lambda codes: ({}, {}, {})
-        win._get_intraday_trends = lambda codes: (_ for _ in ()).throw(AssertionError("should not fetch intraday trends"))
+        calls = []
+        win._get_intraday_trends = lambda codes: calls.append(list(codes)) or {"sh603259": {"points": [{"minute": 0, "price": 10.0}]}}
 
-        result = FloatLabel._get_refresh_data(win, ["sh603259"])
+        with patch("WidgetPanel.time.monotonic", return_value=1200.0):
+            result = FloatLabel._get_refresh_data(win, ["sh603259"])
 
-        self.assertEqual(result[4], {})
+        self.assertEqual(calls, [["sh603259"]])
+        self.assertIn("sh603259", result[4])
 
     def test_parse_eastmoney_intraday_payload_maps_trading_minutes(self):
         win = FloatLabel.__new__(FloatLabel)

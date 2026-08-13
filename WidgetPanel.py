@@ -34,6 +34,7 @@ from StockLogic import (
 
 STRATEGY_DAILY_SUMMARY_SLOTS = ((9, 0, "09:00"), (18, 0, "18:00"))
 STRATEGY_DAILY_SUMMARY_GRACE_MINUTES = 10
+INTRADAY_TREND_REFRESH_SECONDS = 30 * 60
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
@@ -1114,8 +1115,33 @@ class FloatLabel(QWidget):
         return normalize_codes(codes)
 
     def _intraday_request_codes(self):
-        # 浮窗走势使用现有实时行情采样，避免每次刷新额外请求分钟线。
-        return []
+        if not getattr(self, "kline_visible", False):
+            return []
+        try:
+            if hasattr(self, "table") and callable(getattr(self, "isVisible", None)) and not self.isVisible():
+                return []
+        except Exception:
+            pass
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        cache = getattr(self, "_intraday_trend_cache", {})
+        if not isinstance(cache, dict):
+            cache = {}
+        now_mono = time.monotonic()
+        codes = []
+        for code in normalize_codes(getattr(self, "checked_codes", [])):
+            cached = cache.get(code)
+            if not cached or cached.get("date") != today_key:
+                codes.append(code)
+                continue
+            try:
+                age = now_mono - float(cached.get("time", 0.0) or 0.0)
+            except Exception:
+                age = INTRADAY_TREND_REFRESH_SECONDS
+            if age >= INTRADAY_TREND_REFRESH_SECONDS:
+                codes.append(code)
+        return codes
 
     def _refresh_request_codes(self):
         return normalize_codes(
@@ -1289,7 +1315,7 @@ class FloatLabel(QWidget):
             cache = {}
         for code in normalize_codes(codes):
             cached = cache.get(code)
-            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < 45:
+            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < INTRADAY_TREND_REFRESH_SECONDS:
                 result[code] = cached.get("trend", {})
                 continue
             try:
