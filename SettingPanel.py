@@ -2211,8 +2211,8 @@ class SettingsDialog(QDialog):
             "stale_position_days": self.spin_strategy_stale_days.value(),
         }
 
-    def _collect_strategy_config_from_editor(self):
-        current_rules = self._collect_strategy_rules_from_editor()
+    def _collect_strategy_config_from_editor(self, include_position_rules=True):
+        current_rules = self._collect_strategy_rules_from_editor() if include_position_rules else None
         positions = list(getattr(self, "_strategy_config", {}).get("positions", []))
         profiles = [dict(profile) for profile in getattr(self, "_strategy_config", {}).get("strategy_profiles", [])]
         row = self._current_strategy_position_row()
@@ -2220,7 +2220,10 @@ class SettingsDialog(QDialog):
             position = dict(positions[row])
             profile_id = self.cmb_strategy_profile.currentData() or position.get("strategy_id") or "default"
             position["strategy_id"] = profile_id
-            position["rules"] = current_rules
+            if include_position_rules:
+                position["rules"] = current_rules
+            else:
+                position["rules"] = dict(position.get("rules", {}))
             positions[row] = position
         return normalize_strategy_alert_config({
             "enabled": self.chk_strategy_enabled.isChecked(),
@@ -2237,10 +2240,10 @@ class SettingsDialog(QDialog):
             "rules": getattr(self, "_strategy_config", {}).get("rules", {}),
         })
 
-    def _on_strategy_config_changed(self, *_args):
+    def _on_strategy_config_changed(self, *_args, include_position_rules=True):
         if getattr(self, "_loading_strategy_editor", False):
             return
-        self._strategy_config = self._collect_strategy_config_from_editor()
+        self._strategy_config = self._collect_strategy_config_from_editor(include_position_rules=include_position_rules)
         self._refresh_strategy_preview()
         self.win.set_strategy_alert_config(self._strategy_config)
 
@@ -2260,6 +2263,8 @@ class SettingsDialog(QDialog):
             self._loading_strategy_editor = False
         self._mark_pending_apply_alert(self._strategy_config["positions"][row].get("code", ""))
         self._refresh_strategy_preview()
+        self._refresh_strategy_params_list()
+        self.win.set_strategy_alert_config(self._strategy_config)
 
     def _clone_strategy_profile(self):
         source = self._current_strategy_profile()
@@ -2283,8 +2288,14 @@ class SettingsDialog(QDialog):
             self._strategy_config["positions"][row]["rules"] = {}
             self._mark_pending_apply_alert(self._strategy_config["positions"][row].get("code", ""))
         self._load_strategy_profile_options(profile_id)
-        self._load_strategy_rules(profile["rules"])
+        self._loading_strategy_editor = True
+        try:
+            self._load_strategy_rules(profile["rules"])
+        finally:
+            self._loading_strategy_editor = False
         self._refresh_strategy_preview()
+        self._refresh_strategy_params_list()
+        self.win.set_strategy_alert_config(self._strategy_config)
 
     def _save_strategy_position(self):
         row = self._current_strategy_position_row()
@@ -2685,7 +2696,7 @@ class SettingsDialog(QDialog):
         if item:
             item.setText(self._format_strategy_position(position))
             item.setData(Qt.UserRole, position)
-        self._on_strategy_config_changed()
+        self._on_strategy_config_changed(include_position_rules=False)
 
     def _add_strategy_position(self):
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
@@ -2738,8 +2749,13 @@ class SettingsDialog(QDialog):
         if row < 0:
             return
         self._strategy_config["positions"][row]["rules"] = {}
-        self._on_strategy_config_changed()
-        self._load_strategy_rules(self._current_strategy_rules())
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._loading_strategy_editor = True
+        try:
+            self._load_strategy_rules(self._current_strategy_rules())
+        finally:
+            self._loading_strategy_editor = False
+        self._refresh_strategy_preview()
         self._refresh_strategy_params_list()
 
     def _on_strategy_template_selected(self, row: int):

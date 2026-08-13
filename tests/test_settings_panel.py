@@ -553,6 +553,79 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 4.0)
         dlg.close()
 
+    def test_strategy_profile_selection_applies_template_rules_immediately(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "strategy_profiles": [
+                {"id": "default", "name": "默认策略", "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0}},
+                {
+                    "id": "short:test",
+                    "name": "短线策略",
+                    "rules": {
+                        "max_loss_enabled": True,
+                        "max_loss_pct": 3.0,
+                        "trailing_profit_enabled": True,
+                        "trailing_tiers": [
+                            {"profit_pct": 8.0, "lock_pct": 3.0},
+                            {"profit_pct": 15.0, "lock_pct": 8.0},
+                            {"profit_pct": 25.0, "lock_pct": 15.0},
+                        ],
+                    },
+                },
+            ],
+            "positions": [{"code": "sh603259", "cost_price": 100.0, "strategy_id": "default", "rules": {}}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        dlg.cmb_strategy_profile.setCurrentIndex(dlg.cmb_strategy_profile.findData("short:test"))
+
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["strategy_id"], "short:test")
+        self.assertEqual(position["rules"], {})
+        self.assertEqual(dlg.spin_strategy_loss.value(), 3.0)
+        self.assertTrue(dlg.chk_strategy_trailing.isChecked())
+        self.assertEqual(dlg.spin_strategy_tier_profit[0].value(), 8.0)
+        self.assertEqual(dlg.spin_strategy_tier_lock[0].value(), 3.0)
+        self.assertEqual(dlg._current_strategy_rules()["max_loss_pct"], 3.0)
+        dlg.close()
+
+    def test_strategy_template_reset_clears_position_overrides_without_reusing_editor_values(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "strategy_profiles": [
+                {"id": "default", "name": "默认策略", "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0}},
+                {"id": "short:test", "name": "短线策略", "rules": {"max_loss_enabled": True, "max_loss_pct": 3.0}},
+            ],
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 100.0,
+                "strategy_id": "short:test",
+                "rules": {"max_loss_pct": 9.0},
+            }],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(0)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 9.0)
+
+        dlg._on_strategy_template_reset()
+
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["strategy_id"], "short:test")
+        self.assertEqual(position["rules"], {})
+        self.assertEqual(dlg.spin_strategy_loss.value(), 3.0)
+        self.assertEqual(dlg._current_strategy_rules()["max_loss_pct"], 3.0)
+        dlg.close()
+
     def test_strategy_library_shows_builtin_turtle_template(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
