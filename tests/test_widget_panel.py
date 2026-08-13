@@ -516,6 +516,10 @@ class WidgetPanelTests(unittest.TestCase):
         win = FloatLabel.__new__(FloatLabel)
         calls = []
         win._daily_kline_cache = {"old": []}
+        win._latest_strategy_states = []
+        win._latest_quotes = {}
+        win._latest_daily_by_code = {}
+        win._reproject_cached_display = lambda: None
         win._notify_change = lambda: calls.append("saved")
         win._is_market_fetch_time = lambda: False
         win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
@@ -528,6 +532,55 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sh600186")
         self.assertEqual(win._daily_kline_cache, {})
         self.assertEqual(calls, ["saved", ("refresh", True)])
+
+    def test_set_strategy_alert_config_updates_cached_stop_line_immediately(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+        win.strategy_alert_config = {
+            "enabled": True,
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 100.0,
+                "locked_profit_pct": 10.0,
+                "last_stop_price": 110.0,
+            }],
+        }
+        win._latest_strategy_states = [{
+            "code": "sh603259",
+            "name": "药明康德",
+            "profit_pct": 45.0,
+            "locked_profit_pct": 10.0,
+            "stop_price": 110.0,
+            "take_profit_price": 110.0,
+            "triggered": True,
+            "status": "触发锁盈10%",
+        }]
+        win._latest_quotes = {"sh603259": {"name": "药明康德", "price": 145.0}}
+        win._latest_daily_by_code = {}
+        win._daily_kline_cache = {}
+        win._strategy_push_sent_keys = {"2026-08-10|sh603259|触发锁盈10%"}
+        win._strategy_push_sent_at = {"sh603259|触发锁盈10%": 1.0}
+        win._notify_change = lambda: calls.append("saved")
+        win._is_market_fetch_time = lambda: True
+        win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
+        win._reproject_cached_display = lambda: calls.append("reprojected")
+
+        FloatLabel.set_strategy_alert_config(win, {
+            "enabled": True,
+            "positions": [{
+                "code": "sh603259",
+                "cost_price": 120.0,
+                "locked_profit_pct": 10.0,
+                "last_stop_price": 132.0,
+            }],
+        })
+
+        state = win._latest_strategy_states[0]
+        self.assertEqual(state["stop_price"], 132.0)
+        self.assertEqual(state["take_profit_price"], 132.0)
+        self.assertNotIn("2026-08-10|sh603259|触发锁盈10%", win._strategy_push_sent_keys)
+        self.assertNotIn("sh603259|触发锁盈10%", win._strategy_push_sent_at)
+        self.assertEqual(calls, ["reprojected", "saved", ("refresh", True)])
 
     def test_daily_summary_check_uses_latest_strategy_states_outside_market(self):
         class FakeHttp:

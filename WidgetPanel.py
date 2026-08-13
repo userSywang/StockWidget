@@ -2316,10 +2316,11 @@ class FloatLabel(QWidget):
         if not config.get("enabled"):
             return []
         quotes = dict(getattr(self, "_latest_quotes", {}) or {})
+        code_names = dict(getattr(self, "code_names", {}) or {})
         for position in config.get("positions", []):
             code = position.get("code")
             if code and code not in quotes:
-                quotes[code] = {"name": self.code_names.get(code, code), "price": 0.0}
+                quotes[code] = {"name": code_names.get(code, code), "price": 0.0}
         return evaluate_strategy_alerts(config, quotes, {})
 
     def _check_strategy_daily_summary(self):
@@ -2367,6 +2368,10 @@ class FloatLabel(QWidget):
         self._record_intraday_quote_samples(quote_by_code)
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
         self._latest_daily_by_code = dict(daily_by_code or {})
+        self._latest_row_by_code = dict(row_by_code or {})
+        self._latest_sign_by_code = dict(sign_by_code or {})
+        self._latest_alert_states = list(alert_states or [])
+        self._latest_intraday_by_code = dict(intraday_by_code or {})
         dialog = getattr(self, "_kline_chart_dialog", None)
         if dialog is not None and dialog.isVisible() and getattr(dialog, "code", ""):
             chart_value = self._latest_daily_by_code.get(dialog.code)
@@ -2413,6 +2418,107 @@ class FloatLabel(QWidget):
             self._refresh_again_force = False
             QTimer.singleShot(0, lambda: self._refresh_from_function(force=force_again))
 
+    @staticmethod
+    def _strategy_position_fingerprint(position):
+        if not isinstance(position, dict):
+            return {}
+        return {
+            key: position.get(key)
+            for key in (
+                "code",
+                "strategy_id",
+                "cost_price",
+                "buy_date",
+                "rules",
+                "peak_profit_pct",
+                "locked_profit_pct",
+                "last_stop_price",
+            )
+        }
+
+    def _strategy_config_changed_codes(self, old_config, new_config):
+        old_positions = {
+            item.get("code"): self._strategy_position_fingerprint(item)
+            for item in (old_config or {}).get("positions", [])
+            if isinstance(item, dict) and item.get("code")
+        }
+        new_positions = {
+            item.get("code"): self._strategy_position_fingerprint(item)
+            for item in (new_config or {}).get("positions", [])
+            if isinstance(item, dict) and item.get("code")
+        }
+        changed = {
+            code
+            for code in set(old_positions) | set(new_positions)
+            if old_positions.get(code) != new_positions.get(code)
+        }
+        old_shared = dict(old_config or {})
+        new_shared = dict(new_config or {})
+        old_shared.pop("positions", None)
+        new_shared.pop("positions", None)
+        if old_shared != new_shared:
+            changed.update(new_positions)
+        return changed
+
+    @staticmethod
+    def _strategy_push_key_code(key):
+        parts = str(key or "").split("|")
+        if len(parts) >= 3 and len(parts[0]) == 10 and parts[0].count("-") == 2:
+            return parts[1]
+        return parts[0] if parts else ""
+
+    def _clear_strategy_push_cache_for_codes(self, codes):
+        codes = {str(code or "") for code in codes or [] if code}
+        if not codes:
+            return
+        sent_keys = set(getattr(self, "_strategy_push_sent_keys", set()) or set())
+        self._strategy_push_sent_keys = {
+            key for key in sent_keys
+            if self._strategy_push_key_code(key) not in codes
+        }
+        sent_at = dict(getattr(self, "_strategy_push_sent_at", {}) or {})
+        self._strategy_push_sent_at = {
+            key: value for key, value in sent_at.items()
+            if self._strategy_push_key_code(key) not in codes
+        }
+
+    def _refresh_strategy_states_from_cache(self):
+        config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
+        if not config.get("enabled"):
+            self._latest_strategy_states = []
+            return False
+        quotes = dict(getattr(self, "_latest_quotes", {}) or {})
+        code_names = dict(getattr(self, "code_names", {}) or {})
+        for position in config.get("positions", []):
+            code = position.get("code")
+            if code and code not in quotes:
+                quotes[code] = {"name": code_names.get(code, code), "price": 0.0}
+        daily_by_code = dict(getattr(self, "_latest_daily_by_code", {}) or {})
+        updated_config, changed = update_strategy_position_state(config, quotes)
+        if changed:
+            self.strategy_alert_config = updated_config
+            config = updated_config
+        self._latest_strategy_states = list(evaluate_strategy_alerts(config, quotes, daily_by_code) or [])
+        return True
+
+    def _reproject_cached_display(self):
+        row_by_code = dict(getattr(self, "_latest_row_by_code", {}) or {})
+        sign_by_code = dict(getattr(self, "_latest_sign_by_code", {}) or {})
+        if not row_by_code and not sign_by_code:
+            return False
+        full_rows, sign = self._compose_display_rows(
+            row_by_code,
+            sign_by_code,
+            list(getattr(self, "_latest_alert_states", []) or []),
+            dict(getattr(self, "_latest_price_alert_states", {}) or {}),
+            dict(getattr(self, "_latest_quotes", {}) or {}),
+            dict(getattr(self, "_latest_daily_by_code", {}) or {}),
+            list(getattr(self, "_latest_strategy_states", []) or []),
+            dict(getattr(self, "_latest_intraday_by_code", {}) or {}),
+        )
+        self._project_columns(full_rows, sign)
+        return True
+
     # ----- 应用设置 -----
     def set_groups(self, groups):
         self.groups = normalize_groups(groups, self.codes)
@@ -2453,10 +2559,16 @@ class FloatLabel(QWidget):
         self._refresh_from_function()
 
     def set_strategy_alert_config(self, config):
-        self.strategy_alert_config = normalize_strategy_alert_config(config)
+        old_config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
+        new_config = normalize_strategy_alert_config(config)
+        changed_codes = self._strategy_config_changed_codes(old_config, new_config)
+        self.strategy_alert_config = new_config
         self._daily_kline_cache = {}
+        self._clear_strategy_push_cache_for_codes(changed_codes)
+        self._refresh_strategy_states_from_cache()
+        self._reproject_cached_display()
         self._notify_change()
-        self._refresh_from_function(force=not self._is_market_fetch_time())
+        self._refresh_from_function(force=bool(changed_codes) or not self._is_market_fetch_time())
 
     def set_panel_display_mode(self, mode):
         self.panel_display_mode = "quotes"
