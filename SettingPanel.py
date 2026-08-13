@@ -117,19 +117,26 @@ class SettingsDialog(QDialog):
         self.cmb_code_priority.addItem("重点", userData="focus")
         self.cmb_code_priority.addItem("普通", userData="normal")
         self.cmb_code_priority.addItem("低优先", userData="low")
+        self.edit_code_note = QLineEdit()
+        self.edit_code_note.setPlaceholderText("备注，可空")
+        self.edit_code_note.setMaxLength(80)
+        self.edit_code_note.setMinimumWidth(120)
 
         g_code_tags = QGroupBox("标的标识")
         g_code_tags.setContentsMargins(3, 12, 3, 6)
-        tag_lay = QHBoxLayout(g_code_tags)
+        tag_lay = QGridLayout(g_code_tags)
         tag_lay.setContentsMargins(6, 6, 6, 6)
-        tag_lay.setSpacing(6)
-        tag_lay.addWidget(QLabel("状态"))
-        tag_lay.addWidget(self.cmb_code_holding)
-        tag_lay.addWidget(QLabel("周期"))
-        tag_lay.addWidget(self.cmb_code_cycle)
-        tag_lay.addWidget(QLabel("级别"))
-        tag_lay.addWidget(self.cmb_code_priority)
-        tag_lay.addStretch(1)
+        tag_lay.setHorizontalSpacing(6)
+        tag_lay.setVerticalSpacing(6)
+        tag_lay.addWidget(QLabel("状态"), 0, 0)
+        tag_lay.addWidget(self.cmb_code_holding, 0, 1)
+        tag_lay.addWidget(QLabel("周期"), 0, 2)
+        tag_lay.addWidget(self.cmb_code_cycle, 0, 3)
+        tag_lay.addWidget(QLabel("级别"), 0, 4)
+        tag_lay.addWidget(self.cmb_code_priority, 0, 5)
+        tag_lay.addWidget(QLabel("备注"), 1, 0)
+        tag_lay.addWidget(self.edit_code_note, 1, 1, 1, 5)
+        tag_lay.setColumnStretch(5, 1)
 
         lay_codes.addWidget(self.tree_codes, 1)
         lay_codes.addLayout(btn_col)
@@ -162,7 +169,7 @@ class SettingsDialog(QDialog):
         g_flags.setContentsMargins(3,12,3,6)
         gl_flags = QGridLayout(g_flags)
         self.cbs: list[QCheckBox] = []
-        cb_texts = self.win.ALL_HEADERS
+        cb_texts = [header for header in self.win.ALL_HEADERS if header != "备注"]
 
         g_flag_name = QGroupBox("名称")
         gl_flag_name = QGridLayout(g_flag_name)
@@ -1233,6 +1240,7 @@ class SettingsDialog(QDialog):
         self.cmb_code_holding.currentIndexChanged.connect(self._on_code_tag_changed)
         self.cmb_code_cycle.currentIndexChanged.connect(self._on_code_tag_changed)
         self.cmb_code_priority.currentIndexChanged.connect(self._on_code_tag_changed)
+        self.edit_code_note.editingFinished.connect(self._on_code_note_changed)
         self.list_alerts.currentRowChanged.connect(self._on_alert_selected)
         self.btn_alert_add.clicked.connect(self._add_alert_rule)
         self.btn_alert_del.clicked.connect(self._del_alert_rule)
@@ -1395,11 +1403,22 @@ class SettingsDialog(QDialog):
         text = f"{code}  {short_name}" if short_name else code
         return f"{text}  [{tags}]" if tags else text
 
+    @staticmethod
+    def _compact_code_note_label(note, max_chars=8):
+        text = " ".join(str(note or "").split()).strip()
+        if not text:
+            return ""
+        return text if len(text) <= max_chars else f"{text[:max_chars].rstrip()}…"
+
     def _code_tag_label(self, code: str):
         tags = getattr(self.win, "code_tags", {})
         if not isinstance(tags, dict):
             tags = {}
         item = tags.get(code) if isinstance(tags.get(code), dict) else {}
+        notes = getattr(self.win, "code_notes", {})
+        if not isinstance(notes, dict):
+            notes = {}
+        note = notes.get(code, "")
         holding_map = {"hold": "持有", "watch": "观察", "cleared": "清仓"}
         cycle_map = {"short": "短线", "swing": "波段", "long": "长期"}
         priority_map = {"focus": "重点", "normal": "普通", "low": "低优"}
@@ -1407,6 +1426,7 @@ class SettingsDialog(QDialog):
             holding_map.get(item.get("holding"), ""),
             cycle_map.get(item.get("cycle"), ""),
             priority_map.get(item.get("priority"), ""),
+            self._compact_code_note_label(note),
         ]
         return "/".join(part for part in parts if part)
 
@@ -1556,15 +1576,20 @@ class SettingsDialog(QDialog):
         if not isinstance(tags, dict):
             tags = {}
         item = tags.get(code) if code and isinstance(tags.get(code), dict) else {}
+        notes = getattr(self.win, "code_notes", {})
+        if not isinstance(notes, dict):
+            notes = {}
         self._loading_code_tag_editor = True
         try:
             self._set_combo_data(self.cmb_code_holding, item.get("holding", ""))
             self._set_combo_data(self.cmb_code_cycle, item.get("cycle", ""))
             self._set_combo_data(self.cmb_code_priority, item.get("priority", ""))
+            self.edit_code_note.setText(str(notes.get(code) or "") if code else "")
             enabled = bool(code)
             self.cmb_code_holding.setEnabled(enabled)
             self.cmb_code_cycle.setEnabled(enabled)
             self.cmb_code_priority.setEnabled(enabled)
+            self.edit_code_note.setEnabled(enabled)
         finally:
             self._loading_code_tag_editor = False
 
@@ -1589,6 +1614,27 @@ class SettingsDialog(QDialog):
             setter(code_tags)
         else:
             self.win.code_tags = code_tags
+        item = self.tree_codes.currentItem()
+        if item is not None and item.data(0, Qt.UserRole) == "code":
+            item.setText(0, self._format_code_item_text(code))
+
+    def _on_code_note_changed(self):
+        if getattr(self, "_loading_code_tag_editor", False):
+            return
+        code = self._current_code_from_tree()
+        if not code:
+            return
+        code_notes = dict(getattr(self.win, "code_notes", {}) if isinstance(getattr(self.win, "code_notes", {}), dict) else {})
+        note = " ".join(self.edit_code_note.text().split()).strip()[:80]
+        if note:
+            code_notes[code] = note
+        else:
+            code_notes.pop(code, None)
+        setter = getattr(self.win, "set_code_notes", None)
+        if callable(setter):
+            setter(code_notes)
+        else:
+            self.win.code_notes = code_notes
         item = self.tree_codes.currentItem()
         if item is not None and item.data(0, Qt.UserRole) == "code":
             item.setText(0, self._format_code_item_text(code))

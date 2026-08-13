@@ -429,6 +429,8 @@ class FloatLabel(QWidget):
     def header_is_visible(self, header: str) -> bool:
         """返回指定列标题对应的独立可见属性值（替代旧的 flags 字典）。"""
         try:
+            if header == "备注":
+                return False
             if header == "代码":
                 return bool(getattr(self, 'code_visible', False))
             if header == "名称":
@@ -463,8 +465,6 @@ class FloatLabel(QWidget):
                 return bool(getattr(self, 'strategy_stop_visible', False))
             if header == "策略状态":
                 return bool(getattr(self, 'strategy_status_visible', False))
-            if header == "备注":
-                return bool(getattr(self, 'note_visible', False))
         except Exception:
             pass
         return False
@@ -1591,6 +1591,9 @@ class FloatLabel(QWidget):
                     daily_label = self._format_strategy_daily_label(strategy_state)
                     if daily_label:
                         meta["strategy_daily_label"] = daily_label
+                note = (getattr(self, "code_notes", {}) or {}).get(code, "")
+                if note:
+                    meta["stock_note"] = note
                 if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
                     meta["price_alerts"] = price_alerts_by_code[code]
                 badges = []
@@ -1679,8 +1682,7 @@ class FloatLabel(QWidget):
                 if header in self.ALL_HEADERS:
                     result[self.ALL_HEADERS.index(header)] = "-"
         if "备注" in self.ALL_HEADERS:
-            note = (getattr(self, "code_notes", {}) or {}).get(code, "")
-            result[self.ALL_HEADERS.index("备注")] = note or "-"
+            result[self.ALL_HEADERS.index("备注")] = "-"
         return result
 
     @staticmethod
@@ -1744,6 +1746,7 @@ class FloatLabel(QWidget):
         if not isinstance(tags, dict):
             tags = {}
         item = tags.get(code) if isinstance(tags.get(code), dict) else {}
+        note = (getattr(self, "code_notes", {}) or {}).get(code, "")
         holding_map = {"hold": "持有", "watch": "观察", "cleared": "清仓"}
         cycle_map = {"short": "短线", "swing": "波段", "long": "长期"}
         priority_map = {"focus": "重点", "normal": "普通", "low": "低优"}
@@ -1751,8 +1754,16 @@ class FloatLabel(QWidget):
             holding_map.get(item.get("holding"), ""),
             cycle_map.get(item.get("cycle"), ""),
             priority_map.get(item.get("priority"), ""),
+            self._compact_code_note_label(note),
         ]
         return "/".join(part for part in parts if part)
+
+    @staticmethod
+    def _compact_code_note_label(note, max_chars=8):
+        text = " ".join(str(note or "").split()).strip()
+        if not text:
+            return ""
+        return text if len(text) <= max_chars else f"{text[:max_chars].rstrip()}…"
 
     def _compose_strategy_rows(self, strategy_states):
         rows, meta = [], []
@@ -2713,6 +2724,15 @@ class FloatLabel(QWidget):
             header = str(idx)
             if header not in self.ALL_HEADERS:
                 return
+        if header == "备注":
+            prev = bool(getattr(self, "note_visible", False))
+            self.note_visible = False
+            if prev:
+                self._last_fit_signature = None
+                self._notify_change()
+                if not self._reproject_cached_display():
+                    self._refresh_from_function()
+            return
         
         checked = bool(checked)
         prev = None
@@ -2897,7 +2917,7 @@ class FloatLabel(QWidget):
 
     def _populate_display_indicator_menu(self, sub_cols):
         for name in self.ALL_HEADERS:
-            if name == "卖一":
+            if name in ("卖一", "备注"):
                 continue
             if name == "买一":
                 act = QAction("买一/卖一", sub_cols, checkable=True)
@@ -2935,8 +2955,6 @@ class FloatLabel(QWidget):
     def mouseDoubleClickEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._drag_pos = None
-            if self._edit_note_for_event(self, e):
-                return
             self.hide()
             return
         super().mouseDoubleClickEvent(e)
@@ -2944,8 +2962,7 @@ class FloatLabel(QWidget):
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = None
-            if not self._edit_note_for_event(obj, ev):
-                self.hide()
+            self.hide()
             return True
         if ev.type() == QEvent.MouseButtonPress and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()

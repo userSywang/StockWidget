@@ -53,6 +53,11 @@ class SimpleTableModel(QAbstractTableModel):
                 return ""
             return "\n\n".join(str(a.get("detail", "")) for a in alerts if a.get("detail"))
 
+        if role == Qt.ToolTipRole:
+            meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
+            note = str(meta.get("stock_note") or "").strip()
+            return f"备注：{note}" if note else None
+
         if role == Qt.DisplayRole:
             return "" if isinstance(cell, dict) else str(cell)
 

@@ -35,6 +35,7 @@ class FakeWindow:
         self.strategy_alert_config = {}
         self.strategy_alert_history = []
         self.code_tags = {}
+        self.code_notes = {}
         self.warning_visible = False
         self.warning_text = ""
         self.market_amount_visible = False
@@ -82,6 +83,9 @@ class FakeWindow:
 
     def set_edge_auto_hide_enabled(self, visible):
         self.edge_auto_hide_enabled = bool(visible)
+
+    def set_code_notes(self, notes):
+        self.code_notes = notes
 
     def lookup_code_names(self, codes):
         for code in codes:
@@ -270,11 +274,29 @@ class SettingsPanelTests(unittest.TestCase):
         dlg = SettingsDialog(win, None)
         labels = {cb.text() for cb in dlg.cbs}
 
-        self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"}.issubset(labels))
+        self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"}.issubset(labels))
+        self.assertNotIn("备注", labels)
         self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
         dlg.chk_price_alert_badge_visible.setChecked(False)
         self.assertFalse(win.price_alert_badge_visible)
         self.assertFalse(hasattr(dlg, "chk_price_alert_badge_visible_inline"))
+        dlg.close()
+
+    def test_code_note_is_edited_from_code_tag_panel(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+
+        dlg.edit_code_note.setText("压力18.80 等回踩")
+        dlg._on_code_note_changed()
+
+        self.assertEqual(win.code_notes["sh603259"], "压力18.80 等回踩")
+        self.assertIn("[压力18.80…]", code_item.text(0))
         dlg.close()
 
     def test_appearance_page_updates_edge_auto_hide(self):

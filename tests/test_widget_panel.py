@@ -949,7 +949,7 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "锁盈10%")
         self.assertEqual(meta[1]["strategy_daily_label"], "实时08-10")
 
-    def test_compose_display_rows_adds_stock_note_field(self):
+    def test_compose_display_rows_adds_stock_note_to_tag_label(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = NOTE_HEADERS
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
@@ -962,7 +962,7 @@ class WidgetPanelTests(unittest.TestCase):
         win.code_notes = {"sh603259": "压力18.80 等回踩"}
         row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
 
-        rows, _meta = FloatLabel._compose_display_rows(
+        rows, meta = FloatLabel._compose_display_rows(
             win,
             {"sh603259": row},
             {"sh603259": {"delta": 1}},
@@ -973,14 +973,17 @@ class WidgetPanelTests(unittest.TestCase):
             [],
         )
 
-        self.assertEqual(rows[1][NOTE_HEADERS.index("备注")], "压力18.80 等回踩")
+        name_text = rows[1][NOTE_HEADERS.index("名称")]
+        self.assertIn("[压力18.80…]", name_text)
+        self.assertEqual(rows[1][NOTE_HEADERS.index("备注")], "-")
+        self.assertEqual(meta[1]["stock_note"], "压力18.80 等回踩")
 
-    def test_set_flag_reprojects_cached_display_after_market_close(self):
+    def test_note_column_stays_hidden_after_market_close(self):
         cfg = {
             "groups": [{"name": "默认", "codes": ["sh603259"]}],
             "checked_codes": ["sh603259"],
             "name_visible": True,
-            "note_visible": False,
+            "note_visible": True,
             "code_notes": {"sh603259": "盘后备注"},
         }
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
@@ -1000,9 +1003,9 @@ class WidgetPanelTests(unittest.TestCase):
 
             win.set_flag("备注", True)
 
-            self.assertIn("备注", win.model._headers)
+            self.assertNotIn("备注", win.model._headers)
             row = win.model._rows[1]
-            self.assertEqual(row[win.model._headers.index("备注")], "盘后备注")
+            self.assertIn("[盘后备注]", row[win.model._headers.index("名称")])
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()
@@ -1048,20 +1051,7 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
-    def test_note_edit_only_opens_from_visible_note_cell(self):
-        class FakeEvent:
-            def __init__(self, point):
-                self._point = point
-
-            def position(self):
-                point = self._point
-
-                class Position:
-                    def toPoint(self_inner):
-                        return point
-
-                return Position()
-
+    def test_note_tooltip_uses_full_note_without_note_column(self):
         cfg = {
             "groups": [{"name": "默认", "codes": ["sh603259"]}],
             "checked_codes": ["sh603259"],
@@ -1087,16 +1077,11 @@ class WidgetPanelTests(unittest.TestCase):
             self.app.processEvents()
 
             name_col = win.model._headers.index("名称")
-            note_col = win.model._headers.index("备注")
-            name_pos = win.table.visualRect(win.model.index(1, name_col)).center()
-            note_pos = win.table.visualRect(win.model.index(1, note_col)).center()
+            index = win.model.index(1, name_col)
 
-            self.assertIn(note_col, win.model._align_right)
-            with patch("WidgetPanel.QInputDialog.getText", return_value=("新备注", True)) as get_text:
-                self.assertFalse(win._edit_note_for_event(win.table.viewport(), FakeEvent(name_pos)))
-                get_text.assert_not_called()
-                self.assertTrue(win._edit_note_for_event(win.table.viewport(), FakeEvent(note_pos)))
-                self.assertEqual(win.code_notes["sh603259"], "新备注")
+            self.assertNotIn("备注", win.model._headers)
+            self.assertIn("[旧备注]", win.model._rows[1][name_col])
+            self.assertEqual(win.model.data(index, Qt.ToolTipRole), "备注：旧备注")
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()
