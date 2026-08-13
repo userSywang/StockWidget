@@ -3114,11 +3114,12 @@ class FloatLabel(QWidget):
             return ""
         available = screen.availableGeometry()
         geo = self.geometry()
+        if not available.contains(geo):
+            return ""
         distances = [
             ("left", abs(geo.left() - available.left())),
             ("right", abs(available.right() - geo.right())),
             ("top", abs(geo.top() - available.top())),
-            ("bottom", abs(available.bottom() - geo.bottom())),
         ]
         side, distance = min(distances, key=lambda item: item[1])
         return side if distance <= margin else ""
@@ -3136,8 +3137,6 @@ class FloatLabel(QWidget):
             geo.moveLeft(available.right() - strip + 1)
         elif side == "top":
             geo.moveTop(available.top() - geo.height() + strip)
-        elif side == "bottom":
-            geo.moveTop(available.bottom() - strip + 1)
         else:
             return None
         return geo

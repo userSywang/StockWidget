@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QHideEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
@@ -2046,6 +2046,57 @@ class WidgetPanelTests(unittest.TestCase):
             self.assertLessEqual(win.y() + win.height(), screen_rect.bottom())
             self.assertGreaterEqual(win.x(), screen_rect.left())
             self.assertGreaterEqual(win.y(), screen_rect.top())
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_edge_auto_hide_ignores_bottom_edge(self):
+        class FakeScreen:
+            def availableGeometry(self):
+                return QRect(0, 0, 800, 560)
+
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel({"groups": [{"name": "默认", "codes": ["sh000001"]}], "checked_codes": ["sh000001"]})
+        try:
+            win.setGeometry(200, 520, 160, 40)
+            with patch("WidgetPanel.QApplication.screenAt", return_value=FakeScreen()):
+                self.assertEqual(win._edge_side(), "")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_edge_auto_hide_ignores_window_overlapping_taskbar_area(self):
+        class FakeScreen:
+            def availableGeometry(self):
+                return QRect(0, 0, 800, 560)
+
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel({"groups": [{"name": "默认", "codes": ["sh000001"]}], "checked_codes": ["sh000001"]})
+        try:
+            win.setGeometry(740, 540, 60, 40)
+            with patch("WidgetPanel.QApplication.screenAt", return_value=FakeScreen()):
+                self.assertEqual(win._edge_side(), "")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_edge_auto_hide_has_no_bottom_collapsed_geometry(self):
+        class FakeScreen:
+            def availableGeometry(self):
+                return QRect(0, 0, 800, 560)
+
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel({"groups": [{"name": "默认", "codes": ["sh000001"]}], "checked_codes": ["sh000001"]})
+        try:
+            win.setGeometry(200, 520, 160, 40)
+            with patch("WidgetPanel.QApplication.screenAt", return_value=FakeScreen()):
+                self.assertIsNone(win._collapsed_geometry_for_side("bottom"))
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()
