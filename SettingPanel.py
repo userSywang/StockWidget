@@ -1088,9 +1088,12 @@ class SettingsDialog(QDialog):
         self.chk_table_header.setChecked(self.win.header_visible)
         self.chk_table_grid = QCheckBox("显示网格")
         self.chk_table_grid.setChecked(self.win.grid_visible)
+        self.chk_edge_auto_hide = QCheckBox("贴边自动隐藏")
+        self.chk_edge_auto_hide.setChecked(bool(getattr(self.win, "edge_auto_hide_enabled", False)))
 
         gl_table.addWidget(self.chk_table_header,0,0)
         gl_table.addWidget(self.chk_table_grid,0,1)
+        gl_table.addWidget(self.chk_edge_auto_hide,1,0,1,2)
         appearance_settings.addWidget(g_table)
 
         # 3.颜色/透明度
@@ -1340,6 +1343,7 @@ class SettingsDialog(QDialog):
         self.chk_start_on_boot.toggled.connect(self._on_start_on_boot_toggled)
         self.chk_table_header.toggled.connect(self._on_header_toggled)
         self.chk_table_grid.toggled.connect(self._on_grid_toggled)
+        self.chk_edge_auto_hide.toggled.connect(self._on_edge_auto_hide_toggled)
         # icon controls
         try:
             # set current index based on app config if available
@@ -3241,6 +3245,13 @@ class SettingsDialog(QDialog):
 
     def _on_header_toggled(self, checked: bool):
         self.win.set_header_visible(bool(checked))
+
+    def _on_edge_auto_hide_toggled(self, checked: bool):
+        setter = getattr(self.win, "set_edge_auto_hide_enabled", None)
+        if callable(setter):
+            setter(bool(checked))
+        else:
+            self.win.edge_auto_hide_enabled = bool(checked)
 
     def _on_cb_changed(self, header: str, state: bool):
         self.win.set_flag(header, state)

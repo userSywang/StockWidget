@@ -927,7 +927,7 @@ def strategy_daily_request_codes(config):
         or rules.get("index_ma10_break_enabled")
         for rules in rules_list
     ):
-        codes.extend(["sh000001", "sz399001"])
+        codes.append("sh000001")
     return normalize_codes(codes)
 
 
@@ -1152,7 +1152,7 @@ def _strategy_index_status(rules, quotes, daily_by_code):
     for enabled, days in ((rules.get("index_ma5_break_enabled"), 5), (rules.get("index_ma10_break_enabled"), 10)):
         if not enabled:
             continue
-        for index_code, label in (("sh000001", "上证"), ("sz399001", "深成")):
+        for index_code, label in (("sh000001", "上证"),):
             error_text = daily_error_text(daily_by_code.get(index_code))
             if error_text:
                 item = f"{label}{error_text}"
@@ -1289,7 +1289,7 @@ def evaluate_strategy_actions(config, position, quote, daily_by_code=None, conte
         index_rule = action_rules.get(rule_id)
         if not index_rule or not index_rule.get("enabled"):
             continue
-        for index_code in ("sh000001", "sz399001"):
+        for index_code in ("sh000001",):
             index_quote = (context.get("quotes") or {}).get(index_code) or {}
             try:
                 index_price = float(index_quote.get("price", 0.0))
@@ -1320,7 +1320,7 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
         return []
     rules = config["rules"]
     daily_by_code = daily_by_code or {}
-    index_ma5_down = any(ma_is_down(daily_by_code.get(code), 5) for code in ("sh000001", "sz399001"))
+    index_ma5_down = ma_is_down(daily_by_code.get("sh000001"), 5)
 
     states = []
     for position in config.get("positions", []):

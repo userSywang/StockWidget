@@ -409,14 +409,14 @@ class StockLogicTests(unittest.TestCase):
         self.assertFalse(states[0]["triggered"])
         self.assertTrue(states[1]["triggered"])
 
-    def test_strategy_daily_request_codes_include_market_indexes(self):
+    def test_strategy_daily_request_codes_include_shanghai_index_only(self):
         codes = strategy_daily_request_codes({
             "enabled": True,
             "positions": [{"code": "603259", "cost_price": 100.0}],
             "rules": {"index_ma5_break_enabled": True, "index_ma10_break_enabled": True},
         })
 
-        self.assertEqual(codes, ["sh603259", "sh000001", "sz399001"])
+        self.assertEqual(codes, ["sh603259", "sh000001"])
 
     def test_strategy_action_engine_reports_triggered_actions(self):
         config = normalize_strategy_alert_config({
@@ -491,7 +491,7 @@ class StockLogicTests(unittest.TestCase):
         self.assertTrue(states[0]["triggered"])
         self.assertIn("个股破5日线", states[0]["status"])
         self.assertIn("上证破5日线", states[0]["status"])
-        self.assertIn("深成破10日线", states[0]["status"])
+        self.assertNotIn("深成", states[0]["status"])
 
     def test_strategy_alerts_include_display_indicators_and_stop_price(self):
         config = normalize_strategy_alert_config({

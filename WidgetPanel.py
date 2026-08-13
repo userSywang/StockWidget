@@ -8,7 +8,7 @@ import time
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
 from PySide6.QtGui import QFont, QAction, QColor
-from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableView, QHeaderView, QAbstractItemView, QFrame, QStyledItemDelegate
+from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableView, QHeaderView, QAbstractItemView, QFrame, QStyledItemDelegate, QInputDialog
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
@@ -88,8 +88,10 @@ class FloatLabel(QWidget):
         self.warning_text       = str(cfg.get("warning_text", DEFAULT_WARNING_TEXT)).strip() or DEFAULT_WARNING_TEXT
         self.market_amount_visible = bool(cfg.get("market_amount_visible", False))
         self.price_alert_badge_visible = bool(cfg.get("price_alert_badge_visible", True))
+        self.edge_auto_hide_enabled = bool(cfg.get("edge_auto_hide_enabled", False))
         self.code_names         = dict(cfg.get("code_names", {})) if isinstance(cfg.get("code_names"), dict) else {}
         self.code_tags          = self._normalize_code_tags(cfg.get("code_tags", {}))
+        self.code_notes         = self._normalize_code_notes(cfg.get("code_notes", {}))
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
         self._latest_quotes     = {}
         self._http              = requests.Session()
@@ -116,7 +118,7 @@ class FloatLabel(QWidget):
         self.groups = normalize_groups(groups_cfg, codes_cfg)
         self.codes = flatten_group_codes(self.groups)
         # 列标题列表（提前定义，供后续旧配置解析使用）
-        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
+        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"]
 
         # 列显示标志（独立属性）
         # 解析旧 flags 配置以做回退
@@ -147,6 +149,7 @@ class FloatLabel(QWidget):
         self.strategy_profit_visible = bool(cfg.get("strategy_profit_visible", old_flags.get("持仓盈亏", False)))
         self.strategy_stop_visible = bool(cfg.get("strategy_stop_visible", old_flags.get("止损线", False)))
         self.strategy_status_visible = bool(cfg.get("strategy_status_visible", old_flags.get("策略状态", False)))
+        self.note_visible = bool(cfg.get("note_visible", old_flags.get("备注", False)))
 
         # 设置自选显示股票（新名 checked_codes）
         checked_codes_cfg = checked_codes_cfg or self.codes
@@ -231,6 +234,8 @@ class FloatLabel(QWidget):
         self._drag_moved = False
         self._drag_press_global = None
         self._pressed_kline_code = ""
+        self._edge_collapsed = False
+        self._edge_expanded_geometry = None
 
         self.timer = QTimer(self)
         self.timer.setInterval(max(1, self.refresh_seconds)*1000)
@@ -272,8 +277,10 @@ class FloatLabel(QWidget):
             "warning_text": self.warning_text,
             "market_amount_visible": bool(self.market_amount_visible),
             "price_alert_badge_visible": bool(getattr(self, "price_alert_badge_visible", True)),
+            "edge_auto_hide_enabled": bool(getattr(self, "edge_auto_hide_enabled", False)),
             "code_names": self.code_names,
             "code_tags": self.code_tags,
+            "code_notes": self.code_notes,
             "code_visible": bool(getattr(self, 'code_visible', False)),
             "name_visible": bool(getattr(self, 'name_visible', False)),
             "price_visible": bool(getattr(self, 'price_visible', False)),
@@ -291,6 +298,7 @@ class FloatLabel(QWidget):
             "strategy_profit_visible": bool(getattr(self, 'strategy_profit_visible', False)),
             "strategy_stop_visible": bool(getattr(self, 'strategy_stop_visible', False)),
             "strategy_status_visible": bool(getattr(self, 'strategy_status_visible', False)),
+            "note_visible": bool(getattr(self, 'note_visible', False)),
             "short_code": self.short_code,
             "name_length": self.name_length,
             "b1s1_price": (getattr(self, 'b1s1_display', 'qty') == 'price'),
@@ -305,7 +313,7 @@ class FloatLabel(QWidget):
             "font_size": self.font.pointSize(),
             "line_extra_px": self.line_extra_px,
             "default_color": self.default_color,
-            "pos": {"x": self.x(), "y": self.y()},
+            "pos": self._current_persisted_pos(),
             "hotkey": self.hotkey,
             "start_on_boot": bool(self.start_on_boot),
             "data_source": self.data_source,
@@ -335,10 +343,36 @@ class FloatLabel(QWidget):
                 normalized[code] = item
         return normalized
 
+    @staticmethod
+    def _normalize_code_notes(code_notes):
+        if not isinstance(code_notes, dict):
+            return {}
+        normalized = {}
+        for raw_code, raw_note in code_notes.items():
+            code = normalize_code_or_none(raw_code)
+            if not code:
+                continue
+            note = " ".join(str(raw_note or "").split()).strip()
+            if note:
+                normalized[code] = note[:80]
+        return normalized
+
+    def _current_persisted_pos(self):
+        if getattr(self, "_edge_collapsed", False) and getattr(self, "_edge_expanded_geometry", None) is not None:
+            geo = self._edge_expanded_geometry
+            return {"x": geo.x(), "y": geo.y()}
+        return {"x": self.x(), "y": self.y()}
+
     def set_code_tags(self, code_tags):
         self.code_tags = self._normalize_code_tags(code_tags)
         valid_codes = set(getattr(self, "codes", []))
         self.code_tags = {code: tags for code, tags in self.code_tags.items() if code in valid_codes}
+        self._notify_change()
+
+    def set_code_notes(self, code_notes):
+        self.code_notes = self._normalize_code_notes(code_notes)
+        valid_codes = set(getattr(self, "codes", []))
+        self.code_notes = {code: note for code, note in self.code_notes.items() if code in valid_codes}
         self._notify_change()
 
     @staticmethod
@@ -428,6 +462,8 @@ class FloatLabel(QWidget):
                 return bool(getattr(self, 'strategy_stop_visible', False))
             if header == "策略状态":
                 return bool(getattr(self, 'strategy_status_visible', False))
+            if header == "备注":
+                return bool(getattr(self, 'note_visible', False))
         except Exception:
             pass
         return False
@@ -1641,6 +1677,9 @@ class FloatLabel(QWidget):
             for header in ("持仓盈亏", "止损线", "策略状态"):
                 if header in self.ALL_HEADERS:
                     result[self.ALL_HEADERS.index(header)] = "-"
+        if "备注" in self.ALL_HEADERS:
+            note = (getattr(self, "code_notes", {}) or {}).get(code, "")
+            result[self.ALL_HEADERS.index("备注")] = note or "-"
         return result
 
     def _header_visible_for_indicator(self, header):
@@ -2224,7 +2263,7 @@ class FloatLabel(QWidget):
             proj_meta.append(meta)
 
         # 右对齐：除了名称、K线、卖一外的所有列都右对齐
-        right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一")]
+        right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一", "备注")]
         self.model.set_align_right_cols(right_cols)
         self.model.set_rows_headers(proj_rows, headers, meta=proj_meta)
         self.model.set_color_scheme(self.default_color, self.fg)
@@ -2536,6 +2575,7 @@ class FloatLabel(QWidget):
         if not self.checked_codes:
             self.checked_codes = list(self.codes)
         self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
+        self.code_notes = {code: note for code, note in getattr(self, "code_notes", {}).items() if code in self.codes}
         self._notify_change()
         self._refresh_from_function(force=True)
 
@@ -2546,6 +2586,7 @@ class FloatLabel(QWidget):
         self.codes = new
         self.groups = [{"name": "默认", "codes": list(new)}]
         self.code_tags = {code: tags for code, tags in getattr(self, "code_tags", {}).items() if code in self.codes}
+        self.code_notes = {code: note for code, note in getattr(self, "code_notes", {}).items() if code in self.codes}
         self._notify_change()
         self._refresh_from_function(force=True)
 
@@ -2598,6 +2639,14 @@ class FloatLabel(QWidget):
         self._last_fit_signature = None
         self._notify_change()
         self._refresh_from_function(force=True)
+
+    def set_edge_auto_hide_enabled(self, visible: bool):
+        self.edge_auto_hide_enabled = bool(visible)
+        if not self.edge_auto_hide_enabled:
+            self._expand_from_edge()
+        self._notify_change()
+        if self.edge_auto_hide_enabled:
+            QTimer.singleShot(200, self._collapse_to_edge_if_needed)
 
     def set_data_source(self, data_source):
         self.data_source = self._normalize_data_source(data_source)
@@ -2654,6 +2703,8 @@ class FloatLabel(QWidget):
                 prev = bool(getattr(self, 'strategy_stop_visible', False)); self.strategy_stop_visible = checked
             elif header == "策略状态":
                 prev = bool(getattr(self, 'strategy_status_visible', False)); self.strategy_status_visible = checked
+            elif header == "备注":
+                prev = bool(getattr(self, 'note_visible', False)); self.note_visible = checked
         except Exception:
             prev = None
 
@@ -2662,7 +2713,8 @@ class FloatLabel(QWidget):
             if prev == checked:
                 return
         self._notify_change()
-        self._refresh_from_function()
+        if not self._reproject_cached_display():
+            self._refresh_from_function(force=not self._is_market_fetch_time())
 
     def set_code_type(self, pure_num: bool):
         self.short_code = bool(pure_num)
@@ -2781,6 +2833,11 @@ class FloatLabel(QWidget):
         act_color.toggled.connect(self.set_default_color)
         menu.addAction(act_color)
 
+        act_edge_hide = QAction("贴边自动隐藏", menu, checkable=True)
+        act_edge_hide.setChecked(bool(getattr(self, "edge_auto_hide_enabled", False)))
+        act_edge_hide.toggled.connect(self.set_edge_auto_hide_enabled)
+        menu.addAction(act_edge_hide)
+
         menu.addSeparator()
         act_open_settings = QAction("设置…", menu)
         act_open_settings.triggered.connect(self._open_settings_cb)
@@ -2825,16 +2882,19 @@ class FloatLabel(QWidget):
             self._drag_pos = None
             self._ensure_on_top()
             self._notify_change()
+            QTimer.singleShot(250, self._collapse_to_edge_if_needed)
 
     def mouseDoubleClickEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._drag_pos = None
-            self.hide()
+            if not self._edit_note_for_event(self, e):
+                self.hide()
 
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = None
-            self.hide()
+            if not self._edit_note_for_event(obj, ev):
+                self.hide()
             return True
         if ev.type() == QEvent.MouseButtonPress and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -2860,8 +2920,61 @@ class FloatLabel(QWidget):
             self._pressed_kline_code = ""
             if moved:
                 self._notify_change()
+                QTimer.singleShot(250, self._collapse_to_edge_if_needed)
             return True
         return QWidget.eventFilter(self, obj, ev)
+
+    def _code_for_event_pos(self, obj, ev):
+        try:
+            pos = ev.position().toPoint()
+            if obj is self.table.viewport():
+                viewport_pos = pos
+            else:
+                viewport_pos = self.table.viewport().mapFrom(obj, pos)
+            index = self.table.indexAt(viewport_pos)
+            if not index.isValid():
+                return ""
+            meta_rows = getattr(self.model, "_row_meta", []) or []
+            meta = meta_rows[index.row()] if index.row() < len(meta_rows) else {}
+            if meta.get("row_type"):
+                return ""
+            return normalize_code_or_none(meta.get("code")) or ""
+        except Exception:
+            return ""
+
+    def _edit_note_for_event(self, obj, ev):
+        code = self._code_for_event_pos(obj, ev)
+        if not code:
+            return False
+        self._edit_code_note(code)
+        return True
+
+    def _edit_code_note(self, code):
+        code = normalize_code_or_none(code)
+        if not code:
+            return
+        notes = dict(getattr(self, "code_notes", {}) or {})
+        current = notes.get(code, "")
+        name = self.code_names.get(code, code)
+        text, ok = QInputDialog.getText(self, "填写备注", f"{name} 备注：", text=current)
+        if not ok:
+            return
+        self._set_code_note(code, text)
+
+    def _set_code_note(self, code, text):
+        code = normalize_code_or_none(code)
+        if not code:
+            return
+        notes = dict(getattr(self, "code_notes", {}) or {})
+        note = " ".join(str(text or "").split()).strip()[:80]
+        if note:
+            notes[code] = note
+        else:
+            notes.pop(code, None)
+        self.code_notes = notes
+        self._notify_change()
+        if not self._reproject_cached_display():
+            self._refresh_from_function(force=True)
 
     def closeEvent(self, event): 
         event.ignore()
@@ -2875,6 +2988,14 @@ class FloatLabel(QWidget):
                 self._refresh_executor = None
         except Exception:
             pass
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self._expand_from_edge()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        QTimer.singleShot(300, self._collapse_to_edge_if_needed)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2913,6 +3034,70 @@ class FloatLabel(QWidget):
             )
         except Exception:
             pass
+
+    def _edge_side(self, margin=3):
+        screen = QApplication.screenAt(self.geometry().center()) or QApplication.primaryScreen()
+        if screen is None:
+            return ""
+        available = screen.availableGeometry()
+        geo = self.geometry()
+        distances = [
+            ("left", abs(geo.left() - available.left())),
+            ("right", abs(available.right() - geo.right())),
+            ("top", abs(geo.top() - available.top())),
+            ("bottom", abs(available.bottom() - geo.bottom())),
+        ]
+        side, distance = min(distances, key=lambda item: item[1])
+        return side if distance <= margin else ""
+
+    def _collapsed_geometry_for_side(self, side):
+        screen = QApplication.screenAt(self.geometry().center()) or QApplication.primaryScreen()
+        if screen is None:
+            return None
+        available = screen.availableGeometry()
+        geo = self.geometry()
+        strip = 6
+        if side == "left":
+            geo.moveLeft(available.left() - geo.width() + strip)
+        elif side == "right":
+            geo.moveLeft(available.right() - strip + 1)
+        elif side == "top":
+            geo.moveTop(available.top() - geo.height() + strip)
+        elif side == "bottom":
+            geo.moveTop(available.bottom() - strip + 1)
+        else:
+            return None
+        return geo
+
+    def _collapse_to_edge_if_needed(self):
+        if not getattr(self, "edge_auto_hide_enabled", False) or not self.isVisible():
+            return
+        if getattr(self, "_drag_pos", None) or getattr(self, "_edge_collapsed", False):
+            return
+        try:
+            if self.underMouse() or self.table.underMouse() or self.table.viewport().underMouse():
+                return
+        except Exception:
+            pass
+        side = self._edge_side()
+        if not side:
+            return
+        self._edge_expanded_geometry = self.geometry()
+        collapsed = self._collapsed_geometry_for_side(side)
+        if collapsed is None:
+            return
+        self._edge_collapsed = True
+        self.setGeometry(collapsed)
+
+    def _expand_from_edge(self):
+        if not getattr(self, "_edge_collapsed", False):
+            return
+        geo = getattr(self, "_edge_expanded_geometry", None)
+        self._edge_collapsed = False
+        if geo is not None:
+            self.setGeometry(geo)
+        self._edge_expanded_geometry = None
+        self._ensure_on_top()
 
     def _register_hotkey(self):
         try:

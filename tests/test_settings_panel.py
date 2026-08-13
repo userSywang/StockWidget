@@ -16,7 +16,7 @@ class FakeWindow:
         self.groups = [{"name": "默认", "codes": ["sh000001"]}]
         self.codes = ["sh000001"]
         self.checked_codes = ["sh000001"]
-        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
+        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"]
         self.refresh_seconds = 2
         self.short_code = False
         self.name_length = 0
@@ -39,6 +39,7 @@ class FakeWindow:
         self.warning_text = ""
         self.market_amount_visible = False
         self.price_alert_badge_visible = True
+        self.edge_auto_hide_enabled = False
         self._latest_price_alert_states = {}
         self.code_names = {"sh000001": "上证指数"}
         self.lookup_names = {}
@@ -78,6 +79,9 @@ class FakeWindow:
 
     def set_price_alert_badge_visible(self, visible):
         self.price_alert_badge_visible = bool(visible)
+
+    def set_edge_auto_hide_enabled(self, visible):
+        self.edge_auto_hide_enabled = bool(visible)
 
     def lookup_code_names(self, codes):
         for code in codes:
@@ -266,11 +270,21 @@ class SettingsPanelTests(unittest.TestCase):
         dlg = SettingsDialog(win, None)
         labels = {cb.text() for cb in dlg.cbs}
 
-        self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"}.issubset(labels))
+        self.assertTrue({"MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"}.issubset(labels))
         self.assertTrue(dlg.chk_price_alert_badge_visible.isChecked())
         dlg.chk_price_alert_badge_visible.setChecked(False)
         self.assertFalse(win.price_alert_badge_visible)
         self.assertFalse(hasattr(dlg, "chk_price_alert_badge_visible_inline"))
+        dlg.close()
+
+    def test_appearance_page_updates_edge_auto_hide(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        self.assertFalse(win.edge_auto_hide_enabled)
+        dlg.chk_edge_auto_hide.setChecked(True)
+
+        self.assertTrue(win.edge_auto_hide_enabled)
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):

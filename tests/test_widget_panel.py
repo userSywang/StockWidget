@@ -14,6 +14,7 @@ from WidgetPanel import FloatLabel
 
 BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
 STRATEGY_HEADERS = BASE_HEADERS + ["MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
+NOTE_HEADERS = STRATEGY_HEADERS + ["备注"]
 
 
 class WidgetPanelTests(unittest.TestCase):
@@ -263,7 +264,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         codes = FloatLabel._refresh_request_codes(win)
 
-        self.assertEqual(codes, ["sh600000", "sh512000", "sh000001", "sz399001"])
+        self.assertEqual(codes, ["sh600000", "sh512000", "sh000001"])
 
     def test_daily_request_codes_include_price_alert_below_ma5(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -946,6 +947,66 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("持仓盈亏")], "+12.0%")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("止损线")], "110.00")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10% | 实时08-10")
+
+    def test_compose_display_rows_adds_stock_note_field(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = NOTE_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.strategy_alert_config = {"enabled": False}
+        win.code_tags = {}
+        win.code_notes = {"sh603259": "压力18.80 等回踩"}
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, _meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [],
+        )
+
+        self.assertEqual(rows[1][NOTE_HEADERS.index("备注")], "压力18.80 等回踩")
+
+    def test_set_flag_reprojects_cached_display_after_market_close(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "name_visible": True,
+            "note_visible": False,
+            "code_notes": {"sh603259": "盘后备注"},
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            win._now = lambda: datetime(2026, 8, 13, 18, 0)
+            win._latest_row_by_code = {
+                "sh603259": ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+            }
+            win._latest_sign_by_code = {"sh603259": {"delta": 1}}
+            win._latest_alert_states = []
+            win._latest_price_alert_states = {}
+            win._latest_quotes = {"sh603259": {"price": 112.0}}
+            win._latest_daily_by_code = {}
+            win._latest_strategy_states = []
+            win._latest_intraday_by_code = {}
+
+            win.set_flag("备注", True)
+
+            self.assertIn("备注", win.model._headers)
+            row = win.model._rows[1]
+            self.assertEqual(row[win.model._headers.index("备注")], "盘后备注")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
 
     def test_compose_display_rows_appends_code_tags_to_name(self):
         win = FloatLabel.__new__(FloatLabel)
