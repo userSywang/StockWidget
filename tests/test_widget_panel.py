@@ -1091,11 +1091,50 @@ class WidgetPanelTests(unittest.TestCase):
             name_pos = win.table.visualRect(win.model.index(1, name_col)).center()
             note_pos = win.table.visualRect(win.model.index(1, note_col)).center()
 
+            self.assertIn(note_col, win.model._align_right)
             with patch("WidgetPanel.QInputDialog.getText", return_value=("新备注", True)) as get_text:
                 self.assertFalse(win._edit_note_for_event(win.table.viewport(), FakeEvent(name_pos)))
                 get_text.assert_not_called()
                 self.assertTrue(win._edit_note_for_event(win.table.viewport(), FakeEvent(note_pos)))
                 self.assertEqual(win.code_notes["sh603259"], "新备注")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_double_click_non_note_cell_still_hides_window(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "name_visible": True,
+            "note_visible": True,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+            rows, meta = win._compose_display_rows(
+                {"sh603259": row},
+                {"sh603259": {"delta": 1}},
+                [],
+                {},
+                {"sh603259": {"price": 112.0}},
+                {},
+                [],
+            )
+            win._project_columns(rows, meta)
+            win.show()
+            self.app.processEvents()
+
+            name_col = win.model._headers.index("名称")
+            name_pos = win.table.visualRect(win.model.index(1, name_col)).center()
+            with patch("WidgetPanel.QInputDialog.getText") as get_text:
+                QTest.mouseDClick(win.table.viewport(), Qt.LeftButton, Qt.NoModifier, name_pos)
+                self.app.processEvents()
+
+            get_text.assert_not_called()
+            self.assertFalse(win.isVisible())
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

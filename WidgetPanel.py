@@ -2311,7 +2311,7 @@ class FloatLabel(QWidget):
             proj_meta.append(meta)
 
         # 右对齐：除了名称、K线、卖一外的所有列都右对齐
-        right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一", "备注")]
+        right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一")]
         self.model.set_align_right_cols(right_cols)
         self.model.set_rows_headers(proj_rows, headers, meta=proj_meta, header_notes=header_notes)
         self.model.set_color_scheme(self.default_color, self.fg)
@@ -2937,12 +2937,16 @@ class FloatLabel(QWidget):
             self._drag_pos = None
             if self._edit_note_for_event(self, e):
                 return
+            self.hide()
+            return
         super().mouseDoubleClickEvent(e)
 
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = None
-            return self._edit_note_for_event(obj, ev)
+            if not self._edit_note_for_event(obj, ev):
+                self.hide()
+            return True
         if ev.type() == QEvent.MouseButtonPress and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
             self._drag_press_global = ev.globalPosition().toPoint()
