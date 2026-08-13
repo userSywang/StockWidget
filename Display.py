@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt, QRect, QPoint, QAbstractTableModel, QModelIndex, QEvent
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont
+from PySide6.QtCore import Qt, QRect, QPoint, QPointF, QAbstractTableModel, QModelIndex, QEvent
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QBrush, QFont
 from PySide6.QtWidgets import QStyledItemDelegate, QToolTip
 
 # ----- 颜色配置 -----
@@ -225,13 +225,126 @@ class KLineDelegate(QStyledItemDelegate):
     def set_point_size(self, pt: int):
         self.scale = max(0.5, min(1.5, float(pt) / float(self.base_pt)))
 
+    @staticmethod
+    def _legacy_tuple(payload):
+        if isinstance(payload, tuple) and len(payload) == 5:
+            return payload
+        if isinstance(payload, dict):
+            ohlc = payload.get("ohlc")
+            if isinstance(ohlc, tuple) and len(ohlc) == 5:
+                return ohlc
+        return None
+
+    @staticmethod
+    def _trend_points(payload):
+        if not isinstance(payload, dict):
+            return []
+        points = []
+        for item in payload.get("points") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                minute = int(item.get("minute"))
+                price = float(item.get("price"))
+            except Exception:
+                continue
+            if minute < 0 or price <= 0:
+                continue
+            points.append({"minute": minute, "price": price})
+        points.sort(key=lambda item: item["minute"])
+        deduped = []
+        for item in points:
+            if deduped and deduped[-1]["minute"] == item["minute"]:
+                deduped[-1] = item
+            else:
+                deduped.append(item)
+        return deduped
+
+    def _paint_intraday(self, painter: QPainter, option, payload):
+        points = self._trend_points(payload)
+        if len(points) < 2:
+            return False
+
+        try:
+            prev_close = float(payload.get("prev_close") or 0.0)
+        except Exception:
+            prev_close = 0.0
+        prices = [item["price"] for item in points]
+        if prev_close > 0:
+            prices.append(prev_close)
+        low_price = min(prices)
+        high_price = max(prices)
+        if high_price <= low_price:
+            padding = max(abs(high_price) * 0.002, 0.001)
+            low_price -= padding
+            high_price += padding
+        else:
+            padding = max((high_price - low_price) * 0.08, abs(high_price) * 0.001, 0.001)
+            low_price -= padding
+            high_price += padding
+
+        cell = option.rect
+        rect = cell.adjusted(3, 2, -3, -2)
+        if rect.width() < 8 or rect.height() < 6:
+            return True
+
+        max_minute = max(1, int(payload.get("max_minute") or max(item["minute"] for item in points) or 1))
+
+        def y_for(price):
+            ratio = (float(price) - low_price) / (high_price - low_price)
+            return rect.bottom() - ratio * rect.height()
+
+        def x_for(minute):
+            ratio = max(0.0, min(1.0, float(minute) / float(max_minute)))
+            return rect.left() + ratio * rect.width()
+
+        latest = points[-1]["price"]
+        line_color = QColor(self.fg)
+        if self.default_color and prev_close > 0:
+            if latest > prev_close:
+                line_color = UP_COLOR
+            elif latest < prev_close:
+                line_color = DOWN_COLOR
+            else:
+                line_color = NEUTRAL_COLOR
+
+        painter.save()
+        painter.setClipRect(cell)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        if prev_close > 0:
+            dash_col = QColor(NEUTRAL_COLOR if self.default_color else self.fg)
+            dash_col.setAlpha(130)
+            y_prev = y_for(prev_close)
+            painter.setPen(QPen(dash_col, 1, Qt.DashLine))
+            painter.drawLine(QPointF(rect.left(), y_prev), QPointF(rect.right(), y_prev))
+
+        path = QPainterPath()
+        for index, item in enumerate(points):
+            point = QPointF(x_for(item["minute"]), y_for(item["price"]))
+            if index == 0:
+                path.moveTo(point)
+            else:
+                path.lineTo(point)
+        painter.setPen(QPen(line_color, 1.4))
+        painter.drawPath(path)
+        painter.setBrush(QBrush(line_color))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPointF(x_for(points[-1]["minute"]), y_for(latest)), 1.7, 1.7)
+        painter.restore()
+        return True
+
     def paint(self, painter: QPainter, option, index):
         k = index.data(Qt.UserRole)
-        if not k or not isinstance(k, tuple) or len(k) != 5:
+        if self._paint_intraday(painter, option, k):
+            return
+
+        legacy = self._legacy_tuple(k)
+        if not legacy:
             super().paint(painter, option, index)
             return
 
-        o, c, h, l, p = k
+        o, c, h, l, p = legacy
         if h < l: h, l = l, h
 
         cell = option.rect

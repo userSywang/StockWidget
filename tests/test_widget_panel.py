@@ -294,6 +294,86 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh512000"])
 
+    def test_intraday_request_codes_follow_visible_kline_column(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.checked_codes = ["sh600000", "sh512000"]
+        win.kline_visible = False
+
+        self.assertEqual(FloatLabel._intraday_request_codes(win), [])
+
+        win.kline_visible = True
+        self.assertEqual(FloatLabel._intraday_request_codes(win), ["sh600000", "sh512000"])
+
+    def test_parse_eastmoney_intraday_payload_maps_trading_minutes(self):
+        win = FloatLabel.__new__(FloatLabel)
+        payload = {
+            "data": {
+                "preClose": "10.00",
+                "trends": [
+                    "2026-08-13 09:30,10.00,10.10,10.10,10.00,100,1000,10.05",
+                    "2026-08-13 11:30,10.10,10.20,10.25,10.08,100,1000,10.12",
+                    "2026-08-13 13:00,10.20,10.15,10.22,10.12,100,1000,10.14",
+                    "2026-08-13 15:00,10.15,10.30,10.32,10.12,100,1000,10.20",
+                ],
+            }
+        }
+
+        trend = FloatLabel._parse_eastmoney_intraday_payload(win, payload)
+
+        self.assertEqual(trend["prev_close"], 10.0)
+        self.assertEqual([point["minute"] for point in trend["points"]], [0, 120, 121, 241])
+        self.assertEqual(trend["points"][-1]["price"], 10.30)
+
+    def test_intraday_payload_uses_external_points_and_latest_quote(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._today = lambda: date(2026, 8, 13)
+        win._now = lambda: datetime(2026, 8, 13, 10, 1)
+        win._intraday_sample_cache = {}
+
+        payload = FloatLabel._intraday_payload_for_code(
+            win,
+            "sh603259",
+            {"sh603259": {"price": 10.3, "open": 10.0, "high": 10.4, "low": 9.9, "prev_close": 10.0}},
+            {"sh603259": {"points": [{"minute": 0, "price": 10.1}, {"minute": 1, "price": 10.2}], "prev_close": 10.0}},
+        )
+
+        self.assertEqual(payload["type"], "intraday")
+        self.assertEqual(payload["prev_close"], 10.0)
+        self.assertEqual(payload["points"][-1], {"minute": 31, "price": 10.3})
+        self.assertEqual(payload["ohlc"], (10.0, 10.3, 10.4, 9.9, 10.0))
+
+    def test_compose_display_rows_replaces_kline_cell_with_intraday_payload(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = BASE_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.price_alert_badge_visible = True
+        win.strategy_alert_config = {"enabled": False}
+        win.code_tags = {}
+        win._today = lambda: date(2026, 8, 13)
+        win._now = lambda: datetime(2026, 8, 13, 9, 31)
+        win._intraday_sample_cache = {}
+        row = ["sh603259", "药明康德", "10.20", "+0.20", "+2.00%", "-", "-", "-", "0", "0", "10.10", {"k": (10.0, 10.2, 10.3, 9.9, 10.0)}]
+
+        rows, _meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 10.2, "open": 10.0, "high": 10.3, "low": 9.9, "prev_close": 10.0}},
+            {},
+            [],
+            {"sh603259": {"points": [{"minute": 0, "price": 10.0}, {"minute": 1, "price": 10.2}], "prev_close": 10.0}},
+        )
+
+        k_cell = rows[1][BASE_HEADERS.index("K线")]
+        self.assertEqual(k_cell["k"]["type"], "intraday")
+        self.assertEqual(k_cell["k"]["points"][-1], {"minute": 1, "price": 10.2})
+
     def test_kline_price_axis_uses_linear_price_mapping(self):
         from KLineChart import KLineChartWidget
 

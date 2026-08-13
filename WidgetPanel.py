@@ -108,6 +108,8 @@ class FloatLabel(QWidget):
         self._strategy_daily_summary_sent_date = str(cfg.get("strategy_daily_summary_sent_date") or "")
         self._latest_strategy_states = []
         self._daily_kline_cache = {}
+        self._intraday_trend_cache = {}
+        self._intraday_sample_cache = {}
         self._latest_daily_by_code = {}
         self._kline_chart_dialog = None
         self._kline_chart_code = ""
@@ -742,6 +744,11 @@ class FloatLabel(QWidget):
             "change_pct": change_pct,
             "volume": volume,
             "amount": amount,
+            "open": opening_price,
+            "high": high_price,
+            "low": low_price,
+            "prev_close": prev_close,
+            "avg": avg,
         }
         return row, sign, stored
 
@@ -1026,6 +1033,11 @@ class FloatLabel(QWidget):
                 "change_pct": change_pct,
                 "volume": deals_vol,
                 "amount": deals_amt,
+                "open": opening_price,
+                "high": high_price,
+                "low": low_price,
+                "prev_close": prev_close,
+                "avg": avg,
             }
 
         for code in requested_codes:
@@ -1098,6 +1110,11 @@ class FloatLabel(QWidget):
         if normalize_strategy_alert_config(config).get("enabled"):
             codes.extend(strategy_daily_request_codes(config))
         return normalize_codes(codes)
+
+    def _intraday_request_codes(self):
+        if not getattr(self, "kline_visible", False):
+            return []
+        return normalize_codes(getattr(self, "checked_codes", []))
 
     def _refresh_request_codes(self):
         return normalize_codes(
@@ -1192,6 +1209,98 @@ class FloatLabel(QWidget):
             except Exception:
                 continue
         return rows
+
+    @staticmethod
+    def _intraday_minute_index(time_text):
+        text = str(time_text or "").strip()
+        if " " in text:
+            text = text.split()[-1]
+        parts = text.split(":")
+        if len(parts) < 2:
+            return None
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1])
+        except Exception:
+            return None
+        total = hour * 60 + minute
+        if 9 * 60 + 30 <= total <= 11 * 60 + 30:
+            return total - (9 * 60 + 30)
+        if 13 * 60 <= total <= 15 * 60:
+            return 121 + total - (13 * 60)
+        return None
+
+    def _parse_eastmoney_intraday_payload(self, payload):
+        data = (payload or {}).get("data") or {}
+        trends = data.get("trends") or []
+        points = []
+        prev_close = 0.0
+        try:
+            prev_close = float(data.get("preClose") or data.get("pre_close") or 0.0)
+        except Exception:
+            prev_close = 0.0
+        for raw in trends:
+            parts = str(raw or "").split(",")
+            if len(parts) < 3:
+                continue
+            minute = self._intraday_minute_index(parts[0])
+            if minute is None:
+                continue
+            try:
+                price = float(parts[2] or 0.0)
+            except Exception:
+                continue
+            if price <= 0:
+                continue
+            point = {"minute": minute, "price": price}
+            if len(parts) > 7:
+                try:
+                    avg = float(parts[7] or 0.0)
+                    if avg > 0:
+                        point["avg"] = avg
+                except Exception:
+                    pass
+            points.append(point)
+        points.sort(key=lambda item: item["minute"])
+        return {"points": points, "prev_close": prev_close, "max_minute": 241}
+
+    def _get_eastmoney_intraday_trend(self, code):
+        getter = getattr(getattr(self, "_http", None), "get", requests.get)
+        secid = self._eastmoney_secid(code)
+        if not secid:
+            return {}
+        headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/trends2/get"
+            f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11"
+            "&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&iscca=0&ndays=1"
+        )
+        response = getter(url, headers=headers, timeout=5)
+        return self._parse_eastmoney_intraday_payload(response.json())
+
+    def _get_intraday_trends(self, codes):
+        result = {}
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        cache = getattr(self, "_intraday_trend_cache", {})
+        if not isinstance(cache, dict):
+            cache = {}
+        for code in normalize_codes(codes):
+            cached = cache.get(code)
+            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < 45:
+                result[code] = cached.get("trend", {})
+                continue
+            try:
+                trend = self._get_eastmoney_intraday_trend(code)
+            except Exception:
+                trend = {}
+            if trend and trend.get("points"):
+                trend["date"] = today_key
+                result[code] = trend
+                cache[code] = {"date": today_key, "time": time.monotonic(), "trend": trend}
+        self._intraday_trend_cache = cache
+        return result
 
     @staticmethod
     def _baostock_code(code):
@@ -1297,7 +1406,90 @@ class FloatLabel(QWidget):
                 daily_by_code = self._get_daily_klines(daily_codes, limit=limit)
             except Exception:
                 daily_by_code = {}
-        return row_by_code, sign_by_code, quote_by_code, daily_by_code
+        intraday_by_code = {}
+        intraday_codes = self._intraday_request_codes()
+        if intraday_codes:
+            intraday_by_code = self._get_intraday_trends(intraday_codes)
+        return row_by_code, sign_by_code, quote_by_code, daily_by_code, intraday_by_code
+
+    def _record_intraday_quote_samples(self, quote_by_code):
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        now_provider = getattr(self, "_now", None)
+        now_dt = now_provider() if callable(now_provider) else datetime.now()
+        minute_text = now_dt.strftime("%H:%M") if hasattr(now_dt, "strftime") else ""
+        minute = self._intraday_minute_index(minute_text)
+        if minute is None:
+            return
+        cache = getattr(self, "_intraday_sample_cache", {})
+        if not isinstance(cache, dict):
+            cache = {}
+        for code, quote in (quote_by_code or {}).items():
+            try:
+                price = float((quote or {}).get("price", 0.0))
+            except Exception:
+                price = 0.0
+            if price <= 0:
+                continue
+            item = cache.get(code)
+            if not item or item.get("date") != today_key:
+                item = {"date": today_key, "points": []}
+            points = [dict(point) for point in item.get("points", []) if isinstance(point, dict)]
+            if points and points[-1].get("minute") == minute:
+                points[-1] = {"minute": minute, "price": price}
+            else:
+                points.append({"minute": minute, "price": price})
+            item["points"] = points[-242:]
+            cache[code] = item
+        self._intraday_sample_cache = cache
+
+    def _intraday_payload_for_code(self, code, quote_by_code=None, intraday_by_code=None):
+        quote = (quote_by_code or {}).get(code) or {}
+        external = (intraday_by_code or {}).get(code) or {}
+        points = [dict(point) for point in external.get("points", []) if isinstance(point, dict)]
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        sample = (getattr(self, "_intraday_sample_cache", {}) or {}).get(code) or {}
+        if sample.get("date") == today_key:
+            points.extend(dict(point) for point in sample.get("points", []) if isinstance(point, dict))
+        try:
+            current_price = float(quote.get("price", 0.0) or 0.0)
+            opening_price = float(quote.get("open", current_price) or current_price)
+            high_price = float(quote.get("high", max(opening_price, current_price)) or current_price)
+            low_price = float(quote.get("low", min(opening_price, current_price)) or current_price)
+            prev_close = float(quote.get("prev_close", 0.0) or external.get("prev_close", 0.0) or 0.0)
+        except Exception:
+            return {}
+        if current_price > 0:
+            now_provider = getattr(self, "_now", None)
+            now_dt = now_provider() if callable(now_provider) else datetime.now()
+            minute = self._intraday_minute_index(now_dt.strftime("%H:%M") if hasattr(now_dt, "strftime") else "")
+            if minute is not None:
+                points.append({"minute": minute, "price": current_price})
+            if not points:
+                points.append({"minute": 0, "price": opening_price if opening_price > 0 else current_price})
+                points.append({"minute": 1, "price": current_price})
+        deduped = {}
+        for point in points:
+            try:
+                minute = int(point.get("minute"))
+                price = float(point.get("price"))
+            except Exception:
+                continue
+            if minute >= 0 and price > 0:
+                deduped[minute] = {"minute": minute, "price": price}
+        points = [deduped[key] for key in sorted(deduped)]
+        if len(points) < 2:
+            return {}
+        return {
+            "type": "intraday",
+            "points": points[-242:],
+            "prev_close": prev_close,
+            "max_minute": 241,
+            "ohlc": (opening_price, current_price, high_price, low_price, prev_close),
+        }
 
     def _daily_rows_with_realtime_price(self, daily_by_code, quote_by_code):
         today_provider = getattr(self, "_today", None)
@@ -1325,7 +1517,7 @@ class FloatLabel(QWidget):
             result[code] = merged
         return result
 
-    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None, daily_by_code=None, strategy_states=None):
+    def _compose_display_rows(self, row_by_code, sign_by_code, alert_states, price_alerts_by_code=None, quote_by_code=None, daily_by_code=None, strategy_states=None, intraday_by_code=None):
         full_rows, meta_rows = [], []
         checked = set(getattr(self, "checked_codes", []))
         alert_rows_added = False
@@ -1360,7 +1552,7 @@ class FloatLabel(QWidget):
                 strategy_triggered = bool(strategy_state and strategy_state.get("triggered"))
                 if strategy_triggered:
                     badges.append("策略")
-                full_rows.append(self._display_row_with_indicators(source_row, code, daily_by_code, strategy_by_code, badges))
+                full_rows.append(self._display_row_with_indicators(source_row, code, daily_by_code, strategy_by_code, badges, quote_by_code, intraday_by_code))
                 meta_rows.append(meta)
 
         market_amount_text = self._format_market_amount(quote_by_code or {})
@@ -1395,7 +1587,7 @@ class FloatLabel(QWidget):
 
         return full_rows, meta_rows
 
-    def _display_row_with_indicators(self, row, code, daily_by_code=None, strategy_by_code=None, badges=None):
+    def _display_row_with_indicators(self, row, code, daily_by_code=None, strategy_by_code=None, badges=None, quote_by_code=None, intraday_by_code=None):
         result = list(row or [])
         if len(result) < len(self.ALL_HEADERS):
             result.extend(["-"] * (len(self.ALL_HEADERS) - len(result)))
@@ -1415,6 +1607,10 @@ class FloatLabel(QWidget):
                 if text and text != "-":
                     result[target_index] = f"{text} {label_text}"
         daily_rows = (daily_by_code or {}).get(code)
+        if "K线" in self.ALL_HEADERS:
+            trend_payload = self._intraday_payload_for_code(code, quote_by_code, intraday_by_code)
+            if trend_payload:
+                result[self.ALL_HEADERS.index("K线")] = {"k": trend_payload}
         ma_values = {
             "MA5": moving_average(daily_rows, 5),
             "MA10": moving_average(daily_rows, 10),
@@ -2081,8 +2277,13 @@ class FloatLabel(QWidget):
             self._refresh_previous_quotes = dict(getattr(self, "_latest_quotes", {}))
             executor = getattr(self, "_refresh_executor", None)
             if executor is None:
-                row_by_code, sign_by_code, quote_by_code, daily_by_code = self._get_refresh_data(request_codes)
-                self._apply_refresh_result(row_by_code, sign_by_code, quote_by_code, self._refresh_previous_quotes, daily_by_code)
+                result = self._get_refresh_data(request_codes)
+                if len(result) == 4:
+                    row_by_code, sign_by_code, quote_by_code, daily_by_code = result
+                    intraday_by_code = {}
+                else:
+                    row_by_code, sign_by_code, quote_by_code, daily_by_code, intraday_by_code = result
+                self._apply_refresh_result(row_by_code, sign_by_code, quote_by_code, self._refresh_previous_quotes, daily_by_code, intraday_by_code)
                 return
             self._refresh_future = executor.submit(self._get_refresh_data, request_codes)
             self._poll_refresh_future()
@@ -2136,13 +2337,19 @@ class FloatLabel(QWidget):
 
         self._refresh_future = None
         try:
-            row_by_code, sign_by_code, quote_by_code, daily_by_code = future.result()
+            result = future.result()
+            if len(result) == 4:
+                row_by_code, sign_by_code, quote_by_code, daily_by_code = result
+                intraday_by_code = {}
+            else:
+                row_by_code, sign_by_code, quote_by_code, daily_by_code, intraday_by_code = result
             self._apply_refresh_result(
                 row_by_code,
                 sign_by_code,
                 quote_by_code,
                 getattr(self, "_refresh_previous_quotes", {}),
                 daily_by_code,
+                intraday_by_code,
             )
         except Exception as e:
             try:
@@ -2154,8 +2361,9 @@ class FloatLabel(QWidget):
             except Exception:
                 self._show_error(str(e))
 
-    def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None):
+    def _apply_refresh_result(self, row_by_code, sign_by_code, quote_by_code, previous_quotes, daily_by_code=None, intraday_by_code=None):
         alert_states = evaluate_alert_rules(self.alert_rules, quote_by_code, previous_quotes)
+        self._record_intraday_quote_samples(quote_by_code)
         daily_by_code = self._daily_rows_with_realtime_price(daily_by_code or {}, quote_by_code)
         self._latest_daily_by_code = dict(daily_by_code or {})
         dialog = getattr(self, "_kline_chart_dialog", None)
@@ -2182,7 +2390,7 @@ class FloatLabel(QWidget):
             daily_summary_sent = False
             strategy_states = []
             self._latest_strategy_states = []
-        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code, daily_by_code, strategy_states)
+        full_rows, sign = self._compose_display_rows(row_by_code, sign_by_code, alert_states, price_alert_states, quote_by_code, daily_by_code, strategy_states, intraday_by_code)
         self._latest_quotes = quote_by_code
         learned_names = False
         for code, quote in (quote_by_code or {}).items():
