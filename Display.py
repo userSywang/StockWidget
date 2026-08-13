@@ -73,6 +73,7 @@ class SimpleTableModel(QAbstractTableModel):
         if role == Qt.ForegroundRole:
             meta = self._row_meta[r] if 0 <= r < len(self._row_meta) else {}
             row_type = meta.get("row_type")
+            header = self._headers[c] if 0 <= c < len(self._headers) else ""
             if row_type == "group":
                 c = QColor(self.fg_color)
                 c.setAlpha(210)
@@ -86,8 +87,11 @@ class SimpleTableModel(QAbstractTableModel):
                 c = QColor(self.fg_color)
                 c.setAlpha(0)
                 return c
+            if header in ("名称", "代码"):
+                note_color = QColor(str(meta.get("stock_note_color") or ""))
+                if note_color.isValid():
+                    return note_color
             if meta.get("strategy"):
-                header = self._headers[c] if 0 <= c < len(self._headers) else ""
                 if header == "策略状态":
                     if meta.get("severity") == "danger":
                         return UP_COLOR
@@ -98,7 +102,6 @@ class SimpleTableModel(QAbstractTableModel):
             if not self.default_color:
                 return self.fg_color
 
-            header = self._headers[c] if 0 <= c < len(self._headers) else ""
             sign = 0
             if header in ("涨跌值", "涨跌幅", "现价"):
                 sign = int(meta.get("delta", 0))

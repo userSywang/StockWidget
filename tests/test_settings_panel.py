@@ -299,6 +299,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertIn("[压力18.80…]", code_item.text(0))
         dlg.close()
 
+    def test_code_note_editor_is_compact_and_saves_note_color(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+        code_item = dlg.tree_codes.topLevelItem(0).child(0)
+        dlg.tree_codes.setCurrentItem(code_item)
+
+        dlg.edit_code_note.setText("压力18.80")
+        dlg._on_code_note_changed()
+        dlg.cmb_code_note_color.setCurrentIndex(dlg.cmb_code_note_color.findData("#f0c36a"))
+
+        self.assertLessEqual(dlg.edit_code_note.width(), 180)
+        self.assertEqual(win.code_notes["sh603259"], "压力18.80")
+        self.assertEqual(win.code_tags["sh603259"]["note_color"], "#f0c36a")
+        dlg.close()
+
     def test_appearance_page_updates_edge_auto_hide(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
@@ -307,6 +326,19 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.chk_edge_auto_hide.setChecked(True)
 
         self.assertTrue(win.edge_auto_hide_enabled)
+        dlg.close()
+
+    def test_appearance_color_controls_keep_readable_width(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentIndex(3)
+        dlg.show()
+        self.app.processEvents()
+
+        self.assertGreaterEqual(dlg.btn_fg.width(), 108)
+        self.assertGreaterEqual(dlg.btn_bg.width(), 108)
+        self.assertGreaterEqual(dlg.slider_bg_alpha.width(), 150)
+        self.assertGreaterEqual(dlg.slider_win_opacity.width(), 150)
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):

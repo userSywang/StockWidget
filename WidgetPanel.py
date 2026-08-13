@@ -335,10 +335,14 @@ class FloatLabel(QWidget):
             holding = str(raw_tags.get("holding") or "").strip()
             cycle = str(raw_tags.get("cycle") or "").strip()
             priority = str(raw_tags.get("priority") or "").strip()
+            note_color = str(raw_tags.get("note_color") or "").strip()
+            if note_color and not QColor(note_color).isValid():
+                note_color = ""
             item = {
                 "holding": holding if holding in allowed_holding else "",
                 "cycle": cycle if cycle in allowed_cycle else "",
                 "priority": priority if priority in allowed_priority else "",
+                "note_color": note_color,
             }
             if any(item.values()):
                 normalized[code] = item
@@ -1594,6 +1598,9 @@ class FloatLabel(QWidget):
                 note = (getattr(self, "code_notes", {}) or {}).get(code, "")
                 if note:
                     meta["stock_note"] = note
+                    note_color = self._code_note_color(code)
+                    if note_color:
+                        meta["stock_note_color"] = note_color
                 if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
                     meta["price_alerts"] = price_alerts_by_code[code]
                 badges = []
@@ -1757,6 +1764,14 @@ class FloatLabel(QWidget):
             self._compact_code_note_label(note),
         ]
         return "/".join(part for part in parts if part)
+
+    def _code_note_color(self, code):
+        tags = getattr(self, "code_tags", {})
+        if not isinstance(tags, dict):
+            return ""
+        item = tags.get(code) if isinstance(tags.get(code), dict) else {}
+        color = str(item.get("note_color") or "").strip()
+        return color if color and QColor(color).isValid() else ""
 
     @staticmethod
     def _compact_code_note_label(note, max_chars=8):

@@ -120,7 +120,19 @@ class SettingsDialog(QDialog):
         self.edit_code_note = QLineEdit()
         self.edit_code_note.setPlaceholderText("备注，可空")
         self.edit_code_note.setMaxLength(80)
-        self.edit_code_note.setMinimumWidth(120)
+        self.edit_code_note.setFixedWidth(160)
+        self.cmb_code_note_color = QComboBox()
+        self.cmb_code_note_color.setFixedWidth(88)
+        for label, color in (
+            ("默认色", ""),
+            ("红色", "#dd2100"),
+            ("绿色", "#019933"),
+            ("黄色", "#f0c36a"),
+            ("蓝色", "#2563eb"),
+            ("紫色", "#9333ea"),
+            ("灰色", "#6b7280"),
+        ):
+            self.cmb_code_note_color.addItem(label, userData=color)
 
         g_code_tags = QGroupBox("标的标识")
         g_code_tags.setContentsMargins(3, 12, 3, 6)
@@ -135,7 +147,9 @@ class SettingsDialog(QDialog):
         tag_lay.addWidget(QLabel("级别"), 0, 4)
         tag_lay.addWidget(self.cmb_code_priority, 0, 5)
         tag_lay.addWidget(QLabel("备注"), 1, 0)
-        tag_lay.addWidget(self.edit_code_note, 1, 1, 1, 5)
+        tag_lay.addWidget(self.edit_code_note, 1, 1, 1, 2)
+        tag_lay.addWidget(QLabel("颜色"), 1, 3)
+        tag_lay.addWidget(self.cmb_code_note_color, 1, 4)
         tag_lay.setColumnStretch(5, 1)
 
         lay_codes.addWidget(self.tree_codes, 1)
@@ -1114,11 +1128,11 @@ class SettingsDialog(QDialog):
         self.chk_default_color.setChecked(self.win.default_color)
         # 3.2 按钮：文字颜色
         self.btn_fg = QPushButton("文字颜色…")
-        self.btn_fg.setFixedWidth(90)
+        self.btn_fg.setMinimumWidth(108)
         self.btn_fg.setEnabled(not self.win.default_color)
         # 3.3 按钮：背景颜色
         self.btn_bg = QPushButton("背景颜色…")
-        self.btn_bg.setFixedWidth(90)
+        self.btn_bg.setMinimumWidth(108)
         # 3.4 滑块：背景不透明度
         self.slider_bg_alpha = QSlider(Qt.Horizontal)
         self.slider_bg_alpha.setRange(1, 100)
@@ -1132,15 +1146,16 @@ class SettingsDialog(QDialog):
         self.slider_win_opacity.setValue(int(round(self.win.windowOpacity()*100)))
         self.lbl_win_opacity = QLabel(f"{self.slider_win_opacity.value()}%")
 
-        gl_color.addWidget(self.chk_default_color,0,0,1,2)
-        gl_color.addWidget(self.btn_fg,0,2,1,2)
-        gl_color.addWidget(self.btn_bg,0,4,1,2)
-        gl_color.addWidget(QLabel("背景不透明度："),1,0,1,2)
-        gl_color.addWidget(self.slider_bg_alpha,1,2,1,3)
-        gl_color.addWidget(self.lbl_bg_alpha,1,5,1,1)
-        gl_color.addWidget(QLabel("整体不透明度："),2,0,1,2)
-        gl_color.addWidget(self.slider_win_opacity,2,2,1,3)
-        gl_color.addWidget(self.lbl_win_opacity,2,5,1,1)
+        gl_color.addWidget(self.chk_default_color,0,0,1,1)
+        gl_color.addWidget(self.btn_fg,0,1,1,1)
+        gl_color.addWidget(self.btn_bg,0,2,1,1)
+        gl_color.addWidget(QLabel("背景不透明度："),1,0,1,1)
+        gl_color.addWidget(self.slider_bg_alpha,1,1,1,2)
+        gl_color.addWidget(self.lbl_bg_alpha,1,3,1,1)
+        gl_color.addWidget(QLabel("整体不透明度："),2,0,1,1)
+        gl_color.addWidget(self.slider_win_opacity,2,1,1,2)
+        gl_color.addWidget(self.lbl_win_opacity,2,3,1,1)
+        gl_color.setColumnStretch(2, 1)
         appearance_settings.addWidget(g_color)
 
         # 4.字体/行距
@@ -1240,6 +1255,7 @@ class SettingsDialog(QDialog):
         self.cmb_code_holding.currentIndexChanged.connect(self._on_code_tag_changed)
         self.cmb_code_cycle.currentIndexChanged.connect(self._on_code_tag_changed)
         self.cmb_code_priority.currentIndexChanged.connect(self._on_code_tag_changed)
+        self.cmb_code_note_color.currentIndexChanged.connect(self._on_code_tag_changed)
         self.edit_code_note.editingFinished.connect(self._on_code_note_changed)
         self.list_alerts.currentRowChanged.connect(self._on_alert_selected)
         self.btn_alert_add.clicked.connect(self._add_alert_rule)
@@ -1584,11 +1600,13 @@ class SettingsDialog(QDialog):
             self._set_combo_data(self.cmb_code_holding, item.get("holding", ""))
             self._set_combo_data(self.cmb_code_cycle, item.get("cycle", ""))
             self._set_combo_data(self.cmb_code_priority, item.get("priority", ""))
+            self._set_combo_data(self.cmb_code_note_color, item.get("note_color", ""))
             self.edit_code_note.setText(str(notes.get(code) or "") if code else "")
             enabled = bool(code)
             self.cmb_code_holding.setEnabled(enabled)
             self.cmb_code_cycle.setEnabled(enabled)
             self.cmb_code_priority.setEnabled(enabled)
+            self.cmb_code_note_color.setEnabled(enabled)
             self.edit_code_note.setEnabled(enabled)
         finally:
             self._loading_code_tag_editor = False
@@ -1604,6 +1622,7 @@ class SettingsDialog(QDialog):
             "holding": self.cmb_code_holding.currentData() or "",
             "cycle": self.cmb_code_cycle.currentData() or "",
             "priority": self.cmb_code_priority.currentData() or "",
+            "note_color": self.cmb_code_note_color.currentData() or "",
         }
         if any(tags.values()):
             code_tags[code] = tags

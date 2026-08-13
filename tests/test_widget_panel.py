@@ -6,9 +6,10 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt, QRect
-from PySide6.QtGui import QHideEvent
+from PySide6.QtGui import QColor, QHideEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
+from Display import SimpleTableModel
 from WidgetPanel import FloatLabel
 
 
@@ -977,6 +978,37 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("[压力18.80…]", name_text)
         self.assertEqual(rows[1][NOTE_HEADERS.index("备注")], "-")
         self.assertEqual(meta[1]["stock_note"], "压力18.80 等回踩")
+
+    def test_compose_display_rows_carries_stock_note_color(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.ALL_HEADERS = NOTE_HEADERS
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.checked_codes = ["sh603259"]
+        win.warning_visible = False
+        win.warning_text = ""
+        win.market_amount_visible = False
+        win.strategy_alert_config = {"enabled": False}
+        win.code_tags = {"sh603259": {"note_color": "#2563eb"}}
+        win.code_notes = {"sh603259": "压力18.80"}
+        row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+
+        rows, meta = FloatLabel._compose_display_rows(
+            win,
+            {"sh603259": row},
+            {"sh603259": {"delta": 1}},
+            [],
+            {},
+            {"sh603259": {"price": 112.0}},
+            {},
+            [],
+        )
+
+        name_col = NOTE_HEADERS.index("名称")
+        model = SimpleTableModel(rows, NOTE_HEADERS)
+        model.set_rows_headers(rows, NOTE_HEADERS, meta)
+        self.assertIn("[压力18.80]", rows[1][name_col])
+        self.assertEqual(meta[1]["stock_note_color"], "#2563eb")
+        self.assertEqual(model.data(model.index(1, name_col), Qt.ForegroundRole), QColor("#2563eb"))
 
     def test_note_column_stays_hidden_after_market_close(self):
         cfg = {
