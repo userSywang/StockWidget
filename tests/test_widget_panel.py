@@ -294,21 +294,12 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(codes, ["sh512000"])
 
-    def test_intraday_request_codes_fetch_missing_and_stale_cache_only(self):
+    def test_intraday_request_codes_do_not_add_extra_network_requests(self):
         win = FloatLabel.__new__(FloatLabel)
-        win._today = lambda: date(2026, 8, 13)
-        win.checked_codes = ["sh600000", "sh512000", "sh603259"]
+        win.checked_codes = ["sh600000", "sh512000"]
         win.kline_visible = True
-        win._intraday_trend_cache = {
-            "sh600000": {"date": "2026-08-13", "time": 1000.0, "trend": {"points": [{"minute": 0, "price": 10.0}]}},
-            "sh512000": {"date": "2026-08-13", "time": 100.0, "trend": {"points": [{"minute": 0, "price": 1.0}]}},
-        }
 
-        with patch("WidgetPanel.time.monotonic", return_value=1200.0):
-            self.assertEqual(FloatLabel._intraday_request_codes(win), ["sh603259"])
-
-        with patch("WidgetPanel.time.monotonic", return_value=3000.0):
-            self.assertEqual(FloatLabel._intraday_request_codes(win), ["sh600000", "sh512000", "sh603259"])
+        self.assertEqual(FloatLabel._intraday_request_codes(win), [])
 
     def test_intraday_request_codes_disabled_when_kline_hidden(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -318,14 +309,10 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(FloatLabel._intraday_request_codes(win), [])
 
-    def test_get_refresh_data_fetches_due_intraday_trends_only(self):
+    def test_get_refresh_data_does_not_fetch_intraday_trends(self):
         win = FloatLabel.__new__(FloatLabel)
         win.kline_visible = True
-        win.checked_codes = ["sh600000", "sh603259"]
-        win._today = lambda: date(2026, 8, 13)
-        win._intraday_trend_cache = {
-            "sh600000": {"date": "2026-08-13", "time": 1000.0, "trend": {"points": [{"minute": 0, "price": 10.0}]}},
-        }
+        win.checked_codes = ["sh603259"]
         win.price_alerts = []
         win.ma5_visible = False
         win.ma10_visible = False
@@ -333,14 +320,11 @@ class WidgetPanelTests(unittest.TestCase):
         win._kline_chart_code = ""
         win.strategy_alert_config = {"enabled": False}
         win._get_price = lambda codes: ({}, {}, {})
-        calls = []
-        win._get_intraday_trends = lambda codes: calls.append(list(codes)) or {"sh603259": {"points": [{"minute": 0, "price": 10.0}]}}
+        win._get_intraday_trends = lambda codes: (_ for _ in ()).throw(AssertionError("should not fetch intraday trends"))
 
-        with patch("WidgetPanel.time.monotonic", return_value=1200.0):
-            result = FloatLabel._get_refresh_data(win, ["sh603259"])
+        result = FloatLabel._get_refresh_data(win, ["sh603259"])
 
-        self.assertEqual(calls, [["sh603259"]])
-        self.assertIn("sh603259", result[4])
+        self.assertEqual(result[4], {})
 
     def test_parse_eastmoney_intraday_payload_maps_trading_minutes(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -395,7 +379,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(payload["points"], [{"minute": 0, "price": 10.0}, {"minute": 1, "price": 10.2}])
 
-    def test_compose_display_rows_replaces_kline_cell_with_intraday_payload(self):
+    def test_compose_display_rows_keeps_intraday_candlestick_payload(self):
         win = FloatLabel.__new__(FloatLabel)
         win.ALL_HEADERS = BASE_HEADERS
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
@@ -406,9 +390,6 @@ class WidgetPanelTests(unittest.TestCase):
         win.price_alert_badge_visible = True
         win.strategy_alert_config = {"enabled": False}
         win.code_tags = {}
-        win._today = lambda: date(2026, 8, 13)
-        win._now = lambda: datetime(2026, 8, 13, 9, 31)
-        win._intraday_sample_cache = {}
         row = ["sh603259", "药明康德", "10.20", "+0.20", "+2.00%", "-", "-", "-", "0", "0", "10.10", {"k": (10.0, 10.2, 10.3, 9.9, 10.0)}]
 
         rows, _meta = FloatLabel._compose_display_rows(
@@ -424,8 +405,7 @@ class WidgetPanelTests(unittest.TestCase):
         )
 
         k_cell = rows[1][BASE_HEADERS.index("K线")]
-        self.assertEqual(k_cell["k"]["type"], "intraday")
-        self.assertEqual(k_cell["k"]["points"][-1], {"minute": 1, "price": 10.2})
+        self.assertEqual(k_cell["k"], (10.0, 10.2, 10.3, 9.9, 10.0))
 
     def test_kline_price_axis_uses_linear_price_mapping(self):
         from KLineChart import KLineChartWidget
@@ -1111,7 +1091,7 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
-    def test_kline_column_uses_compact_trend_canvas_size(self):
+    def test_kline_column_uses_compact_candle_canvas_size(self):
         cfg = {
             "groups": [{"name": "默认", "codes": ["sh603259"]}],
             "checked_codes": ["sh603259"],
@@ -1122,7 +1102,7 @@ class WidgetPanelTests(unittest.TestCase):
             win = FloatLabel(cfg)
         try:
             full_rows, meta = win._compose_display_rows(
-                {"sh603259": ["sh603259", "药明康德", "10.20", "+0.20", "+2.00%", "-", "-", "-", "0", "0", "10.10", {"k": {"type": "intraday", "points": [{"minute": 0, "price": 10.0}, {"minute": 1, "price": 10.2}], "prev_close": 10.0}}]},
+                {"sh603259": ["sh603259", "药明康德", "10.20", "+0.20", "+2.00%", "-", "-", "-", "0", "0", "10.10", {"k": (10.0, 10.2, 10.2, 10.0, 10.0)}]},
                 {"sh603259": {"delta": 1}},
                 [],
                 quote_by_code={"sh603259": {"price": 10.2, "open": 10.0, "high": 10.2, "low": 10.0, "prev_close": 10.0}},
@@ -1131,8 +1111,9 @@ class WidgetPanelTests(unittest.TestCase):
             self.app.processEvents()
 
             col = win.model._headers.index("K线")
-            self.assertGreaterEqual(win.table.columnWidth(col), 104)
-            self.assertGreaterEqual(win.table.rowHeight(1), 26)
+            self.assertGreaterEqual(win.table.columnWidth(col), 58)
+            self.assertLessEqual(win.table.columnWidth(col), 72)
+            self.assertGreaterEqual(win.table.rowHeight(1), 30)
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

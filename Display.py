@@ -355,18 +355,24 @@ class KLineDelegate(QStyledItemDelegate):
         if h < l: h, l = l, h
 
         cell = option.rect
-        rect = cell.adjusted(2, 2, -2, -2)
+        rect = cell.adjusted(3, 2, -3, -2)
 
         sc = max(0.5, min(1.5, self.scale))
-        vpad = max(2, int(rect.height() * (0.12 + 0.06 * (sc - 1))))   # ~12%~18%
-        h_eff = max(2, rect.height() - 2 * vpad)
+        vpad = max(2, int(rect.height() * 0.08))
+        h_eff = max(6, rect.height() - 2 * vpad)
         krect = QRect(rect.left(), rect.top() + vpad, rect.width(), h_eff)
 
+        low_bound = min(o, c, h, l, p)
+        high_bound = max(o, c, h, l, p)
+        if high_bound <= low_bound:
+            pad = max(abs(high_bound) * 0.002, 0.001)
+        else:
+            pad = max((high_bound - low_bound) * 0.08, abs(high_bound) * 0.001, 0.001)
+        low_bound -= pad
+        high_bound += pad
+
         def y_for(v):
-            if h == l == p:
-                y = 0.5
-            else:
-                y = (v - min(l,p)) / (max(h,p) - min(l,p))
+            y = (v - low_bound) / (high_bound - low_bound)
             return krect.top() + (1 - y) * krect.height()
 
         y_o, y_c, y_h, y_l, y_p = (y_for(o), y_for(c), y_for(h), y_for(l), y_for(p))
@@ -375,14 +381,14 @@ class KLineDelegate(QStyledItemDelegate):
         painter.setClipRect(cell)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        body_w = max(5, min(int(krect.width() * 0.4 * sc), 10))
+        body_w = max(8, min(int(krect.width() * 0.34 * sc), 18))
         x = krect.center().x()
 
         # 昨收虚线
         dash_col = QColor(NEUTRAL_COLOR if self.default_color else self.fg)
-        dash_col.setAlpha(180)
+        dash_col.setAlpha(120)
         painter.setPen(QPen(dash_col, 1, Qt.DashLine))
-        painter.drawLine(x - body_w, y_p, x + body_w, y_p)
+        painter.drawLine(QPointF(krect.left(), y_p), QPointF(krect.right(), y_p))
 
         kcolor = self.fg
         if self.default_color:
@@ -394,22 +400,24 @@ class KLineDelegate(QStyledItemDelegate):
                 kcolor = NEUTRAL_COLOR
 
         top, bot = min(y_o, y_c), max(y_o, y_c)
-        body_h = max(2, bot - top)
+        body_h = max(3, bot - top)
         body_x = x - body_w // 2
 
-        painter.setPen(QPen(kcolor, 1))
+        painter.setPen(QPen(kcolor, 1.4))
         if c != o:
             # 实体
             painter.drawRect(body_x, top, body_w, body_h)
         else:
             # 一字实体
-            painter.drawLine(body_x, y_c, body_x+body_w, y_c)
+            painter.setPen(QPen(kcolor, 1.8))
+            painter.drawLine(QPointF(body_x, y_c), QPointF(body_x + body_w, y_c))
+            painter.setPen(QPen(kcolor, 1.4))
         if y_h < top:
             # 上影线
-            painter.drawLine(x, y_h, x, top)
+            painter.drawLine(QPointF(x, y_h), QPointF(x, top))
         if y_l > bot:
             # 下影线
-            painter.drawLine(x, bot, x, y_l)
+            painter.drawLine(QPointF(x, bot), QPointF(x, y_l))
         if c < o: 
             # 填充实体（空阳线）
             painter.fillRect(body_x, top, body_w, body_h, QBrush(kcolor))

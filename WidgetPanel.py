@@ -34,7 +34,6 @@ from StockLogic import (
 
 STRATEGY_DAILY_SUMMARY_SLOTS = ((9, 0, "09:00"), (18, 0, "18:00"))
 STRATEGY_DAILY_SUMMARY_GRACE_MINUTES = 10
-INTRADAY_TREND_REFRESH_SECONDS = 30 * 60
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
@@ -476,7 +475,7 @@ class FloatLabel(QWidget):
         fm = self.table.fontMetrics()
         h = fm.height() + max(0, self.line_extra_px)
         has_trend_column = "K线" in (getattr(self.model, "_headers", []) or [])
-        trend_h = max(h, 26, int(fm.height() * 1.75))
+        trend_h = max(h, 30, int(fm.height() * 1.9))
         span_width = max(40, sum(self.table.columnWidth(c) for c in range(self.model.columnCount())) - 8)
         self.table.verticalHeader().setDefaultSectionSize(h)
         for r in range(self.model.rowCount()):
@@ -539,7 +538,7 @@ class FloatLabel(QWidget):
                     continue
                 cell = row[c] if c < len(row) else ""
                 if isinstance(cell, dict) and "k" in cell:
-                    cell_width = 104
+                    cell_width = 58
                 else:
                     cell_width = body_fm.horizontalAdvance(str(cell)) + 12
                     if header == "名称":
@@ -1115,33 +1114,8 @@ class FloatLabel(QWidget):
         return normalize_codes(codes)
 
     def _intraday_request_codes(self):
-        if not getattr(self, "kline_visible", False):
-            return []
-        try:
-            if hasattr(self, "table") and callable(getattr(self, "isVisible", None)) and not self.isVisible():
-                return []
-        except Exception:
-            pass
-        today_provider = getattr(self, "_today", None)
-        today = today_provider() if callable(today_provider) else date.today()
-        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
-        cache = getattr(self, "_intraday_trend_cache", {})
-        if not isinstance(cache, dict):
-            cache = {}
-        now_mono = time.monotonic()
-        codes = []
-        for code in normalize_codes(getattr(self, "checked_codes", [])):
-            cached = cache.get(code)
-            if not cached or cached.get("date") != today_key:
-                codes.append(code)
-                continue
-            try:
-                age = now_mono - float(cached.get("time", 0.0) or 0.0)
-            except Exception:
-                age = INTRADAY_TREND_REFRESH_SECONDS
-            if age >= INTRADAY_TREND_REFRESH_SECONDS:
-                codes.append(code)
-        return codes
+        # 浮窗 K 线使用实时行情里的当日 OHLC 蜡烛图，不额外请求分时走势。
+        return []
 
     def _refresh_request_codes(self):
         return normalize_codes(
@@ -1315,7 +1289,7 @@ class FloatLabel(QWidget):
             cache = {}
         for code in normalize_codes(codes):
             cached = cache.get(code)
-            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < INTRADAY_TREND_REFRESH_SECONDS:
+            if cached and cached.get("date") == today_key and time.monotonic() - cached.get("time", 0.0) < 45:
                 result[code] = cached.get("trend", {})
                 continue
             try:
@@ -1640,10 +1614,6 @@ class FloatLabel(QWidget):
                 if text and text != "-":
                     result[target_index] = f"{text} {label_text}"
         daily_rows = (daily_by_code or {}).get(code)
-        if "K线" in self.ALL_HEADERS:
-            trend_payload = self._intraday_payload_for_code(code, quote_by_code, intraday_by_code)
-            if trend_payload:
-                result[self.ALL_HEADERS.index("K线")] = {"k": trend_payload}
         ma_values = {
             "MA5": moving_average(daily_rows, 5),
             "MA10": moving_average(daily_rows, 10),
