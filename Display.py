@@ -288,14 +288,15 @@ class KLineDelegate(QStyledItemDelegate):
         if rect.width() < 8 or rect.height() < 6:
             return True
 
-        max_minute = max(1, int(payload.get("max_minute") or max(item["minute"] for item in points) or 1))
-
         def y_for(price):
             ratio = (float(price) - low_price) / (high_price - low_price)
             return rect.bottom() - ratio * rect.height()
 
-        def x_for(minute):
-            ratio = max(0.0, min(1.0, float(minute) / float(max_minute)))
+        def x_for_index(index):
+            if len(points) <= 1:
+                ratio = 0.5
+            else:
+                ratio = float(index) / float(len(points) - 1)
             return rect.left() + ratio * rect.width()
 
         latest = points[-1]["price"]
@@ -314,23 +315,29 @@ class KLineDelegate(QStyledItemDelegate):
 
         if prev_close > 0:
             dash_col = QColor(NEUTRAL_COLOR if self.default_color else self.fg)
-            dash_col.setAlpha(130)
+            dash_col.setAlpha(95)
             y_prev = y_for(prev_close)
             painter.setPen(QPen(dash_col, 1, Qt.DashLine))
             painter.drawLine(QPointF(rect.left(), y_prev), QPointF(rect.right(), y_prev))
 
         path = QPainterPath()
         for index, item in enumerate(points):
-            point = QPointF(x_for(item["minute"]), y_for(item["price"]))
+            point = QPointF(x_for_index(index), y_for(item["price"]))
             if index == 0:
                 path.moveTo(point)
             else:
                 path.lineTo(point)
-        painter.setPen(QPen(line_color, 1.4))
+
+        fill_color = QColor(line_color)
+        fill_color.setAlpha(34 if self.default_color else 24)
+        fill = QPainterPath(path)
+        fill.lineTo(QPointF(rect.right(), rect.bottom()))
+        fill.lineTo(QPointF(rect.left(), rect.bottom()))
+        fill.closeSubpath()
+        painter.fillPath(fill, QBrush(fill_color))
+
+        painter.setPen(QPen(line_color, 1.6))
         painter.drawPath(path)
-        painter.setBrush(QBrush(line_color))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(QPointF(x_for(points[-1]["minute"]), y_for(latest)), 1.7, 1.7)
         painter.restore()
         return True
 

@@ -474,6 +474,8 @@ class FloatLabel(QWidget):
     def _apply_row_heights(self):
         fm = self.table.fontMetrics()
         h = fm.height() + max(0, self.line_extra_px)
+        has_trend_column = "K线" in (getattr(self.model, "_headers", []) or [])
+        trend_h = max(h, 26, int(fm.height() * 1.75))
         span_width = max(40, sum(self.table.columnWidth(c) for c in range(self.model.columnCount())) - 8)
         self.table.verticalHeader().setDefaultSectionSize(h)
         for r in range(self.model.rowCount()):
@@ -486,7 +488,7 @@ class FloatLabel(QWidget):
                 rect = fm.boundingRect(0, 0, span_width, 10000, Qt.TextWordWrap | Qt.AlignVCenter, text)
                 self.table.setRowHeight(r, max(h, rect.height() + 6))
             else:
-                self.table.setRowHeight(r, h)
+                self.table.setRowHeight(r, trend_h if has_trend_column else h)
 
     @staticmethod
     def _column_width_source_rows(rows, meta):
@@ -536,7 +538,7 @@ class FloatLabel(QWidget):
                     continue
                 cell = row[c] if c < len(row) else ""
                 if isinstance(cell, dict) and "k" in cell:
-                    cell_width = max(46, body_fm.height() * 3)
+                    cell_width = 104
                 else:
                     cell_width = body_fm.horizontalAdvance(str(cell)) + 12
                     if header == "名称":
@@ -1112,9 +1114,8 @@ class FloatLabel(QWidget):
         return normalize_codes(codes)
 
     def _intraday_request_codes(self):
-        if not getattr(self, "kline_visible", False):
-            return []
-        return normalize_codes(getattr(self, "checked_codes", []))
+        # 浮窗走势使用现有实时行情采样，避免每次刷新额外请求分钟线。
+        return []
 
     def _refresh_request_codes(self):
         return normalize_codes(
@@ -1462,12 +1463,13 @@ class FloatLabel(QWidget):
             prev_close = float(quote.get("prev_close", 0.0) or external.get("prev_close", 0.0) or 0.0)
         except Exception:
             return {}
+        current_minute = None
         if current_price > 0:
             now_provider = getattr(self, "_now", None)
             now_dt = now_provider() if callable(now_provider) else datetime.now()
-            minute = self._intraday_minute_index(now_dt.strftime("%H:%M") if hasattr(now_dt, "strftime") else "")
-            if minute is not None:
-                points.append({"minute": minute, "price": current_price})
+            current_minute = self._intraday_minute_index(now_dt.strftime("%H:%M") if hasattr(now_dt, "strftime") else "")
+            if current_minute is not None:
+                points.append({"minute": current_minute, "price": current_price})
             if not points:
                 points.append({"minute": 0, "price": opening_price if opening_price > 0 else current_price})
                 points.append({"minute": 1, "price": current_price})
@@ -1481,6 +1483,11 @@ class FloatLabel(QWidget):
             if minute >= 0 and price > 0:
                 deduped[minute] = {"minute": minute, "price": price}
         points = [deduped[key] for key in sorted(deduped)]
+        if len(points) < 2:
+            start_price = opening_price if opening_price > 0 else (prev_close if prev_close > 0 else current_price)
+            end_minute = max(1, int(current_minute if current_minute is not None else 1))
+            if start_price > 0 and current_price > 0:
+                points = [{"minute": 0, "price": start_price}, {"minute": end_minute, "price": current_price}]
         if len(points) < 2:
             return {}
         return {
