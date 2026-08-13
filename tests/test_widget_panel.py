@@ -1010,6 +1010,20 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(meta[1]["stock_note_color"], "#2563eb")
         self.assertEqual(model.data(model.index(1, name_col), Qt.ForegroundRole), QColor("#2563eb"))
 
+    def test_set_code_tags_reprojects_cached_display_immediately(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.codes = ["sh603259"]
+        win.code_tags = {}
+        calls = []
+        win._reproject_cached_display = lambda: calls.append("reproject") or True
+        win._refresh_from_function = lambda *args, **kwargs: calls.append("refresh")
+        win._notify_change = lambda: calls.append("notify")
+
+        FloatLabel.set_code_tags(win, {"sh603259": {"note_color": "#2563eb"}})
+
+        self.assertEqual(win.code_tags["sh603259"]["note_color"], "#2563eb")
+        self.assertEqual(calls, ["notify", "reproject"])
+
     def test_note_column_stays_hidden_after_market_close(self):
         cfg = {
             "groups": [{"name": "默认", "codes": ["sh603259"]}],

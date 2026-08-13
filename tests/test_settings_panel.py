@@ -313,7 +313,7 @@ class SettingsPanelTests(unittest.TestCase):
         dlg._on_code_note_changed()
         dlg.cmb_code_note_color.setCurrentIndex(dlg.cmb_code_note_color.findData("#f0c36a"))
 
-        self.assertLessEqual(dlg.edit_code_note.width(), 180)
+        self.assertLessEqual(dlg.edit_code_note.width(), 160)
         self.assertEqual(win.code_notes["sh603259"], "压力18.80")
         self.assertEqual(win.code_tags["sh603259"]["note_color"], "#f0c36a")
         dlg.close()
@@ -335,10 +335,29 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.show()
         self.app.processEvents()
 
-        self.assertGreaterEqual(dlg.btn_fg.width(), 108)
-        self.assertGreaterEqual(dlg.btn_bg.width(), 108)
+        self.assertGreaterEqual(dlg.width(), 400)
+        self.assertGreaterEqual(dlg.btn_fg.width(), 124)
+        self.assertGreaterEqual(dlg.btn_bg.width(), 124)
         self.assertGreaterEqual(dlg.slider_bg_alpha.width(), 150)
         self.assertGreaterEqual(dlg.slider_win_opacity.width(), 150)
+        dlg.close()
+
+    def test_code_tag_controls_are_aligned_in_two_rows(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德"}
+        dlg = SettingsDialog(win, None)
+        dlg.show()
+        self.app.processEvents()
+
+        first_row = [dlg.cmb_code_holding, dlg.cmb_code_cycle, dlg.cmb_code_priority]
+        second_row = [dlg.edit_code_note, dlg.cmb_code_note_color]
+        self.assertTrue(all(widget.y() == first_row[0].y() for widget in first_row))
+        self.assertTrue(all(widget.y() == second_row[0].y() for widget in second_row))
+        self.assertGreater(second_row[0].y(), first_row[0].y())
+        self.assertGreaterEqual(dlg.cmb_code_note_color.x(), dlg.cmb_code_priority.x())
         dlg.close()
 
     def test_add_code_keeps_new_editable_item_in_new_group(self):

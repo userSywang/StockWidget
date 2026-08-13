@@ -50,7 +50,7 @@ class SettingsDialog(QDialog):
             0: QSize(430, 620),
             1: QSize(560, 560),
             2: QSize(620, 700),
-            3: QSize(360, 350),
+            3: QSize(400, 350),
             4: QSize(300, 220),
             5: QSize(520, 240),
         }
@@ -100,19 +100,19 @@ class SettingsDialog(QDialog):
         btn_col.addStretch(1)
 
         self.cmb_code_holding = QComboBox()
-        self.cmb_code_holding.setFixedWidth(72)
+        self.cmb_code_holding.setFixedWidth(82)
         self.cmb_code_holding.addItem("未标记", userData="")
         self.cmb_code_holding.addItem("持有", userData="hold")
         self.cmb_code_holding.addItem("观察", userData="watch")
         self.cmb_code_holding.addItem("已清仓", userData="cleared")
         self.cmb_code_cycle = QComboBox()
-        self.cmb_code_cycle.setFixedWidth(72)
+        self.cmb_code_cycle.setFixedWidth(82)
         self.cmb_code_cycle.addItem("周期", userData="")
         self.cmb_code_cycle.addItem("短线", userData="short")
         self.cmb_code_cycle.addItem("波段", userData="swing")
         self.cmb_code_cycle.addItem("长期", userData="long")
         self.cmb_code_priority = QComboBox()
-        self.cmb_code_priority.setFixedWidth(72)
+        self.cmb_code_priority.setFixedWidth(88)
         self.cmb_code_priority.addItem("优先级", userData="")
         self.cmb_code_priority.addItem("重点", userData="focus")
         self.cmb_code_priority.addItem("普通", userData="normal")
@@ -120,7 +120,7 @@ class SettingsDialog(QDialog):
         self.edit_code_note = QLineEdit()
         self.edit_code_note.setPlaceholderText("备注，可空")
         self.edit_code_note.setMaxLength(80)
-        self.edit_code_note.setFixedWidth(160)
+        self.edit_code_note.setFixedWidth(150)
         self.cmb_code_note_color = QComboBox()
         self.cmb_code_note_color.setFixedWidth(88)
         for label, color in (
@@ -140,17 +140,24 @@ class SettingsDialog(QDialog):
         tag_lay.setContentsMargins(6, 6, 6, 6)
         tag_lay.setHorizontalSpacing(6)
         tag_lay.setVerticalSpacing(6)
-        tag_lay.addWidget(QLabel("状态"), 0, 0)
+
+        def tag_label(text):
+            label = QLabel(text)
+            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            return label
+
+        tag_lay.addWidget(tag_label("状态"), 0, 0)
         tag_lay.addWidget(self.cmb_code_holding, 0, 1)
-        tag_lay.addWidget(QLabel("周期"), 0, 2)
+        tag_lay.addWidget(tag_label("周期"), 0, 2)
         tag_lay.addWidget(self.cmb_code_cycle, 0, 3)
-        tag_lay.addWidget(QLabel("级别"), 0, 4)
+        tag_lay.addWidget(tag_label("级别"), 0, 4)
         tag_lay.addWidget(self.cmb_code_priority, 0, 5)
-        tag_lay.addWidget(QLabel("备注"), 1, 0)
-        tag_lay.addWidget(self.edit_code_note, 1, 1, 1, 2)
-        tag_lay.addWidget(QLabel("颜色"), 1, 3)
-        tag_lay.addWidget(self.cmb_code_note_color, 1, 4)
-        tag_lay.setColumnStretch(5, 1)
+        tag_lay.addWidget(tag_label("备注"), 1, 0)
+        tag_lay.addWidget(self.edit_code_note, 1, 1, 1, 3)
+        tag_lay.addWidget(tag_label("颜色"), 1, 4)
+        tag_lay.addWidget(self.cmb_code_note_color, 1, 5)
+        for col, width in ((0, 34), (1, 82), (2, 34), (3, 82), (4, 34), (5, 88)):
+            tag_lay.setColumnMinimumWidth(col, width)
 
         lay_codes.addWidget(self.tree_codes, 1)
         lay_codes.addLayout(btn_col)
@@ -1128,11 +1135,11 @@ class SettingsDialog(QDialog):
         self.chk_default_color.setChecked(self.win.default_color)
         # 3.2 按钮：文字颜色
         self.btn_fg = QPushButton("文字颜色…")
-        self.btn_fg.setMinimumWidth(108)
+        self.btn_fg.setFixedWidth(124)
         self.btn_fg.setEnabled(not self.win.default_color)
         # 3.3 按钮：背景颜色
         self.btn_bg = QPushButton("背景颜色…")
-        self.btn_bg.setMinimumWidth(108)
+        self.btn_bg.setFixedWidth(124)
         # 3.4 滑块：背景不透明度
         self.slider_bg_alpha = QSlider(Qt.Horizontal)
         self.slider_bg_alpha.setRange(1, 100)

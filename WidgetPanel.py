@@ -373,12 +373,18 @@ class FloatLabel(QWidget):
         valid_codes = set(getattr(self, "codes", []))
         self.code_tags = {code: tags for code, tags in self.code_tags.items() if code in valid_codes}
         self._notify_change()
+        self._refresh_display_after_code_marker_change()
 
     def set_code_notes(self, code_notes):
         self.code_notes = self._normalize_code_notes(code_notes)
         valid_codes = set(getattr(self, "codes", []))
         self.code_notes = {code: note for code, note in self.code_notes.items() if code in valid_codes}
         self._notify_change()
+        self._refresh_display_after_code_marker_change()
+
+    def _refresh_display_after_code_marker_change(self):
+        if not self._reproject_cached_display():
+            self._refresh_from_function(force=True)
 
     @staticmethod
     def _normalize_data_source(data_source):
