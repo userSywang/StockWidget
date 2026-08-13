@@ -5,6 +5,7 @@ from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 import time
+import re
 
 from PySide6.QtCore import Qt, QEvent, QTimer, Signal
 from PySide6.QtGui import QFont, QAction, QColor
@@ -1587,6 +1588,9 @@ class FloatLabel(QWidget):
                 if strategy_state:
                     meta["strategy"] = True
                     meta["severity"] = strategy_state.get("severity", "neutral")
+                    daily_label = self._format_strategy_daily_label(strategy_state)
+                    if daily_label:
+                        meta["strategy_daily_label"] = daily_label
                 if getattr(self, "price_alert_badge_visible", True) and code in price_alerts_by_code:
                     meta["price_alerts"] = price_alerts_by_code[code]
                 badges = []
@@ -1661,10 +1665,7 @@ class FloatLabel(QWidget):
         strategy_enabled = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {})).get("enabled")
         if strategy_enabled and state:
             profit = state.get("profit_pct")
-            status_text = str(state.get("status") or "-")
-            daily_label = self._format_strategy_daily_label(state)
-            if daily_label and status_text != "-":
-                status_text = f"{status_text} | {daily_label}"
+            status_text = self._compact_strategy_status(state.get("status") or "-")
             values = {
                 "持仓盈亏": "-" if profit is None else f"{float(profit):+.1f}%",
                 "止损线": self._format_strategy_price(state.get("stop_price")),
@@ -1681,6 +1682,44 @@ class FloatLabel(QWidget):
             note = (getattr(self, "code_notes", {}) or {}).get(code, "")
             result[self.ALL_HEADERS.index("备注")] = note or "-"
         return result
+
+    @staticmethod
+    def _compact_strategy_status(status):
+        text = " ".join(str(status or "-").split())
+        if not text or text == "-":
+            return "-"
+        replacements = [
+            ("已锁盈", "锁盈"),
+            ("触发锁盈", "锁盈"),
+            ("触发止盈", "止盈"),
+            ("止盈线变化", "止盈变"),
+            ("止盈线变动", "止盈变"),
+            ("止损线变化", "止损变"),
+            ("止损线变动", "止损变"),
+            ("上调止盈线至", "止盈↑"),
+            ("下调止盈线至", "止盈↓"),
+            ("上调止损线至", "止损↑"),
+            ("下调止损线至", "止损↓"),
+            ("触发止损", "止损"),
+            ("破5日线清仓", "破5清"),
+            ("破五日线清仓", "破5清"),
+            ("破10日线清仓", "破10清"),
+            ("破十日线清仓", "破10清"),
+            ("持仓满", "满"),
+            ("天不上涨提示卖出", "天未涨"),
+            ("减半仓提醒", "减半"),
+            ("提示卖出", "卖出"),
+            ("等待价格", "等价"),
+            ("未触发", "未触发"),
+            ("清仓", "清"),
+        ]
+        for old, new in replacements:
+            text = text.replace(old, new)
+        text = re.sub(r"（[^）]*）", "", text)
+        text = re.sub(r"\([^)]*\)", "", text)
+        text = text.replace("，", " ").replace(",", " ")
+        text = " ".join(text.split())
+        return text[:12] if len(text) > 12 else text
 
     def _header_visible_for_indicator(self, header):
         checker = getattr(self, "header_is_visible", None)
@@ -2250,6 +2289,15 @@ class FloatLabel(QWidget):
             if code_idx not in cols and name_idx not in cols:
                 cols.insert(0, name_idx)
         headers = [self.ALL_HEADERS[i] for i in cols]
+        header_notes = {}
+        if "策略状态" in headers:
+            daily_labels = [
+                str(meta.get("strategy_daily_label") or "").strip()
+                for meta in (sign_data or [])
+                if isinstance(meta, dict) and meta.get("strategy_daily_label")
+            ]
+            if daily_labels:
+                header_notes[headers.index("策略状态")] = daily_labels[0]
 
         proj_rows, proj_meta = [], []
         for r, row in enumerate(full_rows):
@@ -2265,7 +2313,7 @@ class FloatLabel(QWidget):
         # 右对齐：除了名称、K线、卖一外的所有列都右对齐
         right_cols = [i for i, h in enumerate(headers) if h not in ("名称", "K线", "卖一", "备注")]
         self.model.set_align_right_cols(right_cols)
-        self.model.set_rows_headers(proj_rows, headers, meta=proj_meta)
+        self.model.set_rows_headers(proj_rows, headers, meta=proj_meta, header_notes=header_notes)
         self.model.set_color_scheme(self.default_color, self.fg)
 
         try:
@@ -2887,15 +2935,14 @@ class FloatLabel(QWidget):
     def mouseDoubleClickEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._drag_pos = None
-            if not self._edit_note_for_event(self, e):
-                self.hide()
+            if self._edit_note_for_event(self, e):
+                return
+        super().mouseDoubleClickEvent(e)
 
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = None
-            if not self._edit_note_for_event(obj, ev):
-                self.hide()
-            return True
+            return self._edit_note_for_event(obj, ev)
         if ev.type() == QEvent.MouseButtonPress and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
             self._drag_press_global = ev.globalPosition().toPoint()
@@ -2924,8 +2971,11 @@ class FloatLabel(QWidget):
             return True
         return QWidget.eventFilter(self, obj, ev)
 
-    def _code_for_event_pos(self, obj, ev):
+    def _note_code_for_event_pos(self, obj, ev):
         try:
+            headers = list(getattr(self.model, "_headers", []) or [])
+            if "备注" not in headers:
+                return ""
             pos = ev.position().toPoint()
             if obj is self.table.viewport():
                 viewport_pos = pos
@@ -2933,6 +2983,8 @@ class FloatLabel(QWidget):
                 viewport_pos = self.table.viewport().mapFrom(obj, pos)
             index = self.table.indexAt(viewport_pos)
             if not index.isValid():
+                return ""
+            if headers[index.column()] != "备注":
                 return ""
             meta_rows = getattr(self.model, "_row_meta", []) or []
             meta = meta_rows[index.row()] if index.row() < len(meta_rows) else {}
@@ -2943,7 +2995,7 @@ class FloatLabel(QWidget):
             return ""
 
     def _edit_note_for_event(self, obj, ev):
-        code = self._code_for_event_pos(obj, ev)
+        code = self._note_code_for_event_pos(obj, ev)
         if not code:
             return False
         self._edit_code_note(code)

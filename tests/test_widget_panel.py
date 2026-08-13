@@ -929,7 +929,7 @@ class WidgetPanelTests(unittest.TestCase):
             "daily_realtime": True,
         }]
 
-        rows, _meta = FloatLabel._compose_display_rows(
+        rows, meta = FloatLabel._compose_display_rows(
             win,
             {"sh603259": row},
             {"sh603259": {"delta": 1}},
@@ -946,7 +946,8 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("MA20")], "10.50")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("持仓盈亏")], "+12.0%")
         self.assertEqual(stock_row[STRATEGY_HEADERS.index("止损线")], "110.00")
-        self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "已锁盈10% | 实时08-10")
+        self.assertEqual(stock_row[STRATEGY_HEADERS.index("策略状态")], "锁盈10%")
+        self.assertEqual(meta[1]["strategy_daily_label"], "实时08-10")
 
     def test_compose_display_rows_adds_stock_note_field(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -1002,6 +1003,99 @@ class WidgetPanelTests(unittest.TestCase):
             self.assertIn("备注", win.model._headers)
             row = win.model._rows[1]
             self.assertEqual(row[win.model._headers.index("备注")], "盘后备注")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_strategy_status_header_shows_daily_update_time(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "name_visible": True,
+            "strategy_status_visible": True,
+            "strategy_alert_config": {"enabled": True},
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+            rows, meta = win._compose_display_rows(
+                {"sh603259": row},
+                {"sh603259": {"delta": 1}},
+                [],
+                {},
+                {"sh603259": {"price": 112.0}},
+                {"sh603259": [{"close": float(v)} for v in range(1, 21)]},
+                [{
+                    "code": "sh603259",
+                    "profit_pct": 12.0,
+                    "stop_price": 110.0,
+                    "status": "触发锁盈10%（止盈价110.00）",
+                    "daily_date": "2026-08-10",
+                    "daily_realtime": True,
+                }],
+            )
+            win._project_columns(rows, meta)
+
+            status_col = win.model._headers.index("策略状态")
+            self.assertEqual(win.model._rows[1][status_col], "锁盈10%")
+            self.assertEqual(win.model.headerData(status_col, Qt.Horizontal, Qt.DisplayRole), "策略状态 实时08-10")
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_note_edit_only_opens_from_visible_note_cell(self):
+        class FakeEvent:
+            def __init__(self, point):
+                self._point = point
+
+            def position(self):
+                point = self._point
+
+                class Position:
+                    def toPoint(self_inner):
+                        return point
+
+                return Position()
+
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "name_visible": True,
+            "note_visible": True,
+            "code_notes": {"sh603259": "旧备注"},
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            row = ["sh603259", "药明康德", "112.00", "+12.00", "+12.00%", "-", "-", "-", "0", "0", "112.00", ""]
+            rows, meta = win._compose_display_rows(
+                {"sh603259": row},
+                {"sh603259": {"delta": 1}},
+                [],
+                {},
+                {"sh603259": {"price": 112.0}},
+                {},
+                [],
+            )
+            win._project_columns(rows, meta)
+            win.show()
+            self.app.processEvents()
+
+            name_col = win.model._headers.index("名称")
+            note_col = win.model._headers.index("备注")
+            name_pos = win.table.visualRect(win.model.index(1, name_col)).center()
+            note_pos = win.table.visualRect(win.model.index(1, note_col)).center()
+
+            with patch("WidgetPanel.QInputDialog.getText", return_value=("新备注", True)) as get_text:
+                self.assertFalse(win._edit_note_for_event(win.table.viewport(), FakeEvent(name_pos)))
+                get_text.assert_not_called()
+                self.assertTrue(win._edit_note_for_event(win.table.viewport(), FakeEvent(note_pos)))
+                self.assertEqual(win.code_notes["sh603259"], "新备注")
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

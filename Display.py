@@ -19,6 +19,7 @@ class SimpleTableModel(QAbstractTableModel):
         self.default_color = False
         self.fg_color = QColor("#FFFFFF")
         self._row_meta = []
+        self._header_notes = {}
 
     def set_color_scheme(self, default: bool, fg: QColor):
         self.default_color = bool(default)
@@ -124,14 +125,17 @@ class SimpleTableModel(QAbstractTableModel):
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal and 0 <= section < len(self._headers):
-            return self._headers[section]
+            header = self._headers[section]
+            note = str(self._header_notes.get(section, "") or "").strip()
+            return f"{header} {note}" if note else header
         return None
 
-    def set_rows_headers(self, rows, headers, meta=None):
+    def set_rows_headers(self, rows, headers, meta=None, header_notes=None):
         self.beginResetModel()
         self._rows = rows or []
         self._headers = headers or []
         self._row_meta = list(meta or [{} for _ in self._rows])
+        self._header_notes = dict(header_notes or {})
         self.endResetModel()
 
     def set_align_right_cols(self, cols_idx):
