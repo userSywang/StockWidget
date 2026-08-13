@@ -416,7 +416,7 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertAlmostEqual(top - middle, middle - bottom)
 
-    def test_clicking_kline_cell_opens_intraday_chart(self):
+    def test_clicking_kline_cell_does_not_open_chart(self):
         cfg = {
             "groups": [{"name": "ETF", "codes": ["sh512000"]}],
             "checked_codes": ["sh512000"],
@@ -426,8 +426,6 @@ class WidgetPanelTests(unittest.TestCase):
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
             win = FloatLabel(cfg)
         try:
-            fetches = []
-            win._start_intraday_chart_fetch = lambda code: fetches.append(code)
             win._latest_quotes = {
                 "sh512000": {"name": "券商ETF", "price": 1.15, "open": 1.14, "high": 1.16, "low": 1.13, "prev_close": 1.12}
             }
@@ -449,12 +447,7 @@ class WidgetPanelTests(unittest.TestCase):
             self.app.processEvents()
 
             dialog = getattr(win, "_kline_chart_dialog", None)
-            self.assertIsNotNone(dialog)
-            self.assertTrue(dialog.isVisible())
-            self.assertEqual(dialog.code, "sh512000")
-            self.assertEqual(dialog.detail_label.text(), "分时 · 当日")
-            self.assertGreaterEqual(len(dialog.chart.points), 2)
-            self.assertEqual(fetches, ["sh512000"])
+            self.assertIsNone(dialog)
             self.assertEqual(getattr(win, "_kline_chart_code", ""), "")
         finally:
             dialog = getattr(win, "_kline_chart_dialog", None)

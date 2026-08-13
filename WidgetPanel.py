@@ -12,7 +12,6 @@ from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLa
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
-from KLineChart import IntradayLineChartDialog
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -111,10 +110,7 @@ class FloatLabel(QWidget):
         self._intraday_trend_cache = {}
         self._intraday_sample_cache = {}
         self._latest_daily_by_code = {}
-        self._kline_chart_dialog = None
         self._kline_chart_code = ""
-        self._intraday_chart_code = ""
-        self._intraday_chart_future = None
 
         # 设置初值
         self.groups = normalize_groups(groups_cfg, codes_cfg)
@@ -2693,95 +2689,6 @@ class FloatLabel(QWidget):
         act_badge.toggled.connect(self.set_price_alert_badge_visible)
         sub_cols.addAction(act_badge)
 
-    def _kline_code_at_event(self, obj, event):
-        if obj is not getattr(self.table, "viewport", lambda: None)():
-            return ""
-        try:
-            index = self.table.indexAt(event.position().toPoint())
-            if not index.isValid() or index.column() >= len(self.model._headers):
-                return ""
-            if self.model._headers[index.column()] != "K线":
-                return ""
-            meta = self.model._row_meta[index.row()] if index.row() < len(self.model._row_meta) else {}
-            if meta.get("row_type"):
-                return ""
-            return normalize_code_or_none(meta.get("code")) or ""
-        except Exception:
-            return ""
-
-    def _open_kline_chart(self, code):
-        code = normalize_code_or_none(code)
-        if not code:
-            return False
-        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
-        name = str(quote_data.get("name") or self.code_names.get(code) or code)
-        intraday_by_code = {}
-        cached = (getattr(self, "_intraday_trend_cache", {}) or {}).get(code)
-        today_provider = getattr(self, "_today", None)
-        today = today_provider() if callable(today_provider) else date.today()
-        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
-        if isinstance(cached, dict) and cached.get("date") == today_key:
-            intraday_by_code[code] = cached.get("trend", {})
-        payload = self._intraday_payload_for_code(code, {code: quote_data}, intraday_by_code)
-        status_text = "" if payload else "正在加载当日分时数据..."
-
-        dialog = getattr(self, "_kline_chart_dialog", None)
-        if dialog is None:
-            dialog = IntradayLineChartDialog(self)
-            dialog.finished.connect(self._on_kline_chart_closed)
-            self._kline_chart_dialog = dialog
-        self._intraday_chart_code = code
-        self._kline_chart_code = ""
-        self.suspend_keep_top(8.0)
-        dialog.show_stock(code, name, payload, status_text=status_text)
-        self._start_intraday_chart_fetch(code)
-        return True
-
-    def _on_kline_chart_closed(self, *_args):
-        self._kline_chart_code = ""
-        self._intraday_chart_code = ""
-
-    def _intraday_chart_payload(self, code):
-        code = normalize_code_or_none(code)
-        if not code:
-            return code, {}, "暂无可用分时数据"
-        trend_by_code = self._get_intraday_trends([code])
-        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
-        payload = self._intraday_payload_for_code(code, {code: quote_data}, trend_by_code)
-        status_text = "" if payload else "暂无可用分时数据"
-        return code, payload, status_text
-
-    def _start_intraday_chart_fetch(self, code):
-        executor = getattr(self, "_refresh_executor", None)
-        if executor is None:
-            code, payload, status_text = self._intraday_chart_payload(code)
-            self._update_intraday_chart(code, payload, status_text)
-            return
-        self._intraday_chart_future = executor.submit(self._intraday_chart_payload, code)
-        QTimer.singleShot(30, self._poll_intraday_chart_future)
-
-    def _poll_intraday_chart_future(self):
-        future = getattr(self, "_intraday_chart_future", None)
-        if future is None:
-            return
-        if not future.done():
-            QTimer.singleShot(30, self._poll_intraday_chart_future)
-            return
-        self._intraday_chart_future = None
-        try:
-            code, payload, status_text = future.result()
-        except Exception:
-            code, payload, status_text = getattr(self, "_intraday_chart_code", ""), {}, "分时数据加载失败"
-        self._update_intraday_chart(code, payload, status_text)
-
-    def _update_intraday_chart(self, code, payload, status_text=""):
-        dialog = getattr(self, "_kline_chart_dialog", None)
-        if dialog is None or not dialog.isVisible() or getattr(dialog, "code", "") != code:
-            return
-        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
-        name = str(quote_data.get("name") or self.code_names.get(code) or code)
-        dialog.show_stock(code, name, payload, status_text=status_text)
-
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -2805,11 +2712,6 @@ class FloatLabel(QWidget):
 
     def eventFilter(self, obj, ev):
         if ev.type() == QEvent.MouseButtonDblClick and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
-            code = self._kline_code_at_event(obj, ev)
-            if code:
-                self._drag_pos = None
-                self._open_kline_chart(code)
-                return True
             self._drag_pos = None
             self.hide()
             return True
@@ -2817,7 +2719,7 @@ class FloatLabel(QWidget):
             self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
             self._drag_press_global = ev.globalPosition().toPoint()
             self._drag_moved = False
-            self._pressed_kline_code = self._kline_code_at_event(obj, ev)
+            self._pressed_kline_code = ""
             self.setFocus(Qt.MouseFocusReason)
             return True
         if ev.type() == QEvent.MouseMove and hasattr(ev, "buttons") and (ev.buttons() & Qt.LeftButton) and getattr(self, "_drag_pos", None):
@@ -2830,16 +2732,12 @@ class FloatLabel(QWidget):
             self.move(ev.globalPosition().toPoint() - self._drag_pos)
             return True
         if ev.type() == QEvent.MouseButtonRelease and hasattr(ev, "button") and ev.button() == Qt.LeftButton:
-            released_code = self._kline_code_at_event(obj, ev)
-            pressed_code = getattr(self, "_pressed_kline_code", "")
             moved = bool(getattr(self, "_drag_moved", False))
             self._drag_pos = None
             self._drag_press_global = None
             self._drag_moved = False
             self._pressed_kline_code = ""
-            if not moved and pressed_code and pressed_code == released_code:
-                self._open_kline_chart(pressed_code)
-            elif moved:
+            if moved:
                 self._notify_change()
             return True
         return QWidget.eventFilter(self, obj, ev)
