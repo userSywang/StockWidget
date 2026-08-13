@@ -416,27 +416,30 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertAlmostEqual(top - middle, middle - bottom)
 
-    def test_clicking_kline_cell_opens_chart_with_daily_rows(self):
+    def test_clicking_kline_cell_opens_intraday_chart(self):
         cfg = {
             "groups": [{"name": "ETF", "codes": ["sh512000"]}],
             "checked_codes": ["sh512000"],
             "name_visible": True,
             "kline_visible": True,
         }
-        daily_rows = [
-            {"date": "2026-08-10", "open": 1.10, "high": 1.13, "low": 1.09, "close": 1.12},
-            {"date": "2026-08-11", "open": 1.12, "high": 1.16, "low": 1.11, "close": 1.15},
-        ]
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
             win = FloatLabel(cfg)
         try:
+            fetches = []
+            win._start_intraday_chart_fetch = lambda code: fetches.append(code)
+            win._latest_quotes = {
+                "sh512000": {"name": "券商ETF", "price": 1.15, "open": 1.14, "high": 1.16, "low": 1.13, "prev_close": 1.12}
+            }
+            win._intraday_sample_cache = {}
+            win._today = lambda: date(2026, 8, 13)
+            win._now = lambda: datetime(2026, 8, 13, 10, 0)
             full_rows, meta = win._compose_display_rows(
                 {"sh512000": ["sh512000", "券商ETF", "1.150", "+0.030", "+2.68%", "-", "-", "-", "-", "-", "1.140", ""]},
                 {"sh512000": {"delta": 1}},
                 [],
-                daily_by_code={"sh512000": daily_rows},
+                quote_by_code=win._latest_quotes,
             )
-            win._latest_daily_by_code = {"sh512000": daily_rows}
             win._project_columns(full_rows, meta)
             win.show()
             self.app.processEvents()
@@ -448,7 +451,11 @@ class WidgetPanelTests(unittest.TestCase):
             dialog = getattr(win, "_kline_chart_dialog", None)
             self.assertIsNotNone(dialog)
             self.assertTrue(dialog.isVisible())
-            self.assertEqual(dialog.chart.rows[-1]["close"], 1.15)
+            self.assertEqual(dialog.code, "sh512000")
+            self.assertEqual(dialog.detail_label.text(), "分时 · 当日")
+            self.assertGreaterEqual(len(dialog.chart.points), 2)
+            self.assertEqual(fetches, ["sh512000"])
+            self.assertEqual(getattr(win, "_kline_chart_code", ""), "")
         finally:
             dialog = getattr(win, "_kline_chart_dialog", None)
             if dialog is not None:
@@ -1097,6 +1104,7 @@ class WidgetPanelTests(unittest.TestCase):
             "checked_codes": ["sh603259"],
             "name_visible": True,
             "kline_visible": True,
+            "line_extra_px": 0,
         }
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
             win = FloatLabel(cfg)
@@ -1113,7 +1121,7 @@ class WidgetPanelTests(unittest.TestCase):
             col = win.model._headers.index("K线")
             self.assertGreaterEqual(win.table.columnWidth(col), 58)
             self.assertLessEqual(win.table.columnWidth(col), 72)
-            self.assertGreaterEqual(win.table.rowHeight(1), 30)
+            self.assertLess(win.table.rowHeight(1), 30)
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

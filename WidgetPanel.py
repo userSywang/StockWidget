@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLa
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
-from KLineChart import KLineChartDialog
+from KLineChart import IntradayLineChartDialog
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -113,6 +113,8 @@ class FloatLabel(QWidget):
         self._latest_daily_by_code = {}
         self._kline_chart_dialog = None
         self._kline_chart_code = ""
+        self._intraday_chart_code = ""
+        self._intraday_chart_future = None
 
         # 设置初值
         self.groups = normalize_groups(groups_cfg, codes_cfg)
@@ -475,7 +477,7 @@ class FloatLabel(QWidget):
         fm = self.table.fontMetrics()
         h = fm.height() + max(0, self.line_extra_px)
         has_trend_column = "K线" in (getattr(self.model, "_headers", []) or [])
-        trend_h = max(h, 30, int(fm.height() * 1.9))
+        trend_h = h
         span_width = max(40, sum(self.table.columnWidth(c) for c in range(self.model.columnCount())) - 8)
         self.table.verticalHeader().setDefaultSectionSize(h)
         for r in range(self.model.rowCount()):
@@ -2713,26 +2715,72 @@ class FloatLabel(QWidget):
             return False
         quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
         name = str(quote_data.get("name") or self.code_names.get(code) or code)
-        chart_value = (getattr(self, "_latest_daily_by_code", {}) or {}).get(code)
-        chart_rows = chart_value if isinstance(chart_value, list) else []
-        status_text = chart_value.get("error", "") if isinstance(chart_value, dict) else ""
-        if not chart_rows and not status_text:
-            status_text = "正在加载日线数据..."
+        intraday_by_code = {}
+        cached = (getattr(self, "_intraday_trend_cache", {}) or {}).get(code)
+        today_provider = getattr(self, "_today", None)
+        today = today_provider() if callable(today_provider) else date.today()
+        today_key = today.isoformat() if hasattr(today, "isoformat") else str(today)
+        if isinstance(cached, dict) and cached.get("date") == today_key:
+            intraday_by_code[code] = cached.get("trend", {})
+        payload = self._intraday_payload_for_code(code, {code: quote_data}, intraday_by_code)
+        status_text = "" if payload else "正在加载当日分时数据..."
 
         dialog = getattr(self, "_kline_chart_dialog", None)
         if dialog is None:
-            dialog = KLineChartDialog(self)
+            dialog = IntradayLineChartDialog(self)
             dialog.finished.connect(self._on_kline_chart_closed)
             self._kline_chart_dialog = dialog
-        self._kline_chart_code = code
+        self._intraday_chart_code = code
+        self._kline_chart_code = ""
         self.suspend_keep_top(8.0)
-        dialog.show_stock(code, name, chart_rows, status_text=status_text)
-        if not chart_rows:
-            self._refresh_from_function(force=True)
+        dialog.show_stock(code, name, payload, status_text=status_text)
+        self._start_intraday_chart_fetch(code)
         return True
 
     def _on_kline_chart_closed(self, *_args):
         self._kline_chart_code = ""
+        self._intraday_chart_code = ""
+
+    def _intraday_chart_payload(self, code):
+        code = normalize_code_or_none(code)
+        if not code:
+            return code, {}, "暂无可用分时数据"
+        trend_by_code = self._get_intraday_trends([code])
+        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
+        payload = self._intraday_payload_for_code(code, {code: quote_data}, trend_by_code)
+        status_text = "" if payload else "暂无可用分时数据"
+        return code, payload, status_text
+
+    def _start_intraday_chart_fetch(self, code):
+        executor = getattr(self, "_refresh_executor", None)
+        if executor is None:
+            code, payload, status_text = self._intraday_chart_payload(code)
+            self._update_intraday_chart(code, payload, status_text)
+            return
+        self._intraday_chart_future = executor.submit(self._intraday_chart_payload, code)
+        QTimer.singleShot(30, self._poll_intraday_chart_future)
+
+    def _poll_intraday_chart_future(self):
+        future = getattr(self, "_intraday_chart_future", None)
+        if future is None:
+            return
+        if not future.done():
+            QTimer.singleShot(30, self._poll_intraday_chart_future)
+            return
+        self._intraday_chart_future = None
+        try:
+            code, payload, status_text = future.result()
+        except Exception:
+            code, payload, status_text = getattr(self, "_intraday_chart_code", ""), {}, "分时数据加载失败"
+        self._update_intraday_chart(code, payload, status_text)
+
+    def _update_intraday_chart(self, code, payload, status_text=""):
+        dialog = getattr(self, "_kline_chart_dialog", None)
+        if dialog is None or not dialog.isVisible() or getattr(dialog, "code", "") != code:
+            return
+        quote_data = (getattr(self, "_latest_quotes", {}) or {}).get(code) or {}
+        name = str(quote_data.get("name") or self.code_names.get(code) or code)
+        dialog.show_stock(code, name, payload, status_text=status_text)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
