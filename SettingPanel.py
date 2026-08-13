@@ -2659,15 +2659,23 @@ class SettingsDialog(QDialog):
         if code not in self._strategy_allowed_codes():
             self.edit_strategy_code.setText(previous.get("code", ""))
             return
+        new_cost = self.spin_strategy_cost.value()
+        try:
+            cost_changed = abs(float(new_cost) - float(previous.get("cost_price", 0.0))) > 0.0001
+        except Exception:
+            cost_changed = True
         position = normalize_strategy_position({
             "code": code,
             "strategy_id": self.cmb_strategy_profile.currentData() or previous.get("strategy_id", "default"),
-            "cost_price": self.spin_strategy_cost.value(),
+            "cost_price": new_cost,
             "buy_date": self.edit_strategy_buy_date.text(),
             "note": self.edit_strategy_note.text(),
-            "peak_profit_pct": previous.get("peak_profit_pct", 0.0),
-            "locked_profit_pct": previous.get("locked_profit_pct", 0.0),
-            "last_stop_price": previous.get("last_stop_price", 0.0),
+            "peak_profit_pct": 0.0 if cost_changed else previous.get("peak_profit_pct", 0.0),
+            "locked_profit_pct": 0.0 if cost_changed else previous.get("locked_profit_pct", 0.0),
+            "last_stop_price": 0.0 if cost_changed else previous.get("last_stop_price", 0.0),
+            "lock_raised": False if cost_changed else previous.get("lock_raised", False),
+            "stop_line_changed": False if cost_changed else previous.get("stop_line_changed", False),
+            "stop_line_previous_price": 0.0 if cost_changed else previous.get("stop_line_previous_price", 0.0),
             "rules": previous.get("rules", {}),
         })
         if not position:

@@ -655,7 +655,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(dlg.spin_strategy_loss.value(), 5.0)
         dlg.close()
 
-    def test_strategy_cost_edit_sends_line_change_alert_and_keeps_state(self):
+    def test_strategy_cost_edit_resets_profit_stop_state(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]
         win.codes = ["sh603259"]
@@ -670,6 +670,7 @@ class SettingsPanelTests(unittest.TestCase):
             "positions": [{
                 "code": "sh603259",
                 "cost_price": 100.0,
+                "peak_profit_pct": 30.0,
                 "locked_profit_pct": 10.0,
                 "last_stop_price": 110.0,
             }],
@@ -681,12 +682,15 @@ class SettingsPanelTests(unittest.TestCase):
         dlg._save_strategy_position()
 
         position = win.strategy_alert_config["positions"][0]
-        self.assertEqual(position["last_stop_price"], 132.0)
-        self.assertEqual(position["locked_profit_pct"], 10.0)
-        self.assertTrue(any("药明康德止盈线变化" in text for text in pushed))
+        self.assertEqual(position["peak_profit_pct"], 0.0)
+        self.assertEqual(position["locked_profit_pct"], 0.0)
+        self.assertEqual(position["last_stop_price"], 114.0)
+        self.assertFalse(position["lock_raised"])
+        self.assertFalse(position["stop_line_changed"])
+        self.assertTrue(any("药明康德止损线变化" in text for text in pushed))
         self.assertTrue(any("标的：药明康德" in text for text in pushed))
-        self.assertTrue(any("110.00 -> 132.00" in text for text in pushed))
-        self.assertTrue(any("止盈线：110.00 -> 132.00" in text for text in pushed))
+        self.assertTrue(any("110.00 -> 114.00" in text for text in pushed))
+        self.assertTrue(any("止损线：110.00 -> 114.00" in text for text in pushed))
         self.assertFalse(any("重要提醒" in text for text in pushed))
         self.assertFalse(any("止盈/止损线" in text for text in pushed))
         dlg.close()

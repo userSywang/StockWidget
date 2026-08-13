@@ -2481,6 +2481,15 @@ class FloatLabel(QWidget):
             key: value for key, value in sent_at.items()
             if self._strategy_push_key_code(key) not in codes
         }
+        today_key = self._desktop_alert_ignore_date()
+        self.strategy_alert_history = [
+            item for item in (getattr(self, "strategy_alert_history", []) or [])
+            if not (
+                isinstance(item, dict)
+                and str(item.get("code") or "") in codes
+                and str(item.get("time") or "")[:10] == today_key
+            )
+        ]
 
     def _refresh_strategy_states_from_cache(self):
         config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))

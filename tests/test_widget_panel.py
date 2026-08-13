@@ -560,6 +560,12 @@ class WidgetPanelTests(unittest.TestCase):
         win._daily_kline_cache = {}
         win._strategy_push_sent_keys = {"2026-08-10|sh603259|触发锁盈10%"}
         win._strategy_push_sent_at = {"sh603259|触发锁盈10%": 1.0}
+        win.strategy_alert_history = [
+            {"time": "2026-08-10 10:00", "code": "sh603259", "status": "触发锁盈10%"},
+            {"time": "2026-08-09 10:00", "code": "sh603259", "status": "触发锁盈10%"},
+            {"time": "2026-08-10 10:00", "code": "sh600584", "status": "触发止损"},
+        ]
+        win._now = lambda: datetime(2026, 8, 10, 10, 30)
         win._notify_change = lambda: calls.append("saved")
         win._is_market_fetch_time = lambda: True
         win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
@@ -580,6 +586,10 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(state["take_profit_price"], 132.0)
         self.assertNotIn("2026-08-10|sh603259|触发锁盈10%", win._strategy_push_sent_keys)
         self.assertNotIn("sh603259|触发锁盈10%", win._strategy_push_sent_at)
+        self.assertEqual(
+            [(item["time"], item["code"]) for item in win.strategy_alert_history],
+            [("2026-08-09 10:00", "sh603259"), ("2026-08-10 10:00", "sh600584")],
+        )
         self.assertEqual(calls, ["reprojected", "saved", ("refresh", True)])
 
     def test_daily_summary_check_uses_latest_strategy_states_outside_market(self):
