@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt, QRect
+from PySide6.QtCore import Qt, QRect, QPoint
 from PySide6.QtGui import QColor, QHideEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
@@ -2225,6 +2225,65 @@ class WidgetPanelTests(unittest.TestCase):
             status_col = win.model._headers.index("策略状态")
             self.assertLessEqual(win.table.columnWidth(status_col), 132)
             self.assertNotIn("备注", win.model._headers)
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_name_column_keeps_full_common_stock_name_width(self):
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh515880"]}],
+            "checked_codes": ["sh515880"],
+            "name_visible": True,
+            "price_visible": True,
+            "change_pct_visible": True,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            row = [
+                "sh515880", "通信ETF国泰", "0.646", "+0.00", "+0.31%",
+                "-", "-", "-", "-", "-", "0.646", "",
+            ]
+            win._project_columns([row], [{}])
+
+            name_col = win.model._headers.index("名称")
+            expected = win.table.fontMetrics().horizontalAdvance("通信ETF国泰") + 12
+            self.assertGreaterEqual(win.table.columnWidth(name_col), expected)
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_widget_context_menu_suspends_keep_top_before_popup(self):
+        class DummyMenu:
+            def __init__(self):
+                self.exec_calls = []
+
+            def exec(self, pos):
+                self.exec_calls.append(pos)
+
+        class FakeEvent:
+            def globalPos(self):
+                return QPoint(20, 20)
+
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh000001"]}],
+            "checked_codes": ["sh000001"],
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            suspend_calls = []
+            win.suspend_keep_top = lambda seconds=0: suspend_calls.append(seconds)
+            dummy_menu = DummyMenu()
+            with patch.object(win, "_build_context_menu", return_value=dummy_menu):
+                win.contextMenuEvent(FakeEvent())
+
+            self.assertEqual(suspend_calls, [8.0])
+            self.assertEqual(dummy_menu.exec_calls, [QPoint(20, 20)])
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

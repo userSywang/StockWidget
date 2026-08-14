@@ -1600,6 +1600,9 @@ class SettingsDialog(QDialog):
         if not source_group or not groups:
             return
         menu = self._build_code_tree_context_menu(item, source_group, groups)
+        suspend = getattr(self.win, "suspend_keep_top", None)
+        if callable(suspend):
+            suspend(8.0)
         menu.exec(self.tree_codes.viewport().mapToGlobal(pos))
 
     def _build_code_tree_context_menu(self, item, source_group, groups):

@@ -492,6 +492,8 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.tree_codes.setCurrentItem(target_group.child(0))
         dlg.show()
         self.app.processEvents()
+        suspend_calls = []
+        win.suspend_keep_top = lambda seconds=0: suspend_calls.append(seconds)
 
         dummy_menu = DummyMenu()
         with patch.object(dlg, "_load_code_tag_editor") as load_tags, \
@@ -502,6 +504,7 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertIs(dlg.tree_codes.currentItem(), target_group.child(0))
         self.assertEqual(len(dummy_menu.exec_calls), 1)
+        self.assertEqual(suspend_calls, [8.0])
         load_tags.assert_not_called()
         select_alert.assert_not_called()
         refresh_buttons.assert_not_called()

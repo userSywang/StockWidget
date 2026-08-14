@@ -619,7 +619,7 @@ class FloatLabel(QWidget):
     def _column_min_width(header):
         return {
             "代码": 58,
-            "名称": 54,
+            "名称": 96,
             "K线": 58,
             "策略状态": 70,
             "备注": 48,
@@ -628,11 +628,21 @@ class FloatLabel(QWidget):
     @staticmethod
     def _column_max_width(header):
         return {
-            "名称": 122,
             "策略状态": 132,
             "备注": 88,
             "K线": 58,
         }.get(str(header or ""), 0)
+
+    @staticmethod
+    def _column_shrink_priority(header):
+        header = str(header or "")
+        if header == "名称":
+            return 3
+        if header in ("代码", "K线"):
+            return 2
+        if header in ("策略状态", "备注"):
+            return 0
+        return 1
 
     def _available_window_geometry(self):
         screen = QApplication.screenAt(self.geometry().center()) or QApplication.primaryScreen()
@@ -661,7 +671,10 @@ class FloatLabel(QWidget):
             capacity = max(0, width - min_width)
             if capacity:
                 flexible.append((c, capacity, min_width))
-        for c, capacity, min_width in sorted(flexible, key=lambda item: item[1], reverse=True):
+        for c, capacity, min_width in sorted(
+            flexible,
+            key=lambda item: (self._column_shrink_priority(headers[item[0]] if item[0] < len(headers) else ""), -item[1]),
+        ):
             if overflow <= 0:
                 break
             take = min(capacity, overflow)
@@ -3037,6 +3050,11 @@ class FloatLabel(QWidget):
     
     # ----- 交互 -----
     def contextMenuEvent(self, event):
+        self.suspend_keep_top(8.0)
+        menu = self._build_context_menu()
+        menu.exec(event.globalPos())
+
+    def _build_context_menu(self):
         menu = QMenu(self)
         sub_cols = QMenu("显示指标", menu)
         self._populate_display_indicator_menu(sub_cols)
@@ -3064,12 +3082,15 @@ class FloatLabel(QWidget):
 
         menu.addSeparator()
         act_open_settings = QAction("设置…", menu)
-        act_open_settings.triggered.connect(self._open_settings_cb)
+        if callable(self._open_settings_cb):
+            act_open_settings.triggered.connect(self._open_settings_cb)
+        else:
+            act_open_settings.setEnabled(False)
         menu.addAction(act_open_settings)
 
         menu.addSeparator()
         menu.addAction(QAction("隐藏浮窗", menu, triggered=self.hide))
-        menu.exec(event.globalPos())
+        return menu
 
     def _populate_display_indicator_menu(self, sub_cols):
         for name in self.ALL_HEADERS:
