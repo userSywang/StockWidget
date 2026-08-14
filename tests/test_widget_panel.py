@@ -2098,6 +2098,59 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_project_columns_shrinks_wide_display_to_screen_width(self):
+        class FakeScreen:
+            def availableGeometry(self):
+                return QRect(0, 0, 900, 560)
+
+        cfg = {
+            "groups": [{"name": "默认", "codes": ["sh603259"]}],
+            "checked_codes": ["sh603259"],
+            "code_visible": True,
+            "name_visible": True,
+            "price_visible": True,
+            "change_visible": True,
+            "change_pct_visible": True,
+            "b1s1_visible": True,
+            "commi_visible": True,
+            "vol_visible": True,
+            "amount_visible": True,
+            "avg_visible": True,
+            "kline_visible": True,
+            "ma5_visible": True,
+            "ma10_visible": True,
+            "ma20_visible": True,
+            "strategy_profit_visible": True,
+            "strategy_stop_visible": True,
+            "strategy_status_visible": True,
+            "note_visible": True,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            row = [
+                "sh603259", "药明康德超长名称测试", "160.21", "+1.20", "+3.88%",
+                "160.20", "160.30", "12.00%", "123456789", "1234567890",
+                "159.88", {"k": (159.0, 160.2, 161.0, 158.8, 159.5)},
+                "158.00", "156.00", "153.00", "+12.3%", "150.00",
+                "个股破5日线清仓 | 实时08-14 | 状态文字很长", "压力位3976观察回踩",
+            ]
+            with patch("WidgetPanel.QApplication.screenAt", return_value=FakeScreen()), \
+                    patch("WidgetPanel.QApplication.primaryScreen", return_value=FakeScreen()):
+                win.setGeometry(820, 20, 160, 80)
+                win._project_columns([row], [{}])
+
+            self.assertLessEqual(win.width(), 900)
+            self.assertLessEqual(win.geometry().right(), 899)
+            status_col = win.model._headers.index("策略状态")
+            self.assertLessEqual(win.table.columnWidth(status_col), 132)
+            self.assertNotIn("备注", win.model._headers)
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_edge_auto_hide_ignores_bottom_edge(self):
         class FakeScreen:
             def availableGeometry(self):

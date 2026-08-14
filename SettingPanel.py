@@ -1599,7 +1599,10 @@ class SettingsDialog(QDialog):
         groups = self._group_items()
         if not source_group or not groups:
             return
-        self.tree_codes.setCurrentItem(item)
+        menu = self._build_code_tree_context_menu(item, source_group, groups)
+        menu.exec(self.tree_codes.viewport().mapToGlobal(pos))
+
+    def _build_code_tree_context_menu(self, item, source_group, groups):
         menu = QMenu(self)
         title = menu.addAction("移动到分组")
         title.setEnabled(False)
@@ -1609,7 +1612,7 @@ class SettingsDialog(QDialog):
             action = menu.addAction(group_name)
             action.setEnabled(group_item is not source_group)
             action.triggered.connect(partial(self._move_code_item_to_group, item, group_item))
-        menu.exec(self.tree_codes.viewport().mapToGlobal(pos))
+        return menu
 
     def _move_code_item_to_group(self, item, target_group):
         if item is None or target_group is None or item.data(0, Qt.UserRole) != "code":

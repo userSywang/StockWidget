@@ -590,7 +590,63 @@ class FloatLabel(QWidget):
                         if row_meta.get("price_alerts"):
                             cell_width += 22
                 width = max(width, cell_width)
-            self.table.setColumnWidth(c, max(18, width))
+            max_width = self._column_max_width(header)
+            if max_width:
+                width = min(width, max_width)
+            self.table.setColumnWidth(c, max(self._column_min_width(header), width))
+
+    @staticmethod
+    def _column_min_width(header):
+        return {
+            "代码": 58,
+            "名称": 54,
+            "K线": 58,
+            "策略状态": 70,
+            "备注": 48,
+        }.get(str(header or ""), 38)
+
+    @staticmethod
+    def _column_max_width(header):
+        return {
+            "名称": 122,
+            "策略状态": 132,
+            "备注": 88,
+            "K线": 58,
+        }.get(str(header or ""), 0)
+
+    def _available_window_geometry(self):
+        screen = QApplication.screenAt(self.geometry().center()) or QApplication.primaryScreen()
+        return screen.availableGeometry() if screen is not None else None
+
+    def _shrink_columns_to_available_width(self):
+        rect = self._available_window_geometry()
+        if rect is None:
+            return
+        margins = self.vbox.contentsMargins() if hasattr(self, "vbox") else None
+        extra_w = self.table.verticalHeader().width() + 2 * self.table.frameWidth() + 14
+        if margins is not None:
+            extra_w += margins.left() + margins.right()
+        budget = max(120, rect.width() - 16 - extra_w)
+        col_count = self.model.columnCount()
+        current = sum(self.table.columnWidth(c) for c in range(col_count))
+        overflow = current - budget
+        if overflow <= 0:
+            return
+        headers = list(getattr(self.model, "_headers", []) or [])
+        flexible = []
+        for c in range(col_count):
+            header = headers[c] if c < len(headers) else ""
+            width = self.table.columnWidth(c)
+            min_width = self._column_min_width(header)
+            capacity = max(0, width - min_width)
+            if capacity:
+                flexible.append((c, capacity, min_width))
+        for c, capacity, min_width in sorted(flexible, key=lambda item: item[1], reverse=True):
+            if overflow <= 0:
+                break
+            take = min(capacity, overflow)
+            self.table.setColumnWidth(c, self.table.columnWidth(c) - take)
+            overflow -= take
 
     def _wrap_message_rows_to_current_width(self):
         rows = getattr(self.model, "_rows", [])
@@ -613,6 +669,7 @@ class FloatLabel(QWidget):
     def _fit_to_contents(self):
         fit_sig = self._fit_signature()
         if fit_sig == getattr(self, "_last_fit_signature", None):
+            self._keep_window_inside_screen()
             return
         self._last_fit_signature = fit_sig
 
@@ -620,6 +677,7 @@ class FloatLabel(QWidget):
         header.setStretchLastSection(False)
         header.setSectionResizeMode(QHeaderView.Fixed)
         self._resize_columns_to_contents()
+        self._shrink_columns_to_available_width()
         self._wrap_message_rows_to_current_width()
         self._apply_row_heights()
 
@@ -643,10 +701,11 @@ class FloatLabel(QWidget):
 
     def _keep_window_inside_screen(self):
         try:
-            screen = QApplication.primaryScreen()
-            if screen is None:
+            if getattr(self, "_edge_collapsed", False):
                 return
-            rect = screen.availableGeometry()
+            rect = self._available_window_geometry()
+            if rect is None:
+                return
             max_x = max(rect.left(), rect.right() - self.width())
             max_y = max(rect.top(), rect.bottom() - self.height())
             x = max(rect.left(), min(self.x(), max_x))

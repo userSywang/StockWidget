@@ -469,6 +469,44 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(target_group.child(1).checkState(0), Qt.Checked)
         dlg.close()
 
+    def test_code_tree_context_menu_open_does_not_reload_editors(self):
+        class DummyMenu:
+            def __init__(self):
+                self.exec_calls = []
+
+            def exec(self, pos):
+                self.exec_calls.append(pos)
+
+        win = FakeWindow()
+        win.groups = [
+            {"name": "默认", "codes": ["sh603259"]},
+            {"name": "观察", "codes": ["sh600584"]},
+        ]
+        win.codes = ["sh603259", "sh600584"]
+        win.checked_codes = ["sh603259", "sh600584"]
+        win.code_names = {"sh603259": "药明康德", "sh600584": "长电科技"}
+        dlg = SettingsDialog(win, None)
+        source_group = dlg.tree_codes.topLevelItem(0)
+        target_group = dlg.tree_codes.topLevelItem(1)
+        code_item = source_group.child(0)
+        dlg.tree_codes.setCurrentItem(target_group.child(0))
+        dlg.show()
+        self.app.processEvents()
+
+        dummy_menu = DummyMenu()
+        with patch.object(dlg, "_load_code_tag_editor") as load_tags, \
+                patch.object(dlg, "_select_price_alert_for_code") as select_alert, \
+                patch.object(dlg, "_refresh_code_action_buttons") as refresh_buttons, \
+                patch.object(dlg, "_build_code_tree_context_menu", return_value=dummy_menu):
+            dlg._show_code_tree_context_menu(dlg.tree_codes.visualItemRect(code_item).center())
+
+        self.assertIs(dlg.tree_codes.currentItem(), target_group.child(0))
+        self.assertEqual(len(dummy_menu.exec_calls), 1)
+        load_tags.assert_not_called()
+        select_alert.assert_not_called()
+        refresh_buttons.assert_not_called()
+        dlg.close()
+
     def test_alert_targets_can_be_added_edited_and_deleted(self):
         win = FakeWindow()
         win.alert_rules = [{
