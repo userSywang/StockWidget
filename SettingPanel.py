@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QMenu
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -72,6 +72,7 @@ class SettingsDialog(QDialog):
         self.tree_codes.setMinimumWidth(300)
         self.tree_codes.setMinimumHeight(250)
         self.tree_codes.setIndentation(18)
+        self.tree_codes.setContextMenuPolicy(Qt.CustomContextMenu)
         self._load_code_tree()
         # 1.2 操作按钮
         btn_col = QVBoxLayout()
@@ -1252,6 +1253,7 @@ class SettingsDialog(QDialog):
         # 连接：代码列表
         self.tree_codes.itemChanged.connect(self._on_codes_changed)
         self.tree_codes.currentItemChanged.connect(self._on_code_tree_selection_changed)
+        self.tree_codes.customContextMenuRequested.connect(self._show_code_tree_context_menu)
         self.btn_add.clicked.connect(self._add_code)
         self.btn_add_group.clicked.connect(self._add_group)
         self.btn_del.clicked.connect(self._del_code)
@@ -1568,6 +1570,77 @@ class SettingsDialog(QDialog):
                 self._add_group()
             return self.tree_codes.topLevelItem(0)
         return item if item.data(0, Qt.UserRole) == "group" else item.parent()
+
+    def _group_items(self):
+        return [
+            self.tree_codes.topLevelItem(i)
+            for i in range(self.tree_codes.topLevelItemCount())
+            if self.tree_codes.topLevelItem(i) is not None
+        ]
+
+    def _find_code_item_in_group(self, group_item, code):
+        if group_item is None or not code:
+            return None
+        for row in range(group_item.childCount()):
+            child = group_item.child(row)
+            child_code = child.data(0, Qt.UserRole + 1) or self._code_from_item_text(child.text(0))
+            if child_code == code:
+                return child
+        return None
+
+    def _show_code_tree_context_menu(self, pos):
+        item = self.tree_codes.itemAt(pos)
+        if item is None or item.data(0, Qt.UserRole) != "code" or item.data(0, self._pending_role()):
+            return
+        code = item.data(0, Qt.UserRole + 1) or self._code_from_item_text(item.text(0))
+        if not code:
+            return
+        source_group = item.parent()
+        groups = self._group_items()
+        if not source_group or not groups:
+            return
+        self.tree_codes.setCurrentItem(item)
+        menu = QMenu(self)
+        title = menu.addAction("移动到分组")
+        title.setEnabled(False)
+        menu.addSeparator()
+        for group_item in groups:
+            group_name = group_item.text(0).strip() or "分组"
+            action = menu.addAction(group_name)
+            action.setEnabled(group_item is not source_group)
+            action.triggered.connect(partial(self._move_code_item_to_group, item, group_item))
+        menu.exec(self.tree_codes.viewport().mapToGlobal(pos))
+
+    def _move_code_item_to_group(self, item, target_group):
+        if item is None or target_group is None or item.data(0, Qt.UserRole) != "code":
+            return False
+        source_group = item.parent()
+        if source_group is None or source_group is target_group:
+            return False
+        code = item.data(0, Qt.UserRole + 1) or self._code_from_item_text(item.text(0))
+        code = normalize_code_or_none(code)
+        if not code:
+            return False
+        existing = self._find_code_item_in_group(target_group, code)
+        checked = item.checkState(0) == Qt.Checked
+        self.tree_codes.blockSignals(True)
+        try:
+            source_group.removeChild(item)
+            if existing is None:
+                existing = self._make_code_item(code, checked)
+                target_group.addChild(existing)
+            elif checked and existing.checkState(0) != Qt.Checked:
+                existing.setCheckState(0, Qt.Checked)
+            target_group.setExpanded(True)
+            self.tree_codes.setCurrentItem(existing)
+        finally:
+            self.tree_codes.blockSignals(False)
+        self._on_codes_changed(None)
+        self.tree_codes.setCurrentItem(existing)
+        self._load_code_tag_editor()
+        self._select_price_alert_for_code(code)
+        self._refresh_code_action_buttons()
+        return True
 
     def _current_code_from_tree(self):
         item = self.tree_codes.currentItem()

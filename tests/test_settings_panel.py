@@ -423,6 +423,52 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(checked_codes, ["sh000001"])
         dlg.close()
 
+    def test_code_tree_moves_stock_to_another_group(self):
+        win = FakeWindow()
+        win.groups = [
+            {"name": "默认", "codes": ["sh603259"]},
+            {"name": "观察", "codes": ["sh600584"]},
+        ]
+        win.codes = ["sh603259", "sh600584"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德", "sh600584": "长电科技"}
+        dlg = SettingsDialog(win, None)
+        source_group = dlg.tree_codes.topLevelItem(0)
+        target_group = dlg.tree_codes.topLevelItem(1)
+        code_item = source_group.child(0)
+
+        moved = dlg._move_code_item_to_group(code_item, target_group)
+
+        self.assertTrue(moved)
+        self.assertEqual(win.groups, [{"name": "观察", "codes": ["sh600584", "sh603259"]}])
+        self.assertEqual(win.checked_codes, ["sh603259"])
+        self.assertIs(dlg.tree_codes.currentItem(), target_group.child(1))
+        dlg.close()
+
+    def test_code_tree_move_to_group_with_existing_stock_does_not_duplicate(self):
+        win = FakeWindow()
+        win.groups = [
+            {"name": "默认", "codes": ["sh603259"]},
+            {"name": "观察", "codes": ["sh603259", "sh600584"]},
+        ]
+        win.codes = ["sh603259", "sh600584"]
+        win.checked_codes = ["sh603259"]
+        win.code_names = {"sh603259": "药明康德", "sh600584": "长电科技"}
+        dlg = SettingsDialog(win, None)
+        source_group = dlg.tree_codes.topLevelItem(0)
+        target_group = dlg.tree_codes.topLevelItem(1)
+        target_group.child(0).setCheckState(0, Qt.Unchecked)
+
+        moved = dlg._move_code_item_to_group(source_group.child(0), target_group)
+
+        self.assertTrue(moved)
+        self.assertEqual(win.groups, [{"name": "观察", "codes": ["sh600584", "sh603259"]}])
+        self.assertEqual(win.checked_codes, ["sh603259"])
+        self.assertEqual(target_group.childCount(), 2)
+        self.assertIs(dlg.tree_codes.currentItem(), target_group.child(1))
+        self.assertEqual(target_group.child(1).checkState(0), Qt.Checked)
+        dlg.close()
+
     def test_alert_targets_can_be_added_edited_and_deleted(self):
         win = FakeWindow()
         win.alert_rules = [{
