@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -1726,6 +1726,86 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertIn("标的：药明康德", content)
         self.assertIn("当前价：144.500", content)
         self.assertIn("条件：低于/等于 145.000", content)
+
+    def test_price_alert_pushes_once_per_alert_per_day(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._price_alert_push_sent_keys = set()
+        win._price_alert_push_sent_at = {}
+        win._price_alert_push_sent_today = {}
+        current_time = datetime(2026, 8, 10, 9, 35)
+        win._now = lambda: current_time
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+                "push_cooldown_minutes": 30,
+            },
+        }
+        alerts = {
+            "sh000001": [{
+                "triggered": True,
+                "name": "上证指数",
+                "direction": "below",
+                "price": 3900.0,
+                "current_price": 3890.0,
+                "message": "大盘跌破提醒",
+            }]
+        }
+
+        first = FloatLabel._send_price_alert_pushes(win, alerts)
+        current_time = current_time + timedelta(minutes=31)
+        same_day = FloatLabel._send_price_alert_pushes(win, alerts)
+        current_time = current_time + timedelta(days=1)
+        next_day = FloatLabel._send_price_alert_pushes(win, alerts)
+
+        self.assertTrue(first)
+        self.assertFalse(same_day)
+        self.assertTrue(next_day)
+        self.assertEqual(len(win._http.posts), 2)
+        self.assertEqual(
+            win._price_alert_push_sent_today["sh000001|below|3900.0000|大盘跌破提醒"],
+            "2026-08-11",
+        )
+
+    def test_set_price_alerts_clears_deleted_index_alert_state_and_push_cache(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.price_alerts = [{
+            "enabled": True,
+            "code": "sh000001",
+            "direction": "below",
+            "price": 3900.0,
+            "message": "大盘跌破提醒",
+        }]
+        win._latest_price_alert_states = {"sh000001": [{"triggered": True}]}
+        win._price_alert_push_sent_keys = {
+            "sh000001|below|3900.0000|大盘跌破提醒",
+            "2026-08-10|sh000001|below|3900.0000|大盘跌破提醒",
+        }
+        win._price_alert_push_sent_at = {"sh000001|below|3900.0000|大盘跌破提醒": 1.0}
+        win._price_alert_push_sent_today = {"sh000001|below|3900.0000|大盘跌破提醒": "2026-08-10"}
+        win._latest_row_by_code = {}
+        win._latest_sign_by_code = {}
+        calls = []
+        win._notify_change = lambda: calls.append("saved")
+        win._refresh_from_function = lambda *args, **kwargs: calls.append("refresh")
+
+        FloatLabel.set_price_alerts(win, [])
+
+        self.assertEqual(win.price_alerts, [])
+        self.assertNotIn("sh000001", win._latest_price_alert_states)
+        self.assertEqual(win._price_alert_push_sent_keys, set())
+        self.assertEqual(win._price_alert_push_sent_at, {})
+        self.assertEqual(win._price_alert_push_sent_today, {})
+        self.assertEqual(calls, ["saved", "refresh"])
 
     def test_prune_expired_price_alerts_removes_old_alerts(self):
         win = FloatLabel.__new__(FloatLabel)

@@ -103,6 +103,11 @@ class FloatLabel(QWidget):
         self._refresh_again_force = False
         self._strategy_push_sent_keys = set()
         self._strategy_push_sent_at = {}
+        self._price_alert_push_sent_keys = set()
+        self._price_alert_push_sent_at = {}
+        self._price_alert_push_sent_today = self._normalize_price_alert_push_sent_today(
+            cfg.get("price_alert_push_sent_today", {})
+        )
         self._desktop_alert_ignored_today = self._normalize_desktop_alert_ignored_today(
             cfg.get("desktop_alert_ignored_today", {})
         )
@@ -268,6 +273,9 @@ class FloatLabel(QWidget):
             "checked_codes": self.checked_codes,
             "alert_rules": self.alert_rules,
             "price_alerts": self.price_alerts,
+            "price_alert_push_sent_today": self._normalize_price_alert_push_sent_today(
+                getattr(self, "_price_alert_push_sent_today", {})
+            ),
             "strategy_alert_config": self.strategy_alert_config,
             "strategy_alert_history": self.strategy_alert_history,
             "strategy_daily_summary_sent_date": getattr(self, "_strategy_daily_summary_sent_date", ""),
@@ -426,6 +434,18 @@ class FloatLabel(QWidget):
 
     @staticmethod
     def _normalize_desktop_alert_ignored_today(value):
+        if not isinstance(value, dict):
+            return {}
+        normalized = {}
+        for raw_key, raw_day in value.items():
+            key = str(raw_key or "").strip()
+            day = str(raw_day or "").strip()[:10]
+            if key and day:
+                normalized[key] = day
+        return normalized
+
+    @staticmethod
+    def _normalize_price_alert_push_sent_today(value):
         if not isinstance(value, dict):
             return {}
         normalized = {}
@@ -2175,28 +2195,36 @@ class FloatLabel(QWidget):
             return False
         sent_keys = getattr(self, "_price_alert_push_sent_keys", set())
         sent_at = getattr(self, "_price_alert_push_sent_at", {})
+        sent_today = self._normalize_price_alert_push_sent_today(getattr(self, "_price_alert_push_sent_today", {}))
         cooldown_seconds = int(notifications.get("push_cooldown_minutes", 30)) * 60
         now_provider = getattr(self, "_now", None)
         now_dt = now_provider() if callable(now_provider) else datetime.now()
         now_ts = now_dt.timestamp() if hasattr(now_dt, "timestamp") else time.time()
+        today_key = now_dt.strftime("%Y-%m-%d") if hasattr(now_dt, "strftime") else date.today().strftime("%Y-%m-%d")
         pushed_any = False
         for code, alerts in (price_alerts_by_code or {}).items():
             for alert in alerts or []:
                 if not isinstance(alert, dict) or not alert.get("triggered"):
                     continue
                 key = f"{code}|{alert.get('direction')}|{float(alert.get('price', 0.0)):.4f}|{alert.get('message', '')}"
+                daily_key = f"{today_key}|{key}"
+                if sent_today.get(key) == today_key or daily_key in sent_keys:
+                    continue
                 last_ts = float(sent_at.get(key, 0.0) or 0.0)
                 if key in sent_keys and now_ts - last_ts < cooldown_seconds:
                     continue
                 try:
                     if self._send_strategy_push_text(self._price_alert_push_text(code, alert)):
                         sent_keys.add(key)
+                        sent_keys.add(daily_key)
                         sent_at[key] = now_ts
+                        sent_today[key] = today_key
                         pushed_any = True
                 except Exception:
                     pass
         self._price_alert_push_sent_keys = sent_keys
         self._price_alert_push_sent_at = sent_at
+        self._price_alert_push_sent_today = sent_today
         return pushed_any
 
     def _prune_expired_price_alerts(self, now=None):
@@ -2213,6 +2241,47 @@ class FloatLabel(QWidget):
         if changed:
             self.price_alerts = active_alerts
         return changed
+
+    @staticmethod
+    def _price_alert_identity(alert):
+        alert = normalize_price_alerts([alert])[0] if isinstance(alert, dict) else normalize_price_alerts([{}])[0]
+        return (
+            alert.get("code", ""),
+            alert.get("direction", ""),
+            f"{float(alert.get('price', 0.0)):.4f}",
+            str(alert.get("message") or ""),
+        )
+
+    @staticmethod
+    def _price_alert_push_key_code(key):
+        parts = str(key or "").split("|")
+        if len(parts) >= 5 and len(parts[0]) == 10 and parts[0].count("-") == 2:
+            return parts[1]
+        return parts[0] if parts else ""
+
+    def _clear_price_alert_cache_for_codes(self, codes):
+        codes = {str(code or "") for code in codes or [] if code}
+        if not codes:
+            return
+        states = dict(getattr(self, "_latest_price_alert_states", {}) or {})
+        self._latest_price_alert_states = {
+            code: value for code, value in states.items() if code not in codes
+        }
+        sent_keys = set(getattr(self, "_price_alert_push_sent_keys", set()) or set())
+        self._price_alert_push_sent_keys = {
+            key for key in sent_keys
+            if self._price_alert_push_key_code(key) not in codes
+        }
+        sent_at = dict(getattr(self, "_price_alert_push_sent_at", {}) or {})
+        self._price_alert_push_sent_at = {
+            key: value for key, value in sent_at.items()
+            if self._price_alert_push_key_code(key) not in codes
+        }
+        sent_today = self._normalize_price_alert_push_sent_today(getattr(self, "_price_alert_push_sent_today", {}))
+        self._price_alert_push_sent_today = {
+            key: value for key, value in sent_today.items()
+            if self._price_alert_push_key_code(key) not in codes
+        }
 
     def _record_strategy_alert_history(self, state, now=None):
         now = now or datetime.now()
@@ -2743,9 +2812,16 @@ class FloatLabel(QWidget):
         self._refresh_from_function()
 
     def set_price_alerts(self, alerts):
-        self.price_alerts = normalize_price_alerts(alerts)
+        old_alerts = normalize_price_alerts(getattr(self, "price_alerts", []))
+        new_alerts = normalize_price_alerts(alerts)
+        old_ids = {self._price_alert_identity(alert) for alert in old_alerts}
+        new_ids = {self._price_alert_identity(alert) for alert in new_alerts}
+        changed_codes = {identity[0] for identity in (old_ids ^ new_ids) if identity and identity[0]}
+        self.price_alerts = new_alerts
+        self._clear_price_alert_cache_for_codes(changed_codes)
         self._notify_change()
-        self._refresh_from_function()
+        if not self._reproject_cached_display():
+            self._refresh_from_function()
 
     def set_strategy_alert_config(self, config):
         old_config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
