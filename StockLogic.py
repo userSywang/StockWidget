@@ -230,15 +230,24 @@ def flatten_group_codes(groups):
 def default_alert_rule():
     return {
         "enabled": False,
-        "name": "科技共振提醒",
+        "name": "联动提醒",
         "display_mode": "on_trigger",
         "targets": [
             {"code": "sh000001", "op": ">", "pct": 0.0, "volume": False},
             {"code": "sh512000", "op": ">=", "pct": 2.0, "volume": True},
             {"code": "sh515880", "op": ">=", "pct": 3.0, "volume": False},
         ],
-        "message": "共振信号出现，先观察量能持续性，避免冲动交易。",
+        "message": "联动提醒触发，请结合量能和趋势确认。",
     }
+
+
+_LEGACY_ALERT_RULE_NAMES = {"科技共振", "科技共振提醒"}
+
+
+def _is_legacy_alert_rule(rule):
+    if not isinstance(rule, dict):
+        return False
+    return str(rule.get("name") or "").strip() in _LEGACY_ALERT_RULE_NAMES
 
 
 def normalize_alert_target(target):
@@ -311,8 +320,13 @@ def normalize_alert_rule(rule):
 
 
 def normalize_alert_rules(rules):
-    normalized = [normalize_alert_rule(rule) for rule in (rules or []) if isinstance(rule, dict)]
-    return normalized or [default_alert_rule()]
+    source = rules if isinstance(rules, list) else []
+    normalized = [
+        normalize_alert_rule(rule)
+        for rule in source
+        if isinstance(rule, dict) and not _is_legacy_alert_rule(rule)
+    ]
+    return normalized if source else [default_alert_rule()]
 
 
 def _quote_pct(quotes, code):

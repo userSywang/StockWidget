@@ -7,6 +7,7 @@ from StockLogic import (
     flatten_group_codes,
     normalize_code_or_none,
     normalize_alert_rule,
+    normalize_alert_rules,
     normalize_price_alert,
     price_alert_is_expired,
     normalize_groups,
@@ -90,6 +91,24 @@ class StockLogicTests(unittest.TestCase):
         self.assertEqual(rule["targets"][0]["op"], ">")
         self.assertEqual(rule["targets"][1]["pct"], 2.0)
         self.assertTrue(rule["targets"][1]["volume"])
+
+    def test_alert_rules_drop_legacy_tech_resonance_rule(self):
+        rules = normalize_alert_rules([
+            {
+                "enabled": True,
+                "name": "科技共振",
+                "display_mode": "always",
+                "targets": [{"code": "sh000001", "op": ">", "pct": 0.0}],
+            }
+        ])
+
+        self.assertEqual(rules, [])
+
+    def test_default_alert_rule_uses_generic_name(self):
+        rules = normalize_alert_rules([])
+
+        self.assertEqual(rules[0]["name"], "联动提醒")
+        self.assertNotIn("科技共振", rules[0]["message"])
 
     def test_alert_rule_supports_dynamic_targets(self):
         rule = {
