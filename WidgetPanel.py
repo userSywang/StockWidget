@@ -91,6 +91,9 @@ class FloatLabel(QWidget):
         self.default_color      = bool(cfg.get("default_color", False))     # 默认颜色模式
 
         self.hotkey             = normalize_hotkey(cfg.get("hotkey", DEFAULT_HOTKEY))           # 快捷键
+        self._hotkey_handle     = None
+        self._hotkey_registered_key = ""
+        self._hotkey_error      = ""
         self.start_on_boot      = bool(cfg.get("start_on_boot", False))
         self.alert_rules        = normalize_alert_rules(cfg.get("alert_rules", []))
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
@@ -265,6 +268,11 @@ class FloatLabel(QWidget):
         self._keep_top_timer.setInterval(1000)  # 每 1000ms 检查一次
         self._keep_top_timer.timeout.connect(self._ensure_on_top)
         self._keep_top_timer.start()
+
+        self._hotkey_watchdog_timer = QTimer(self)
+        self._hotkey_watchdog_timer.setInterval(60000)
+        self._hotkey_watchdog_timer.timeout.connect(self._refresh_hotkey_registration)
+        self._hotkey_watchdog_timer.start()
 
     # 与 App 连接
     def set_open_settings_callback(self, fn): 
@@ -3243,6 +3251,13 @@ class FloatLabel(QWidget):
 
     def shutdown_background(self):
         try:
+            timer = getattr(self, "_hotkey_watchdog_timer", None)
+            if timer is not None and timer.isActive():
+                timer.stop()
+        except Exception:
+            pass
+        self._unregister_hotkey()
+        try:
             executor = getattr(self, "_refresh_executor", None)
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
@@ -3359,20 +3374,38 @@ class FloatLabel(QWidget):
         self._edge_expanded_geometry = None
         self._ensure_on_top()
 
-    def _register_hotkey(self):
+    def _unregister_hotkey(self):
+        handle = getattr(self, "_hotkey_handle", None)
+        if handle is None:
+            return
         try:
-            keyboard.remove_all_hotkeys()
-        except Exception:
-            pass
-        self._hotkey_error = ""
-        try:
-            keyboard.add_hotkey(normalize_hotkey(self.hotkey).lower(), lambda: self.hotkey_triggered.emit())
+            keyboard.remove_hotkey(handle)
         except Exception as exc:
             self._hotkey_error = str(exc)
+        finally:
+            self._hotkey_handle = None
+            self._hotkey_registered_key = ""
+
+    def _register_hotkey(self, force=False):
+        key = normalize_hotkey(self.hotkey).lower()
+        if not force and getattr(self, "_hotkey_handle", None) is not None and getattr(self, "_hotkey_registered_key", "") == key:
+            return
+        self._unregister_hotkey()
+        self._hotkey_error = ""
+        try:
+            self._hotkey_handle = keyboard.add_hotkey(key, lambda: self.hotkey_triggered.emit())
+            self._hotkey_registered_key = key
+        except Exception as exc:
+            self._hotkey_error = str(exc)
+            self._hotkey_handle = None
+            self._hotkey_registered_key = ""
+
+    def _refresh_hotkey_registration(self):
+        self._register_hotkey(force=True)
 
     def update_hotkey(self, new_hotkey: str):
         self.hotkey = normalize_hotkey(new_hotkey)
-        self._register_hotkey()
+        self._register_hotkey(force=True)
 
     def toggle_win(self):
         if self.isVisible():

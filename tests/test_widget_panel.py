@@ -31,12 +31,38 @@ class WidgetPanelTests(unittest.TestCase):
     def test_update_hotkey_registers_numpad_decimal(self):
         win = FloatLabel.__new__(FloatLabel)
         calls = []
+        win._hotkey_handle = None
+        win._hotkey_registered_key = ""
 
-        with patch("WidgetPanel.keyboard.remove_all_hotkeys"), patch("WidgetPanel.keyboard.add_hotkey", lambda key, callback: calls.append(key)):
+        def fake_add_hotkey(key, callback):
+            calls.append(key)
+            return f"handle:{key}"
+
+        with patch("WidgetPanel.keyboard.add_hotkey", fake_add_hotkey):
             FloatLabel.update_hotkey(win, ".")
 
         self.assertEqual(win.hotkey, "decimal")
         self.assertEqual(calls, ["decimal"])
+        self.assertEqual(win._hotkey_handle, "handle:decimal")
+
+    def test_hotkey_watchdog_re_registers_existing_handle(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.hotkey = "decimal"
+        win._hotkey_handle = "old-handle"
+        win._hotkey_registered_key = "decimal"
+        removed = []
+        added = []
+
+        def fake_add_hotkey(key, callback):
+            added.append(key)
+            return "new-handle"
+
+        with patch("WidgetPanel.keyboard.remove_hotkey", lambda handle: removed.append(handle)), patch("WidgetPanel.keyboard.add_hotkey", fake_add_hotkey):
+            FloatLabel._refresh_hotkey_registration(win)
+
+        self.assertEqual(removed, ["old-handle"])
+        self.assertEqual(added, ["decimal"])
+        self.assertEqual(win._hotkey_handle, "new-handle")
 
     def test_compose_display_rows_separates_alert_and_warning_sections(self):
         win = FloatLabel.__new__(FloatLabel)
