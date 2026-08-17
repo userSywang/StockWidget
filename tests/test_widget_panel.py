@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QHideEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
 from Display import SimpleTableModel
-from WidgetPanel import FloatLabel
+from WidgetPanel import FloatLabel, normalize_hotkey
 
 
 BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
@@ -22,6 +22,21 @@ class WidgetPanelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_normalize_hotkey_maps_dot_to_numpad_decimal(self):
+        self.assertEqual(normalize_hotkey("."), "decimal")
+        self.assertEqual(normalize_hotkey("小键盘."), "decimal")
+        self.assertEqual(normalize_hotkey(""), "decimal")
+
+    def test_update_hotkey_registers_numpad_decimal(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+
+        with patch("WidgetPanel.keyboard.remove_all_hotkeys"), patch("WidgetPanel.keyboard.add_hotkey", lambda key, callback: calls.append(key)):
+            FloatLabel.update_hotkey(win, ".")
+
+        self.assertEqual(win.hotkey, "decimal")
+        self.assertEqual(calls, ["decimal"])
 
     def test_compose_display_rows_separates_alert_and_warning_sections(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -35,7 +50,7 @@ class WidgetPanelTests(unittest.TestCase):
             win,
             {"sh512000": ["sh512000", "券商ETF", "1.000", "+0.010", "+1.00%", "-", "-", "-", "-", "-", "1.000", ""]},
             {"sh512000": {"delta": 1}},
-            [{"rule": {"name": "共振", "display_mode": "always"}, "status": "未触发", "triggered": False, "text": ""}],
+            [{"rule": {"name": "联动提醒", "display_mode": "always"}, "status": "未触发", "triggered": False, "text": ""}],
         )
 
         self.assertEqual(meta[0]["row_type"], "group")

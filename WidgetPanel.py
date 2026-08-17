@@ -34,6 +34,17 @@ from StockLogic import (
 
 STRATEGY_DAILY_SUMMARY_SLOTS = ((9, 0, "09:00"), (18, 0, "18:00"))
 STRATEGY_DAILY_SUMMARY_GRACE_MINUTES = 10
+DEFAULT_HOTKEY = "decimal"
+
+
+def normalize_hotkey(value):
+    text = str(value or "").strip()
+    if not text:
+        return DEFAULT_HOTKEY
+    normalized = text.lower().replace("num.", "decimal").replace("numpad.", "decimal")
+    if normalized in (".", "num decimal", "numpad decimal", "小键盘.", "小键盘点"):
+        return "decimal"
+    return text
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
@@ -79,7 +90,7 @@ class FloatLabel(QWidget):
         self.opacity_pct        = int(cfg.get("opacity_pct", 90))           # 透明度
         self.default_color      = bool(cfg.get("default_color", False))     # 默认颜色模式
 
-        self.hotkey             = cfg.get("hotkey", "Ctrl+Alt+F")           # 快捷键
+        self.hotkey             = normalize_hotkey(cfg.get("hotkey", DEFAULT_HOTKEY))           # 快捷键
         self.start_on_boot      = bool(cfg.get("start_on_boot", False))
         self.alert_rules        = normalize_alert_rules(cfg.get("alert_rules", []))
         self.price_alerts       = normalize_price_alerts(cfg.get("price_alerts", []))
@@ -3353,10 +3364,14 @@ class FloatLabel(QWidget):
             keyboard.remove_all_hotkeys()
         except Exception:
             pass
-        keyboard.add_hotkey(self.hotkey.lower(), lambda: self.hotkey_triggered.emit())
+        self._hotkey_error = ""
+        try:
+            keyboard.add_hotkey(normalize_hotkey(self.hotkey).lower(), lambda: self.hotkey_triggered.emit())
+        except Exception as exc:
+            self._hotkey_error = str(exc)
 
     def update_hotkey(self, new_hotkey: str):
-        self.hotkey = new_hotkey.strip()
+        self.hotkey = normalize_hotkey(new_hotkey)
         self._register_hotkey()
 
     def toggle_win(self):
