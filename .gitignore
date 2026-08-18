@@ -14,3 +14,4 @@ strategy_condition_builder.png
 *.py.bak
 build/
 *.spec
+!StockWidget.spec

@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 from StockLogic import normalize_code_or_none
 
@@ -33,20 +34,29 @@ def _compact(text):
     return "".join(str(text or "").split()).lower()
 
 
+_INDEX_CACHE = {}
+
+
 def load_stock_code_index(path=None):
+    cache_key = path or "default"
+    if cache_key in _INDEX_CACHE:
+        return _INDEX_CACHE[cache_key]
     candidates = []
     if path:
         candidates.append(path)
-    candidates.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "stock_codes_list.json"))
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(base, "resources", "stock_codes_list.json"))
     for candidate in candidates:
         try:
             with open(candidate, "r", encoding="utf-8") as file:
                 payload = json.load(file)
             codes = payload.get("codes") if isinstance(payload, dict) else payload
             if isinstance(codes, dict):
+                _INDEX_CACHE[cache_key] = codes
                 return codes
         except Exception:
             continue
+    _INDEX_CACHE[cache_key] = {}
     return {}
 
 
