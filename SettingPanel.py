@@ -613,9 +613,13 @@ class SettingsDialog(QDialog):
         self.btn_strategy_params_save = QPushButton("保存参数")
         self.btn_strategy_params_save.setFixedWidth(90)
         self.btn_strategy_params_save.setVisible(False)
+        self.btn_strategy_apply = QPushButton("应用策略")
+        self.btn_strategy_apply.setFixedWidth(110)
+        self.btn_strategy_apply.setToolTip("将当前策略编辑（参数/模板/持仓）一次性应用到浮窗；编辑过程中不会反复触发止盈止损")
         params_action_layout.addWidget(self.btn_strategy_template_reset)
         params_action_layout.addWidget(self.btn_strategy_params_edit)
         params_action_layout.addWidget(self.btn_strategy_params_save)
+        params_action_layout.addWidget(self.btn_strategy_apply)
         params_action_layout.addStretch(1)
         config_layout.addLayout(params_action_layout)
 
@@ -1098,6 +1102,7 @@ class SettingsDialog(QDialog):
 
         self._loading_strategy_editor = False
         self._loading_code_tag_editor = False
+        self._strategy_edit_dirty = False
         self._set_strategy_selection_visible(False)
         self._load_strategy_config()
         self._load_code_tag_editor()
@@ -1289,12 +1294,12 @@ class SettingsDialog(QDialog):
         self.cmb_price_alert_expire_days.currentIndexChanged.connect(self._on_price_alert_editor_changed)
         self.spin_price_alert_price.valueChanged.connect(self._on_price_alert_editor_changed)
         self.edit_price_alert_message.editingFinished.connect(self._on_price_alert_editor_changed)
-        self.chk_strategy_enabled.toggled.connect(self._on_strategy_config_changed)
-        self.chk_strategy_notify_desktop.toggled.connect(self._on_strategy_config_changed)
-        self.chk_strategy_notify_panel.toggled.connect(self._on_strategy_config_changed)
-        self.chk_strategy_notify_remote.toggled.connect(self._on_strategy_config_changed)
-        self.cmb_strategy_remote_channel.currentIndexChanged.connect(self._on_strategy_config_changed)
-        self.edit_strategy_webhook.editingFinished.connect(self._on_strategy_config_changed)
+        self.chk_strategy_enabled.toggled.connect(partial(self._on_strategy_config_changed, apply=False))
+        self.chk_strategy_notify_desktop.toggled.connect(partial(self._on_strategy_config_changed, apply=False))
+        self.chk_strategy_notify_panel.toggled.connect(partial(self._on_strategy_config_changed, apply=False))
+        self.chk_strategy_notify_remote.toggled.connect(partial(self._on_strategy_config_changed, apply=False))
+        self.cmb_strategy_remote_channel.currentIndexChanged.connect(partial(self._on_strategy_config_changed, apply=False))
+        self.edit_strategy_webhook.editingFinished.connect(partial(self._on_strategy_config_changed, apply=False))
         self.btn_strategy_push_test.clicked.connect(self._send_strategy_push_test)
         self.list_strategy_positions.currentRowChanged.connect(self._on_strategy_position_selected)
         self.cmb_strategy_profile.currentIndexChanged.connect(self._on_strategy_profile_selected)
@@ -1316,7 +1321,7 @@ class SettingsDialog(QDialog):
             self.chk_strategy_reduce_half,
             self.chk_strategy_stale,
         ):
-            checkbox.toggled.connect(self._on_strategy_config_changed)
+            checkbox.toggled.connect(partial(self._on_strategy_config_changed, apply=False))
         for spin in (
             self.spin_strategy_loss,
             self.spin_strategy_reduce_half,
@@ -1324,9 +1329,10 @@ class SettingsDialog(QDialog):
             *self.spin_strategy_tier_profit,
             *self.spin_strategy_tier_lock,
         ):
-            spin.valueChanged.connect(self._on_strategy_config_changed)
+            spin.valueChanged.connect(partial(self._on_strategy_config_changed, apply=False))
         self.btn_strategy_params_edit.clicked.connect(self._on_strategy_params_edit)
         self.btn_strategy_params_save.clicked.connect(self._on_strategy_params_save)
+        self.btn_strategy_apply.clicked.connect(self._apply_strategy_config)
         self.btn_strategy_template_reset.clicked.connect(self._on_strategy_template_reset)
         self.list_strategy_templates.currentRowChanged.connect(self._on_strategy_template_selected)
         self.btn_template_new.clicked.connect(self._on_template_new)
@@ -2404,12 +2410,30 @@ class SettingsDialog(QDialog):
             "rules": getattr(self, "_strategy_config", {}).get("rules", {}),
         })
 
-    def _on_strategy_config_changed(self, *_args, include_position_rules=True):
+    def _mark_strategy_edit_dirty(self):
+        """标记策略配置有未应用的编辑，避免调整策略时持续触发止盈止损评估/推送。"""
+        self._strategy_edit_dirty = True
+        btn = getattr(self, "btn_strategy_apply", None)
+        if btn is not None:
+            btn.setText("应用策略（未生效）")
+
+    def _apply_strategy_config(self):
+        """将当前策略配置一次性应用到浮窗（触发一次评估，而非编辑过程中持续触发）。"""
+        self.win.set_strategy_alert_config(self._strategy_config)
+        self._strategy_edit_dirty = False
+        btn = getattr(self, "btn_strategy_apply", None)
+        if btn is not None:
+            btn.setText("应用策略")
+
+    def _on_strategy_config_changed(self, *_args, include_position_rules=True, apply=True):
         if getattr(self, "_loading_strategy_editor", False):
             return
         self._strategy_config = self._collect_strategy_config_from_editor(include_position_rules=include_position_rules)
         self._refresh_strategy_preview()
-        self.win.set_strategy_alert_config(self._strategy_config)
+        if apply:
+            self._apply_strategy_config()
+        else:
+            self._mark_strategy_edit_dirty()
 
     def _on_strategy_profile_selected(self, *_args):
         if getattr(self, "_loading_strategy_editor", False):
@@ -2428,7 +2452,7 @@ class SettingsDialog(QDialog):
         self._mark_pending_apply_alert(self._strategy_config["positions"][row].get("code", ""))
         self._refresh_strategy_preview()
         self._refresh_strategy_params_list()
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
 
     def _clone_strategy_profile(self):
         source = self._current_strategy_profile()
@@ -2459,7 +2483,7 @@ class SettingsDialog(QDialog):
             self._loading_strategy_editor = False
         self._refresh_strategy_preview()
         self._refresh_strategy_params_list()
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
 
     def _save_strategy_position(self):
         row = self._current_strategy_position_row()
@@ -2484,8 +2508,8 @@ class SettingsDialog(QDialog):
         old_stop_price = strategy_stop_price(old_cost, old_resolved_rules, old_locked_pct)
         was_first_apply = self._consume_pending_apply_alert(code)
 
-        self._on_strategy_position_editor_changed()
-        self._on_strategy_config_changed()
+        self._on_strategy_position_editor_changed(apply=True)
+        self._on_strategy_config_changed(apply=True)
 
         new_position = self._strategy_config["positions"][row]
         new_rules = new_position.get("rules", {})
@@ -2823,7 +2847,16 @@ class SettingsDialog(QDialog):
             return True
         return super().eventFilter(obj, event)
 
-    def _on_strategy_position_editor_changed(self, *_args):
+    def closeEvent(self, event):
+        # 策略编辑为手动应用：关闭面板时若有未应用的修改，兜底应用一次，避免配置丢失
+        if getattr(self, "_strategy_edit_dirty", False):
+            try:
+                self._apply_strategy_config()
+            except Exception:
+                pass
+        super().closeEvent(event)
+
+    def _on_strategy_position_editor_changed(self, *_args, apply=False):
         if getattr(self, "_loading_strategy_editor", False):
             return
         row = self._current_strategy_position_row()
@@ -2860,7 +2893,7 @@ class SettingsDialog(QDialog):
         if item:
             item.setText(self._format_strategy_position(position))
             item.setData(Qt.UserRole, position)
-        self._on_strategy_config_changed(include_position_rules=False)
+        self._on_strategy_config_changed(include_position_rules=False, apply=apply)
 
     def _add_strategy_position(self):
         config = normalize_strategy_alert_config(getattr(self, "_strategy_config", {}))
@@ -2913,7 +2946,7 @@ class SettingsDialog(QDialog):
         if row < 0:
             return
         self._strategy_config["positions"][row]["rules"] = {}
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
         self._loading_strategy_editor = True
         try:
             self._load_strategy_rules(self._current_strategy_rules())
@@ -2976,7 +3009,7 @@ class SettingsDialog(QDialog):
         }
         profiles.append(new_profile)
         self._strategy_config["strategy_profiles"] = profiles
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
         self._refresh_strategy_template_list()
         self._refresh_strategy_params_list()
 
@@ -2995,7 +3028,7 @@ class SettingsDialog(QDialog):
         else:
             profile["rules"] = self._collect_template_rules_from_editor()
         self._strategy_config["strategy_profiles"] = profiles
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
         self._refresh_strategy_template_list()
         self.list_strategy_templates.setCurrentRow(row)
         self.btn_template_save.setText("已保存")
@@ -3247,7 +3280,7 @@ class SettingsDialog(QDialog):
         }
         profiles.append(new_profile)
         self._strategy_config["strategy_profiles"] = profiles
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
         self._refresh_strategy_template_list()
 
     def _on_template_delete(self):
@@ -3265,7 +3298,7 @@ class SettingsDialog(QDialog):
             return
         profiles.pop(row)
         self._strategy_config["strategy_profiles"] = profiles
-        self.win.set_strategy_alert_config(self._strategy_config)
+        self._mark_strategy_edit_dirty()
         self._refresh_strategy_template_list()
 
     def _on_condition_add(self):

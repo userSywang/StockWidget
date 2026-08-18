@@ -776,14 +776,20 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg.cmb_strategy_profile.setCurrentIndex(dlg.cmb_strategy_profile.findData("short:test"))
 
-        position = win.strategy_alert_config["positions"][0]
-        self.assertEqual(position["strategy_id"], "short:test")
-        self.assertEqual(position["rules"], {})
+        # 编辑不再即时应用：本地预览已更新，win 需手动应用后才生效
+        self.assertTrue(dlg._strategy_edit_dirty)
+        self.assertEqual(dlg._strategy_config["positions"][0]["strategy_id"], "short:test")
+        self.assertEqual(win.strategy_alert_config["positions"][0]["strategy_id"], "default")
         self.assertEqual(dlg.spin_strategy_loss.value(), 3.0)
         self.assertTrue(dlg.chk_strategy_trailing.isChecked())
         self.assertEqual(dlg.spin_strategy_tier_profit[0].value(), 8.0)
         self.assertEqual(dlg.spin_strategy_tier_lock[0].value(), 3.0)
         self.assertEqual(dlg._current_strategy_rules()["max_loss_pct"], 3.0)
+        dlg._apply_strategy_config()
+        position = win.strategy_alert_config["positions"][0]
+        self.assertEqual(position["strategy_id"], "short:test")
+        self.assertEqual(position["rules"], {})
+        self.assertFalse(dlg._strategy_edit_dirty)
         dlg.close()
 
     def test_strategy_template_reset_clears_position_overrides_without_reusing_editor_values(self):
@@ -810,11 +816,15 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg._on_strategy_template_reset()
 
+        # 恢复默认标记为未应用，手动应用后才写入 win
+        self.assertTrue(dlg._strategy_edit_dirty)
+        self.assertEqual(dlg.spin_strategy_loss.value(), 3.0)
+        self.assertEqual(dlg._current_strategy_rules()["max_loss_pct"], 3.0)
+        dlg._apply_strategy_config()
         position = win.strategy_alert_config["positions"][0]
         self.assertEqual(position["strategy_id"], "short:test")
         self.assertEqual(position["rules"], {})
-        self.assertEqual(dlg.spin_strategy_loss.value(), 3.0)
-        self.assertEqual(dlg._current_strategy_rules()["max_loss_pct"], 3.0)
+        self.assertFalse(dlg._strategy_edit_dirty)
         dlg.close()
 
     def test_strategy_library_shows_builtin_turtle_template(self):
@@ -873,6 +883,9 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.spin_turtle_max_units.setValue(3)
         dlg.cmb_turtle_sizing.setCurrentIndex(dlg.cmb_turtle_sizing.findData("fixed_percent"))
         dlg._on_template_save()
+        # 模板保存为待应用，手动应用后写入 win
+        self.assertTrue(dlg._strategy_edit_dirty)
+        dlg._apply_strategy_config()
 
         profile = next(item for item in win.strategy_alert_config["strategy_profiles"] if item["id"] == "turtle:classic")
         rules = {rule["id"]: rule for rule in profile["action_rules"]}
@@ -883,6 +896,32 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(rules["turtle_exit_10d"]["parameter"], {"value": 20, "unit": "day_low"})
         self.assertEqual(rules["turtle_atr_stop"]["condition"]["threshold"]["multiple"], 3.0)
         self.assertEqual(rules["turtle_pyramid_0_5atr"]["action"]["max_units"], 3)
+        dlg.close()
+
+    def test_strategy_edits_do_not_apply_until_manual_apply(self):
+        win = FakeWindow()
+        win.groups = [{"name": "默认", "codes": ["sh603259"]}]
+        win.codes = ["sh603259"]
+        win.checked_codes = ["sh603259"]
+        win.strategy_alert_config = {
+            "enabled": True,
+            "rules": {"max_loss_enabled": True, "max_loss_pct": 5.0},
+            "positions": [{"code": "sh603259", "cost_price": 100.0, "strategy_id": "default", "rules": {}}],
+        }
+        dlg = SettingsDialog(win, None)
+        dlg.list_strategy_positions.setCurrentRow(0)
+
+        # 调整参数（触发 valueChanged）：只更新本地缓存并标记 dirty，不即时写入 win
+        dlg.spin_strategy_loss.setValue(8.0)
+
+        self.assertTrue(dlg._strategy_edit_dirty)
+        self.assertEqual(dlg._strategy_config["positions"][0]["rules"]["max_loss_pct"], 8.0)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"], {})
+
+        # 手动应用后一次性生效
+        dlg._apply_strategy_config()
+        self.assertFalse(dlg._strategy_edit_dirty)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["rules"]["max_loss_pct"], 8.0)
         dlg.close()
 
     def test_strategy_rule_edits_do_not_change_other_default_positions(self):
