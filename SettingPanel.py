@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QMenu
+    QTableWidget, QTableWidgetItem, QHeaderView, QMenu, QMessageBox
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -32,6 +32,7 @@ from StockLogic import (
     strategy_stop_price,
 )
 from StockCodeSearch import BUILTIN_STOCK_CODES, resolve_stock_code
+from VersionCheck import APP_VERSION_TAG
 
 class SettingsDialog(QDialog):
     def __init__(self, win: FloatLabel, parent: QWidget, app=None):
@@ -1251,6 +1252,25 @@ class SettingsDialog(QDialog):
         gl_icon.addWidget(self.btn_pick_icon)
         other_settings.addWidget(g_icon)
 
+        # 版本更新
+        g_update = QGroupBox("版本更新")
+        g_update.setContentsMargins(3,12,3,6)
+        gl_update = QGridLayout(g_update)
+        gl_update.setHorizontalSpacing(6)
+        gl_update.setVerticalSpacing(6)
+        self.lbl_version = QLabel(f"当前版本：{APP_VERSION_TAG}")
+        gl_update.addWidget(self.lbl_version, 0, 0)
+        self.btn_check_update = QPushButton("检查更新")
+        self.btn_check_update.setFixedWidth(100)
+        gl_update.addWidget(self.btn_check_update, 0, 1)
+        self.chk_check_updates_on_startup = QCheckBox("启动时自动检查更新")
+        app = getattr(self, "app", None)
+        self.chk_check_updates_on_startup.setChecked(
+            bool(getattr(app, "_check_updates_on_startup", True)) if app is not None else True
+        )
+        gl_update.addWidget(self.chk_check_updates_on_startup, 1, 0, 1, 2)
+        other_settings.addWidget(g_update)
+
         self.tabs.addTab(tab_3, "常规")
         self.tabs.addTab(self.tab_source, "数据源")
         self._install_wheel_guards()
@@ -1334,6 +1354,8 @@ class SettingsDialog(QDialog):
         self.btn_strategy_params_save.clicked.connect(self._on_strategy_params_save)
         self.btn_strategy_apply.clicked.connect(self._apply_strategy_config)
         self.btn_strategy_template_reset.clicked.connect(self._on_strategy_template_reset)
+        self.btn_check_update.clicked.connect(self._on_check_update_clicked)
+        self.chk_check_updates_on_startup.toggled.connect(self._on_check_updates_on_startup_toggled)
         self.list_strategy_templates.currentRowChanged.connect(self._on_strategy_template_selected)
         self.btn_template_new.clicked.connect(self._on_template_new)
         self.btn_template_save.clicked.connect(self._on_template_save)
@@ -3382,6 +3404,47 @@ class SettingsDialog(QDialog):
 
     def _on_warning_changed(self, *_args):
         self.win.set_warning(self.chk_warning_visible.isChecked(), self.edit_warning_text.text())
+
+    def _on_check_update_clicked(self):
+        app = getattr(self, "app", None)
+        self.btn_check_update.setEnabled(False)
+        self.btn_check_update.setText("检查中…")
+        started = False
+        if app is not None and callable(getattr(app, "check_updates_manual", None)):
+            try:
+                started = bool(app.check_updates_manual())
+            except Exception:
+                started = False
+        if not started:
+            # 无 App 或启动失败：直接同步检查（测试环境/异常兜底）
+            try:
+                from VersionCheck import fetch_latest_release, is_newer_version
+                result = fetch_latest_release()
+                self._show_sync_check_result(result, is_newer_version)
+            except Exception:
+                pass
+        QTimer.singleShot(15000, self._restore_check_update_button)
+
+    def _show_sync_check_result(self, result, is_newer_version):
+        app = getattr(self, "app", None)
+        if result and is_newer_version(result.get("tag", "")) and app is not None and callable(getattr(app, "_show_update_prompt", None)):
+            app._show_update_prompt(result)
+        elif result:
+            QMessageBox.information(None, "检查更新", f"当前已是最新版本（{APP_VERSION_TAG}）。")
+        else:
+            QMessageBox.information(None, "检查更新", "检查失败：无法连接 GitHub，请检查网络后重试。")
+
+    def _restore_check_update_button(self):
+        self.btn_check_update.setEnabled(True)
+        self.btn_check_update.setText("检查更新")
+
+    def _on_check_updates_on_startup_toggled(self, checked):
+        app = getattr(self, "app", None)
+        if app is not None and callable(getattr(app, "set_check_updates_on_startup", None)):
+            try:
+                app.set_check_updates_on_startup(bool(checked))
+            except Exception:
+                pass
 
     def _on_market_amount_changed(self, *_args):
         self.win.set_market_amount_visible(self.chk_market_amount_visible.isChecked())

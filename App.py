@@ -1,11 +1,12 @@
 import sys, os, winreg
 
-from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QStyle
+from PySide6.QtCore import Qt, QPoint, QTimer, QUrl
+from PySide6.QtGui import QAction, QIcon, QDesktopServices
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QStyle, QMessageBox
 from WidgetPanel import FloatLabel
 from SettingPanel import SettingsDialog
 from ConfigStore import load_config, save_config
+from VersionCheck import APP_VERSION_TAG, UpdateChecker, is_newer_version
 
 # ----- 程序与资源 -----
 APP_NAME = "StockWidget"
@@ -82,6 +83,12 @@ class App(QApplication):
         self.win.setFocus(Qt.ActiveWindowFocusReason)
         self.save_now()
 
+        # 版本更新检测
+        self._update_checker = UpdateChecker(on_result=self._on_update_check_result)
+        self._check_updates_on_startup = bool(cfg.get("check_updates_on_startup", True))
+        if self._check_updates_on_startup:
+            QTimer.singleShot(2000, self._check_updates_on_startup_delayed)
+
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick): self.toggle_win()
 
@@ -127,7 +134,69 @@ class App(QApplication):
             cfg['app_icon'] = getattr(self, '_app_icon_choice', None)
         except Exception:
             pass
+        # persist update-check preference
+        try:
+            cfg['check_updates_on_startup'] = bool(getattr(self, '_check_updates_on_startup', True))
+        except Exception:
+            pass
         save_config(cfg)
+
+    # ---- 版本更新检测 ----
+
+    def _check_updates_on_startup_delayed(self):
+        if not getattr(self, "_check_updates_on_startup", True):
+            return
+        try:
+            self._update_checker.check_async()
+        except Exception:
+            pass
+
+    def _on_update_check_result(self, result):
+        # worker 线程回调，转回主线程弹窗
+        QTimer.singleShot(0, lambda: self._show_update_prompt(result))
+
+    def _show_update_prompt(self, result):
+        if not result or not is_newer_version(result.get("tag", "")):
+            return
+        tag = result.get("tag", "")
+        url = result.get("url", "")
+        box = QMessageBox(self.win)
+        box.setWindowTitle("发现新版本")
+        box.setText(f"StockWidget 有新版本 {tag}（当前 {APP_VERSION_TAG}）")
+        box.setInformativeText("是否前往 GitHub Releases 下载最新版本？")
+        download = box.addButton("前往下载", QMessageBox.AcceptRole)
+        box.addButton("稍后再说", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is download and url:
+            try:
+                QDesktopServices.openUrl(QUrl(url))
+            except Exception:
+                pass
+
+    def check_updates_manual(self):
+        """设置面板手动检查更新（异步，完成后弹窗提示结果）。"""
+        checker = UpdateChecker(on_result=self._on_manual_update_check_result)
+        self._manual_update_checker = checker
+        return checker.check_async()
+
+    def _on_manual_update_check_result(self, result):
+        QTimer.singleShot(0, lambda: self._show_manual_check_result(result))
+
+    def _show_manual_check_result(self, result):
+        if not result:
+            QMessageBox.information(None, "检查更新", "检查失败：无法连接 GitHub，请检查网络后重试。")
+            return
+        if is_newer_version(result.get("tag", "")):
+            self._show_update_prompt(result)
+            return
+        QMessageBox.information(None, "检查更新", f"当前已是最新版本（{APP_VERSION_TAG}）。")
+
+    def set_check_updates_on_startup(self, enabled: bool):
+        self._check_updates_on_startup = bool(enabled)
+        try:
+            self.save_now()
+        except Exception:
+            pass
 
     def set_app_icon(self, choice):
         """Set application and tray icon. `choice` can be None/'default', 'std:KEY' or a file path."""
