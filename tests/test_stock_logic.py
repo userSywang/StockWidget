@@ -12,6 +12,7 @@ from StockLogic import (
     price_alert_is_expired,
     normalize_groups,
     normalize_strategy_alert_config,
+    quote_has_trade,
     strategy_action_rules_for_position,
     strategy_action_rules_from_rules,
     strategy_daily_request_codes,
@@ -669,6 +670,86 @@ class StockLogicTests(unittest.TestCase):
 
         self.assertIn("日线接口不可用", states[0]["status"])
         self.assertIn("大盘上证日线接口不可用", states[0]["status"])
+
+    # ---- 集合竞价成交判断 ----
+
+    def test_quote_has_trade_false_when_zero_volume_and_amount(self):
+        self.assertFalse(quote_has_trade({"price": 120.0, "volume": 0, "amount": 0}))
+        self.assertFalse(quote_has_trade({"price": 120.0, "volume": 0.0, "amount": 0.0}))
+
+    def test_quote_has_trade_true_when_volume_or_amount_positive(self):
+        self.assertTrue(quote_has_trade({"price": 120.0, "volume": 12345, "amount": 0}))
+        self.assertTrue(quote_has_trade({"price": 120.0, "volume": 0, "amount": 1.5e6}))
+
+    def test_quote_has_trade_true_when_fields_missing(self):
+        # 数据源缺 volume/amount 字段时保守视为已成交，避免策略失效
+        self.assertTrue(quote_has_trade({"price": 120.0}))
+        self.assertTrue(quote_has_trade({}))
+
+    def test_strategy_position_state_skips_auction_price_before_trade(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+        })
+        # 竞价未成交：价格 120 不应计入 peak/lock
+        updated, changed = update_strategy_position_state(config, {
+            "sh603259": {"price": 120.0, "name": "药明康德", "volume": 0, "amount": 0},
+        })
+
+        self.assertTrue(changed)
+        self.assertTrue(updated["positions"][0]["auction_pending"])
+        self.assertEqual(updated["positions"][0].get("peak_profit_pct", 0.0), 0.0)
+        self.assertEqual(updated["positions"][0].get("locked_profit_pct", 0.0), 0.0)
+
+    def test_strategy_position_state_recovers_after_first_trade(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+        })
+        # 竞价阶段未成交
+        updated, _ = update_strategy_position_state(config, {
+            "sh603259": {"price": 120.0, "volume": 0, "amount": 0},
+        })
+        self.assertTrue(updated["positions"][0]["auction_pending"])
+        # 第一笔成交后恢复计算
+        updated2, changed = update_strategy_position_state(updated, {
+            "sh603259": {"price": 120.0, "volume": 5000, "amount": 600000.0},
+        })
+
+        self.assertTrue(changed)
+        self.assertFalse(updated2["positions"][0].get("auction_pending"))
+        self.assertEqual(updated2["positions"][0]["peak_profit_pct"], 20.0)
+        self.assertEqual(updated2["positions"][0]["locked_profit_pct"], 10.0)
+
+    def test_strategy_alerts_not_triggered_during_auction_before_trade(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+        })
+        # 价格跌到 90（-10%）但未成交：不应触发止损
+        states = evaluate_strategy_alerts(config, {
+            "sh603259": {"price": 90.0, "name": "药明康德", "volume": 0, "amount": 0},
+        })
+
+        self.assertEqual(len(states), 1)
+        self.assertTrue(states[0]["auction_pending"])
+        self.assertFalse(states[0]["triggered"])
+        self.assertEqual(states[0]["severity"], "neutral")
+        self.assertEqual(states[0]["status"], "竞价未成交")
+
+    def test_strategy_alerts_trigger_normally_after_trade(self):
+        config = normalize_strategy_alert_config({
+            "enabled": True,
+            "positions": [{"code": "603259", "cost_price": 100.0}],
+        })
+        states = evaluate_strategy_alerts(config, {
+            "sh603259": {"price": 90.0, "name": "药明康德", "volume": 5000, "amount": 450000.0},
+        })
+
+        self.assertFalse(states[0].get("auction_pending"))
+        self.assertTrue(states[0]["triggered"])
+        self.assertEqual(states[0]["severity"], "danger")
+        self.assertIn("触发止损", states[0]["status"])
 
 
 if __name__ == "__main__":

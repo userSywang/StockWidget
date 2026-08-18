@@ -1115,6 +1115,23 @@ def trailing_lock_pct(rules, peak_profit_pct):
     return lock_pct
 
 
+def quote_has_trade(quote):
+    """判断行情是否已产生真实成交（集合竞价撮合前 volume/amount 为 0）。
+
+    用于在策略计算中忽略竞价参考价：竞价没成交前，实时价不算入止盈线/止损触发。
+    数据源完全缺失 volume/amount 字段时保守返回 True（不因数据源缺字段而误伤策略）。
+    """
+    quote = quote or {}
+    if "amount" not in quote and "volume" not in quote:
+        return True
+    try:
+        amount = float(quote.get("amount", 0.0) or 0.0)
+        volume = float(quote.get("volume", 0.0) or 0.0)
+    except Exception:
+        return True
+    return amount > 0 or volume > 0
+
+
 def update_strategy_position_state(config, quotes):
     config = normalize_strategy_alert_config(config)
     if not config.get("enabled"):
@@ -1129,6 +1146,16 @@ def update_strategy_position_state(config, quotes):
         item["stop_line_previous_price"] = 0.0
         position_rules = strategy_rules_for_position(config, item)
         quote = (quotes or {}).get(item["code"]) or {}
+        traded = quote_has_trade(quote)
+        if not traded:
+            if not item.get("auction_pending"):
+                item["auction_pending"] = True
+                changed = True
+            positions.append(item)
+            continue
+        if item.get("auction_pending"):
+            item["auction_pending"] = False
+            changed = True
         cost = float(item.get("cost_price", 0.0))
         try:
             price = float(quote.get("price", 0.0))
@@ -1375,6 +1402,34 @@ def evaluate_strategy_alerts(config, quotes, daily_by_code=None):
                 "triggered": False,
                 "severity": "neutral",
                 "status": "等待价格",
+            })
+            continue
+
+        if not quote_has_trade(quote):
+            # 集合竞价未成交：实时价只是竞价参考价，不计入止盈线/止损触发，
+            # 仅保留现有止盈线展示，避免竞价结果污染策略状态与推送。
+            states.append({
+                "code": position["code"],
+                "name": name,
+                "profit_pct": None,
+                "locked_profit_pct": lock_pct,
+                "lock_raised": False,
+                "stop_line_changed": False,
+                "stop_line_previous_price": 0.0,
+                "stop_price": strategy_effective_stop_price(cost, rules, lock_pct, daily_rows),
+                "stop_loss_price": strategy_effective_loss_price(cost, rules, daily_rows),
+                "take_profit_price": strategy_take_profit_price(cost, lock_pct),
+                "ma5": None if stock_ma5 is None else round(stock_ma5, 4),
+                "ma10": None if stock_ma10 is None else round(stock_ma10, 4),
+                "ma20": None if stock_ma20 is None else round(stock_ma20, 4),
+                "daily_date": daily_date,
+                "daily_realtime": daily_realtime,
+                "enabled_rules": strategy_enabled_rule_labels(rules),
+                "triggered_actions": [],
+                "triggered": False,
+                "severity": "neutral",
+                "auction_pending": True,
+                "status": "竞价未成交",
             })
             continue
 
