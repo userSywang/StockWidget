@@ -31,6 +31,7 @@ from StockLogic import (
     strategy_rules_for_position,
     strategy_stop_price,
 )
+from StockCodeSearch import BUILTIN_STOCK_CODES, resolve_stock_code
 
 class SettingsDialog(QDialog):
     def __init__(self, win: FloatLabel, parent: QWidget, app=None):
@@ -1458,7 +1459,11 @@ class SettingsDialog(QDialog):
     def _code_from_item_text(self, text: str):
         text = str(text or "").strip()
         first = text.split()[0] if text.split() else text
-        return normalize_code_or_none(first) or normalize_code_or_none(text)
+        return (
+            normalize_code_or_none(first)
+            or normalize_code_or_none(text)
+            or resolve_stock_code(text, getattr(self.win, "code_names", {}))
+        )
 
     def _refresh_code_names(self, codes):
         lookup = getattr(self.win, "lookup_code_names", None)
@@ -1543,6 +1548,10 @@ class SettingsDialog(QDialog):
                         continue
                     seen.add(norm)
                     codes.append(norm)
+                    if norm in BUILTIN_STOCK_CODES:
+                        names = getattr(self.win, "code_names", {})
+                        if isinstance(names, dict) and not str(names.get(norm) or "").strip():
+                            names[norm] = BUILTIN_STOCK_CODES[norm]
                     self._refresh_code_names([norm])
                     display_text = self._format_code_item_text(norm)
                     if child.text(0) != display_text:

@@ -389,6 +389,23 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertIn("sh512000", win.codes)
         dlg.close()
 
+    def test_pending_code_saves_after_user_enters_full_stock_name(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        group = dlg.tree_codes.topLevelItem(0)
+
+        dlg.tree_codes.setCurrentItem(group)
+        dlg._add_code()
+        item = group.child(1)
+        item.setText(0, "药明康德")
+        dlg._on_codes_changed(item)
+
+        self.assertEqual(group.child(1).text(0), "sh603259  药明")
+        self.assertEqual(group.child(1).data(0, dlg._pending_role()), False)
+        self.assertIn("sh603259", win.codes)
+        self.assertEqual(win.code_names["sh603259"], "药明康德")
+        dlg.close()
+
     def test_code_tree_displays_cached_two_character_name(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

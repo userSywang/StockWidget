@@ -1,5 +1,5 @@
 import json
-import requests, keyboard
+import requests
 from urllib.parse import quote
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLa
 
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
+from HotkeyManager import GlobalHotkeyManager, normalize_hotkey
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -35,16 +36,6 @@ from StockLogic import (
 STRATEGY_DAILY_SUMMARY_SLOTS = ((9, 0, "09:00"), (18, 0, "18:00"))
 STRATEGY_DAILY_SUMMARY_GRACE_MINUTES = 10
 DEFAULT_HOTKEY = "decimal"
-
-
-def normalize_hotkey(value):
-    text = str(value or "").strip()
-    if not text:
-        return DEFAULT_HOTKEY
-    normalized = text.lower().replace("num.", "decimal").replace("numpad.", "decimal")
-    if normalized in (".", "num decimal", "numpad decimal", "小键盘.", "小键盘点"):
-        return "decimal"
-    return text
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
@@ -91,6 +82,7 @@ class FloatLabel(QWidget):
         self.default_color      = bool(cfg.get("default_color", False))     # 默认颜色模式
 
         self.hotkey             = normalize_hotkey(cfg.get("hotkey", DEFAULT_HOTKEY))           # 快捷键
+        self._hotkey_manager    = GlobalHotkeyManager(self)
         self._hotkey_handle     = None
         self._hotkey_registered_key = ""
         self._hotkey_error      = ""
@@ -3379,7 +3371,7 @@ class FloatLabel(QWidget):
         if handle is None:
             return
         try:
-            keyboard.remove_hotkey(handle)
+            self._hotkey_manager.unregister(handle)
         except Exception as exc:
             self._hotkey_error = str(exc)
         finally:
@@ -3393,7 +3385,13 @@ class FloatLabel(QWidget):
         self._unregister_hotkey()
         self._hotkey_error = ""
         try:
-            self._hotkey_handle = keyboard.add_hotkey(key, lambda: self.hotkey_triggered.emit())
+            result = self._hotkey_manager.register(key, lambda: self.hotkey_triggered.emit())
+            if not result:
+                self._hotkey_error = result.reason
+                self._hotkey_handle = None
+                self._hotkey_registered_key = ""
+                return
+            self._hotkey_handle = result.handle
             self._hotkey_registered_key = key
         except Exception as exc:
             self._hotkey_error = str(exc)

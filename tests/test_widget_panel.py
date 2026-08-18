@@ -10,7 +10,8 @@ from PySide6.QtGui import QColor, QHideEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QHeaderView, QMenu
 from Display import SimpleTableModel
-from WidgetPanel import FloatLabel, normalize_hotkey
+from HotkeyManager import HotkeyResult, normalize_hotkey
+from WidgetPanel import FloatLabel
 
 
 BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
@@ -33,13 +34,18 @@ class WidgetPanelTests(unittest.TestCase):
         calls = []
         win._hotkey_handle = None
         win._hotkey_registered_key = ""
+        win._hotkey_error = ""
 
-        def fake_add_hotkey(key, callback):
-            calls.append(key)
-            return f"handle:{key}"
+        class FakeHotkeyManager:
+            def register(self, key, callback):
+                calls.append(key)
+                return HotkeyResult(True, handle=f"handle:{key}")
 
-        with patch("WidgetPanel.keyboard.add_hotkey", fake_add_hotkey):
-            FloatLabel.update_hotkey(win, ".")
+            def unregister(self, handle):
+                calls.append(("remove", handle))
+
+        win._hotkey_manager = FakeHotkeyManager()
+        FloatLabel.update_hotkey(win, ".")
 
         self.assertEqual(win.hotkey, "decimal")
         self.assertEqual(calls, ["decimal"])
@@ -53,12 +59,16 @@ class WidgetPanelTests(unittest.TestCase):
         removed = []
         added = []
 
-        def fake_add_hotkey(key, callback):
-            added.append(key)
-            return "new-handle"
+        class FakeHotkeyManager:
+            def register(self, key, callback):
+                added.append(key)
+                return HotkeyResult(True, handle="new-handle")
 
-        with patch("WidgetPanel.keyboard.remove_hotkey", lambda handle: removed.append(handle)), patch("WidgetPanel.keyboard.add_hotkey", fake_add_hotkey):
-            FloatLabel._refresh_hotkey_registration(win)
+            def unregister(self, handle):
+                removed.append(handle)
+
+        win._hotkey_manager = FakeHotkeyManager()
+        FloatLabel._refresh_hotkey_registration(win)
 
         self.assertEqual(removed, ["old-handle"])
         self.assertEqual(added, ["decimal"])

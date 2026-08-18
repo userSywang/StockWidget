@@ -1,10 +1,11 @@
-import sys, os, json, keyboard, winreg
+import sys, os, winreg
 
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QStyle
 from WidgetPanel import FloatLabel
 from SettingPanel import SettingsDialog
+from ConfigStore import load_config, save_config
 
 # ----- 程序与资源 -----
 APP_NAME = "StockWidget"
@@ -13,32 +14,6 @@ APP_ICON_FILE = "StockWidget.ico"
 def resource_path(rel_path):
     base = getattr(sys, "_MEIPASS", "")
     return os.path.join(base, rel_path)
-
-# ----- 配置存档 -----
-CONFIG_DIR = os.path.join(os.getenv("APPDATA") or os.path.expanduser("~"), APP_NAME)
-CONFIG_FILE = os.path.join(CONFIG_DIR, "SW_config.json")
-
-def load_config():
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_config(cfg: dict):
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-    if os.path.exists(CONFIG_FILE):
-        backup_file = CONFIG_FILE + ".bak"
-        try:
-            import shutil
-            shutil.copy2(CONFIG_FILE, backup_file)
-        except Exception:
-            pass
-    tmp = CONFIG_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, CONFIG_FILE)
 
 class App(QApplication):
     def __init__(self, argv):
@@ -143,7 +118,6 @@ class App(QApplication):
             self.win.shutdown_background()
         except Exception:
             pass
-        keyboard.unhook_all_hotkeys()
         sys.exit(0)
 
     def save_now(self):
