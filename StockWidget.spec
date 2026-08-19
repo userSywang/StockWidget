@@ -1,5 +1,64 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import re
+
+
+def _app_version():
+    # 版本号唯一来源：VersionCheck.APP_VERSION，避免多处手工维护不一致
+    spec_dir = os.path.abspath(SPECPATH)
+    with open(os.path.join(spec_dir, "VersionCheck.py"), "r", encoding="utf-8") as fh:
+        match = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', fh.read())
+    return match.group(1) if match else "0.0.0"
+
+
+def _build_version_file():
+    version = _app_version()
+    parts = [int(p) for p in version.split(".")[:3]]
+    parts += [0] * (3 - len(parts))
+    quad = tuple(parts + [0])
+    out_dir = os.path.join(os.path.abspath(SPECPATH), "build")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "version_info.txt")
+    content = (
+        "# UTF-8\n"
+        "# 由 StockWidget.spec 依据 VersionCheck.APP_VERSION 自动生成，勿手工编辑\n"
+        "VSVersionInfo(\n"
+        "  ffi=FixedFileInfo(\n"
+        f"    filevers={quad},\n"
+        f"    prodvers={quad},\n"
+        "    mask=0x3f,\n"
+        "    flags=0x0,\n"
+        "    OS=0x40004,\n"
+        "    fileType=0x1,\n"
+        "    subtype=0x0,\n"
+        "    date=(0, 0)\n"
+        "  ),\n"
+        "  kids=[\n"
+        "    StringFileInfo(\n"
+        "      [\n"
+        "      StringTable(\n"
+        "        u'080404b0',\n"
+        "        [StringStruct(u'CompanyName', u'StockWidget'),\n"
+        "        StringStruct(u'FileDescription', u'StockWidget 股票看盘浮窗'),\n"
+        f"        StringStruct(u'FileVersion', u'{version}'),\n"
+        "        StringStruct(u'InternalName', u'StockWidget'),\n"
+        "        StringStruct(u'LegalCopyright', u''),\n"
+        "        StringStruct(u'OriginalFilename', u'StockWidget.exe'),\n"
+        "        StringStruct(u'ProductName', u'StockWidget'),\n"
+        f"        StringStruct(u'ProductVersion', u'{version}')])\n"
+        "      ]),\n"
+        "    VarFileInfo([VarStruct(u'Translation', [2052, 1200])])\n"
+        "  ]\n"
+        ")\n"
+    )
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+    return path
+
+
+_VERSION_FILE = _build_version_file()
+
 
 a = Analysis(
     ['StockWidget.py'],
@@ -36,4 +95,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['StockWidget.ico'],
+    version=_VERSION_FILE,
 )

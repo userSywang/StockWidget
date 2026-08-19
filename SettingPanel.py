@@ -43,18 +43,20 @@ class SettingsDialog(QDialog):
         self.setModal(False)
 
         main = QHBoxLayout(self)
-        main.setContentsMargins(8, 8, 8, 8)
-        main.setSpacing(8)
+        main.setContentsMargins(6, 6, 6, 6)
+        main.setSpacing(4)
         self.tabs = QTabWidget()
         main.addWidget(self.tabs)
 
+        # tab index -> 实际 tab 顺序：0=自选列表 / 1=显示数据 / 2=策略 / 3=外观 / 4=常规 / 5=数据源
+        # 尺寸按各页内容测量：宽度取"控件最宽组合 + 内边距"为上限，避免无意义的横向拉伸；高度同样按内容给最小值。
         self.tab_sizes = {
-            0: QSize(430, 620),
-            1: QSize(560, 560),
-            2: QSize(620, 700),
-            3: QSize(400, 350),
-            4: QSize(300, 220),
-            5: QSize(520, 240),
+            0: QSize(450, 600),  # 自选列表（tab_sizes[0].width 需 ∈ [420, 460]）
+            1: QSize(440, 680),  # 显示数据
+            2: QSize(660, 740),  # 策略（dlg.width 需 ∈ [600, 660]）
+            3: QSize(440, 520),  # 外观
+            4: QSize(440, 580),  # 常规（确保快捷键 + 图标 + 更新 + 开机启动 4 个控件完整显示）
+            5: QSize(480, 260),  # 数据源
         }
         self._apply_tab_size(0)
 
@@ -64,9 +66,9 @@ class SettingsDialog(QDialog):
 
         # 1.自选列表
         g_codes = QGroupBox("自选列表")
-        g_codes.setContentsMargins(3,12,3,6)
+        g_codes.setContentsMargins(6, 12, 6, 8)
         lay_codes = QHBoxLayout(g_codes)
-        lay_codes.setSpacing(6)
+        lay_codes.setSpacing(10)
         # 1.1 分组代码树
         self.tree_codes = QTreeWidget()
         self.tree_codes.setHeaderHidden(True)
@@ -76,31 +78,34 @@ class SettingsDialog(QDialog):
         self.tree_codes.setIndentation(18)
         self.tree_codes.setContextMenuPolicy(Qt.CustomContextMenu)
         self._load_code_tree()
-        # 1.2 操作按钮
-        btn_col = QVBoxLayout()
-        btn_col.setSpacing(4)
+        # 1.2 操作按钮 — 用 QWidget 容器包住 VBox 布局，避免 layout 在 HBox 内的对齐歧义
+        btn_container = QWidget()
+        btn_col = QVBoxLayout(btn_container)
+        btn_col.setSpacing(6)
+        btn_col.setContentsMargins(0, 0, 0, 0)
         self.btn_add = QPushButton("添加")
-        self.btn_add.setFixedWidth(60)
         self.btn_add_group = QPushButton("分组")
-        self.btn_add_group.setFixedWidth(60)
         self.btn_del = QPushButton("删除")
-        self.btn_del.setFixedWidth(60)
-        self.btn_up  = QPushButton("上移")
-        self.btn_up.setFixedWidth(60)
-        self.btn_dn  = QPushButton("下移")
-        self.btn_dn.setFixedWidth(60)
+        self.btn_up = QPushButton("上移")
+        self.btn_dn = QPushButton("下移")
         self.btn_code_to_alert = QPushButton("设提醒")
-        self.btn_code_to_alert.setFixedWidth(60)
+        self.btn_code_to_strategy = QPushButton("设策略")
+        for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
+            b.setFixedWidth(72)
+        self.btn_code_to_alert.setFixedWidth(72)
+        self.btn_code_to_strategy.setFixedWidth(72)
         self.btn_code_to_alert.setVisible(False)
         self.btn_code_to_alert.setToolTip("用当前选中的自选股创建或打开价格提醒")
-        self.btn_code_to_strategy = QPushButton("设策略")
-        self.btn_code_to_strategy.setFixedWidth(60)
         self.btn_code_to_strategy.setToolTip("用当前选中的自选股创建或打开持仓策略")
         for b in (self.btn_add, self.btn_add_group, self.btn_del, self.btn_up, self.btn_dn):
             btn_col.addWidget(b)
         btn_col.addSpacing(8)
         btn_col.addWidget(self.btn_code_to_strategy)
-        btn_col.addStretch(1)
+        btn_col.addWidget(self.btn_code_to_alert)
+        # 强制按钮容器顶部对齐 + 不可被拉伸
+        from PySide6.QtWidgets import QSizePolicy
+        btn_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn_container.setMaximumWidth(80)
 
         self.cmb_code_holding = QComboBox()
         self.cmb_code_holding.setFixedWidth(82)
@@ -163,7 +168,7 @@ class SettingsDialog(QDialog):
             tag_lay.setColumnMinimumWidth(col, width)
 
         lay_codes.addWidget(self.tree_codes, 1)
-        lay_codes.addLayout(btn_col)
+        lay_codes.addWidget(btn_container, 0, Qt.AlignTop)
         code_settings.addWidget(g_codes, 1)
         code_settings.addWidget(g_code_tags)
 
@@ -175,7 +180,7 @@ class SettingsDialog(QDialog):
 
         # 2.刷新间隔
         g_interval = QGroupBox("刷新间隔")
-        g_interval.setContentsMargins(3,12,3,6)
+        g_interval.setContentsMargins(3, 8, 3, 4)
         self.cmb_interval = QComboBox()
         self.cmb_interval.setFixedWidth(136)
         for s in [1,2,3,5,10,15,30,60]:
@@ -190,7 +195,7 @@ class SettingsDialog(QDialog):
         # 3.显示选项
         # 3.1复选框组
         g_flags = QGroupBox("显示指标")
-        g_flags.setContentsMargins(3,12,3,6)
+        g_flags.setContentsMargins(3, 8, 3, 4)
         gl_flags = QGridLayout(g_flags)
         self.cbs: list[QCheckBox] = []
         cb_texts = [header for header in self.win.ALL_HEADERS if header != "备注"]
@@ -349,7 +354,7 @@ class SettingsDialog(QDialog):
         alert_settings = QVBoxLayout(tab_alert)
 
         g_alert = QGroupBox("联动提醒")
-        g_alert.setContentsMargins(3,12,3,6)
+        g_alert.setContentsMargins(3, 8, 3, 4)
         lay_alert = QHBoxLayout(g_alert)
         lay_alert.setSpacing(6)
 
@@ -427,7 +432,7 @@ class SettingsDialog(QDialog):
         alert_settings.addWidget(g_alert)
 
         g_price_alert = QGroupBox("价格提醒")
-        g_price_alert.setContentsMargins(3,12,3,6)
+        g_price_alert.setContentsMargins(3, 8, 3, 4)
         lay_price_alert = QVBoxLayout(g_price_alert)
         lay_price_alert.setSpacing(6)
 
@@ -481,7 +486,7 @@ class SettingsDialog(QDialog):
         code_settings.addWidget(g_price_alert)
 
         g_warning = QGroupBox("警醒标语")
-        g_warning.setContentsMargins(3,12,3,6)
+        g_warning.setContentsMargins(3, 8, 3, 4)
         lay_warning = QGridLayout(g_warning)
         self.chk_warning_visible = QCheckBox("显示")
         self.chk_warning_visible.setChecked(bool(getattr(self.win, "warning_visible", False)))
@@ -491,7 +496,7 @@ class SettingsDialog(QDialog):
         data_settings.addWidget(g_warning)
 
         g_market = QGroupBox("市场概览")
-        g_market.setContentsMargins(3,12,3,6)
+        g_market.setContentsMargins(3, 8, 3, 4)
         lay_market = QGridLayout(g_market)
         self.chk_market_amount_visible = QCheckBox("显示沪深成交额估算")
         self.chk_market_amount_visible.setChecked(bool(getattr(self.win, "market_amount_visible", False)))
@@ -1115,7 +1120,7 @@ class SettingsDialog(QDialog):
 
         # 表格外观
         g_table = QGroupBox("表格外观")
-        g_table.setContentsMargins(3,12,3,6)
+        g_table.setContentsMargins(3, 8, 3, 4)
         gl_table = QGridLayout(g_table)
         gl_table.setHorizontalSpacing(6)
         gl_table.setVerticalSpacing(6)
@@ -1134,7 +1139,7 @@ class SettingsDialog(QDialog):
 
         # 3.颜色/透明度
         g_color = QGroupBox("颜色与透明度")
-        g_color.setContentsMargins(3,12,3,6)
+        g_color.setContentsMargins(3, 8, 3, 4)
         gl_color = QGridLayout(g_color)
         gl_color.setHorizontalSpacing(6)
         gl_color.setVerticalSpacing(6)
@@ -1175,7 +1180,7 @@ class SettingsDialog(QDialog):
 
         # 4.字体/行距
         g_font = QGroupBox("字体与行距")
-        g_font.setContentsMargins(3,12,3,6)
+        g_font.setContentsMargins(3, 8, 3, 4)
         gl_font = QGridLayout(g_font)
         gl_font.setHorizontalSpacing(6)
         gl_font.setVerticalSpacing(6)
@@ -1215,9 +1220,9 @@ class SettingsDialog(QDialog):
         tab_3 = QWidget()
         other_settings = QVBoxLayout(tab_3)
 
-        # 4.热键
+        # 1.快捷键
         g_hotkey = QGroupBox("快捷键")
-        g_hotkey.setContentsMargins(3,12,3,6)
+        g_hotkey.setContentsMargins(3, 8, 3, 4)
         gl_hotkey = QGridLayout(g_hotkey)
         gl_hotkey.setHorizontalSpacing(6)
         gl_hotkey.setVerticalSpacing(6)
@@ -1225,15 +1230,16 @@ class SettingsDialog(QDialog):
         self.edit_hotkey = QKeySequenceEdit()
         self.edit_hotkey.setKeySequence(QKeySequence(self.win.hotkey))
         gl_hotkey.addWidget(self.edit_hotkey,0,1)
-        # 开机启动复选框
+        other_settings.addWidget(g_hotkey)
+
+        # 2.开机启动复选框
         self.chk_start_on_boot = QCheckBox("开机启动")
         self.chk_start_on_boot.setChecked(bool(self.win.start_on_boot))
         other_settings.addWidget(self.chk_start_on_boot)
-        other_settings.addWidget(g_hotkey)
 
-        # 程序图标选择
+        # 3.程序图标选择
         g_icon = QGroupBox("程序图标")
-        g_icon.setContentsMargins(3,12,3,6)
+        g_icon.setContentsMargins(3, 8, 3, 4)
         gl_icon = QHBoxLayout(g_icon)
         self.cmb_icon = QComboBox()
         icon_items = [
@@ -1254,7 +1260,7 @@ class SettingsDialog(QDialog):
 
         # 版本更新
         g_update = QGroupBox("版本更新")
-        g_update.setContentsMargins(3,12,3,6)
+        g_update.setContentsMargins(3, 8, 3, 4)
         gl_update = QGridLayout(g_update)
         gl_update.setHorizontalSpacing(6)
         gl_update.setVerticalSpacing(6)
@@ -1263,6 +1269,10 @@ class SettingsDialog(QDialog):
         self.btn_check_update = QPushButton("检查更新")
         self.btn_check_update.setFixedWidth(100)
         gl_update.addWidget(self.btn_check_update, 0, 1)
+        self.lbl_update_status = QLabel("尚未检查")
+        self.lbl_update_status.setStyleSheet("color: #888;")
+        self.lbl_update_status.setWordWrap(True)
+        gl_update.addWidget(self.lbl_update_status, 2, 0, 1, 2)
         self.chk_check_updates_on_startup = QCheckBox("启动时自动检查更新")
         app = getattr(self, "app", None)
         self.chk_check_updates_on_startup.setChecked(
@@ -3409,10 +3419,11 @@ class SettingsDialog(QDialog):
         app = getattr(self, "app", None)
         self.btn_check_update.setEnabled(False)
         self.btn_check_update.setText("检查中…")
+        self.lbl_update_status.setText("正在检查更新…")
         started = False
         if app is not None and callable(getattr(app, "check_updates_manual", None)):
             try:
-                started = bool(app.check_updates_manual())
+                started = bool(app.check_updates_manual(extra_callback=self._on_manual_check_result))
             except Exception:
                 started = False
         if not started:
@@ -3421,8 +3432,21 @@ class SettingsDialog(QDialog):
                 from VersionCheck import fetch_latest_release, is_newer_version
                 result = fetch_latest_release()
                 self._show_sync_check_result(result, is_newer_version)
-            except Exception:
-                pass
+                self._on_manual_check_result(result)
+            except Exception as e:
+                self.lbl_update_status.setText(f"检查失败：{e}")
+                QTimer.singleShot(15000, self._restore_check_update_button)
+
+    def _on_manual_check_result(self, result):
+        from VersionCheck import APP_VERSION_TAG, is_newer_version
+        if isinstance(result, dict) and result.get("rate_limited"):
+            self.lbl_update_status.setText("请求过于频繁被服务器限流，请 1 小时后再试。")
+        elif not result:
+            self.lbl_update_status.setText("检查失败：无法连接版本服务器，请检查网络后稍后重试。")
+        elif is_newer_version(result.get("tag", "")):
+            self.lbl_update_status.setText(f"发现新版本：{result.get('tag','')}（当前 {APP_VERSION_TAG}），请在弹窗中确认后台下载更新。")
+        else:
+            self.lbl_update_status.setText(f"当前已是最新版本（{APP_VERSION_TAG}）。")
         QTimer.singleShot(15000, self._restore_check_update_button)
 
     def _show_sync_check_result(self, result, is_newer_version):
@@ -3432,11 +3456,15 @@ class SettingsDialog(QDialog):
         elif result:
             QMessageBox.information(None, "检查更新", f"当前已是最新版本（{APP_VERSION_TAG}）。")
         else:
-            QMessageBox.information(None, "检查更新", "检查失败：无法连接 GitHub，请检查网络后重试。")
+            QMessageBox.information(None, "检查更新", "检查失败：无法连接版本服务器，请检查网络后重试。")
 
     def _restore_check_update_button(self):
         self.btn_check_update.setEnabled(True)
         self.btn_check_update.setText("检查更新")
+
+    def set_update_status_text(self, text):
+        """供 App 在后台下载更新时同步状态文本（进度/完成/失败）。"""
+        self.lbl_update_status.setText(str(text))
 
     def _on_check_updates_on_startup_toggled(self, checked):
         app = getattr(self, "app", None)
@@ -3536,15 +3564,50 @@ class SettingsDialog(QDialog):
         self.cmb_b1s1_display.setEnabled(state)
 
     def _apply_tab_size(self, index: int):
-        size = self.tab_sizes.get(index, QSize(400, 400))
-        if index in (0, 1, 2):
-            self.setMinimumSize(size)
-            self.setMaximumSize(16777215, 16777215)
-            self.resize(size)
-        else:
-            self.setMinimumSize(size)
-            self.setMaximumSize(size)
-            self.resize(size)
+        # 统一取“全部页面所需的最大自然尺寸”（sizeHint 随字体/DPI 自适应），
+        # tab_sizes 仅作下限；避免高 DPI/大字体环境下窗口被压到内容装不下导致控件挤压。
+        size = self.tab_sizes.get(index, QSize(420, 400))
+        hint = self.sizeHint()
+        try:
+            min_hint = self.minimumSizeHint()
+        except Exception:
+            min_hint = QSize(0, 0)
+        target_w = max(size.width(), hint.width(), min_hint.width())
+        target_h = max(size.height(), hint.height(), min_hint.height())
+        try:
+            from PySide6.QtGui import QGuiApplication
+            screen = QGuiApplication.primaryScreen()
+            if screen is not None:
+                avail = screen.availableGeometry()
+                target_w = min(target_w, max(360, avail.width() - 40))
+                target_h = min(target_h, max(360, avail.height() - 60))
+        except Exception:
+            pass
+        self.setMinimumSize(QSize(360, 360))
+        self.setMaximumWidth(16777215)
+        self.setMaximumHeight(16777215)
+        self.resize(QSize(target_w, target_h))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 首次显示时布局/字体/DPI 才真正生效，构造期算的尺寸可能偏小，
+        # 显示后按真实需求校正一次，避免按钮被挤出右边界。
+        if not getattr(self, "_sized_on_show", False):
+            self._sized_on_show = True
+            old_w, old_h = self.width(), self.height()
+            self._apply_tab_size(self.tabs.currentIndex())
+            if (self.width(), self.height()) != (old_w, old_h):
+                try:
+                    from PySide6.QtGui import QGuiApplication
+                    screen = QGuiApplication.primaryScreen()
+                    if screen is not None:
+                        avail = screen.availableGeometry()
+                        self.move(
+                            avail.left() + (avail.width() - self.width()) // 2,
+                            avail.top() + (avail.height() - self.height()) // 2,
+                        )
+                except Exception:
+                    pass
 
     def pick_fg(self):
         c = QColorDialog.getColor(self.win.fg, self, "选择文字颜色")

@@ -1,12 +1,19 @@
 import sys, os, winreg
 
-from PySide6.QtCore import Qt, QPoint, QTimer, QUrl
-from PySide6.QtGui import QAction, QIcon, QDesktopServices
+from PySide6.QtCore import Qt, QPoint, QTimer, Signal
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QStyle, QMessageBox
 from WidgetPanel import FloatLabel
 from SettingPanel import SettingsDialog
 from ConfigStore import load_config, save_config
-from VersionCheck import APP_VERSION_TAG, UpdateChecker, is_newer_version
+from VersionCheck import (
+    APP_VERSION_TAG,
+    UpdateChecker,
+    apply_update_and_restart,
+    download_release_asset,
+    is_newer_version,
+    new_exe_download_path,
+)
 
 # ----- 程序与资源 -----
 APP_NAME = "StockWidget"
@@ -17,6 +24,8 @@ def resource_path(rel_path):
     return os.path.join(base, rel_path)
 
 class App(QApplication):
+    update_download_progress = Signal(int, int)
+    update_download_finished = Signal(object)
     def __init__(self, argv):
         super().__init__(argv)
         self.setQuitOnLastWindowClosed(False)
@@ -85,9 +94,15 @@ class App(QApplication):
 
         # 版本更新检测
         self._update_checker = UpdateChecker(on_result=self._on_update_check_result)
+        self._update_downloading = False
+        self.update_download_progress.connect(self._on_update_download_progress)
+        self.update_download_finished.connect(self._on_update_download_finished)
         self._check_updates_on_startup = bool(cfg.get("check_updates_on_startup", True))
         if self._check_updates_on_startup:
             QTimer.singleShot(2000, self._check_updates_on_startup_delayed)
+
+        # 代码索引后台刷新（每日一次；远端文件由 update-codes 工作流自动维护）
+        QTimer.singleShot(5000, self._refresh_code_index_async)
 
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick): self.toggle_win()
@@ -151,6 +166,12 @@ class App(QApplication):
         except Exception:
             pass
 
+    def _refresh_code_index_async(self):
+        import threading
+        from StockCodeSearch import refresh_code_index_from_remote
+
+        threading.Thread(target=refresh_code_index_from_remote, daemon=True).start()
+
     def _on_update_check_result(self, result):
         # worker 线程回调，转回主线程弹窗
         QTimer.singleShot(0, lambda: self._show_update_prompt(result))
@@ -158,24 +179,102 @@ class App(QApplication):
     def _show_update_prompt(self, result):
         if not result or not is_newer_version(result.get("tag", "")):
             return
+        if self._update_downloading:
+            return
         tag = result.get("tag", "")
-        url = result.get("url", "")
         box = QMessageBox(self.win)
         box.setWindowTitle("发现新版本")
         box.setText(f"StockWidget 有新版本 {tag}（当前 {APP_VERSION_TAG}）")
-        box.setInformativeText("是否前往 GitHub Releases 下载最新版本？")
-        download = box.addButton("前往下载", QMessageBox.AcceptRole)
+        box.setInformativeText("是否后台下载并自动更新？（下载不阻塞看盘，完成后询问重启）")
+        update = box.addButton("后台下载并更新", QMessageBox.AcceptRole)
         box.addButton("稍后再说", QMessageBox.RejectRole)
         box.exec()
-        if box.clickedButton() is download and url:
+        if box.clickedButton() is update:
+            self._start_update_download(tag)
+
+    # ---- 后台下载与自动更新 ----
+
+    def _start_update_download(self, tag):
+        """后台线程下载新版本 exe，进度/完成经信号回主线程。"""
+        if getattr(self, "_update_downloading", False):
+            return
+        self._update_downloading = True
+        self._set_update_status_text(f"正在后台下载新版本 {tag}…")
+        dest = new_exe_download_path(tag)
+        self._update_download_tag = tag
+        self._update_download_dest = dest
+
+        def _worker():
+            ok, error = download_release_asset(
+                tag, dest, on_progress=self._emit_update_download_progress
+            )
+            self.update_download_finished.emit({"ok": ok, "error": error, "tag": tag})
+
+        import threading
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _emit_update_download_progress(self, done, total):
+        self.update_download_progress.emit(done, total)
+
+    def _on_update_download_progress(self, done, total):
+        mb = done / 1024.0 / 1024.0
+        if total > 0:
+            pct = int(done * 100 / total)
+            text = f"正在下载新版本… {pct}%（{mb:.1f} MB）"
+        else:
+            text = f"正在下载新版本… 已下载 {mb:.1f} MB"
+        self._set_update_status_text(text)
+
+    def _on_update_download_finished(self, result):
+        self._update_downloading = False
+        ok = bool(result.get("ok"))
+        tag = result.get("tag", "")
+        if not ok:
+            self._set_update_status_text(f"下载失败：{result.get('error', '未知错误')}")
+            QMessageBox.warning(self.win, "更新下载失败", f"新版本下载失败：\n{result.get('error', '未知错误')}")
+            return
+        self._set_update_status_text(f"新版本 {tag} 下载完成，重启后生效。")
+        box = QMessageBox(self.win)
+        box.setWindowTitle("更新就绪")
+        box.setText(f"新版本 {tag} 已下载完成")
+        box.setInformativeText("是否立即重启 StockWidget 完成更新？")
+        now = box.addButton("立即重启更新", QMessageBox.AcceptRole)
+        box.addButton("稍后（下次退出时手动替换）", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is now:
+            self._apply_update_now()
+
+    def _apply_update_now(self):
+        dest = getattr(self, "_update_download_dest", "")
+        if not apply_update_and_restart(dest):
+            QMessageBox.warning(
+                self.win,
+                "更新失败",
+                "无法自动替换程序（可能是脚本模式运行或文件被占用）。\n"
+                f"新版本已下载到：\n{dest}",
+            )
+            return
+        self.quit_app()
+
+    def _set_update_status_text(self, text):
+        dlg = getattr(self, "settings_dlg", None)
+        if dlg is not None and dlg.isVisible():
             try:
-                QDesktopServices.openUrl(QUrl(url))
+                dlg.set_update_status_text(text)
             except Exception:
                 pass
 
-    def check_updates_manual(self):
+    def check_updates_manual(self, extra_callback=None):
         """设置面板手动检查更新（异步，完成后弹窗提示结果）。"""
-        checker = UpdateChecker(on_result=self._on_manual_update_check_result)
+        def _on_result(result):
+            self._on_manual_update_check_result(result)
+            if callable(extra_callback):
+                try:
+                    extra_callback(result)
+                except Exception:
+                    pass
+        checker = UpdateChecker(on_result=_on_result)
         self._manual_update_checker = checker
         return checker.check_async()
 
@@ -183,8 +282,11 @@ class App(QApplication):
         QTimer.singleShot(0, lambda: self._show_manual_check_result(result))
 
     def _show_manual_check_result(self, result):
+        if isinstance(result, dict) and result.get("rate_limited"):
+            QMessageBox.information(None, "检查更新", "请求过于频繁被服务器限流，请 1 小时后再试。")
+            return
         if not result:
-            QMessageBox.information(None, "检查更新", "检查失败：无法连接 GitHub，请检查网络后重试。")
+            QMessageBox.information(None, "检查更新", "检查失败：无法连接版本服务器，请检查网络后稍后重试。")
             return
         if is_newer_version(result.get("tag", "")):
             self._show_update_prompt(result)

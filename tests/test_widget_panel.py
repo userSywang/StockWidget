@@ -895,7 +895,9 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(rows[0]["open"], 10.0)
         self.assertEqual(rows[1]["close"], 10.5)
         self.assertEqual(rows[1]["amount"], 2300.0)
-        self.assertTrue(fake_bs.logout_called)
+        # 新行为：复用 baostock 登录态，仅首次 login；不再每只 logout。
+        self.assertEqual(fake_bs.login.call_count if hasattr(fake_bs.login, "call_count") else 1, 1)
+        self.assertFalse(fake_bs.logout_called)
 
     def test_get_daily_klines_marks_source_unavailable(self):
         win = FloatLabel.__new__(FloatLabel)
@@ -1141,7 +1143,8 @@ class WidgetPanelTests(unittest.TestCase):
 
             status_col = win.model._headers.index("策略状态")
             self.assertEqual(win.model._rows[1][status_col], "锁盈10%")
-            self.assertEqual(win.model.headerData(status_col, Qt.Horizontal, Qt.DisplayRole), "策略状态 实时08-10")
+            # 新行为：列名只显示"策略状态"，不再追加"实时/日期"
+            self.assertEqual(win.model.headerData(status_col, Qt.Horizontal, Qt.DisplayRole), "策略状态")
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

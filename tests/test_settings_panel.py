@@ -318,6 +318,25 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.code_tags["sh603259"]["note_color"], "#f0c36a")
         dlg.close()
 
+    def test_manual_check_result_updates_status_label(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        newer = {"tag": "v9.9.9", "url": "https://example.com", "published_at": ""}
+        dlg._on_manual_check_result(newer)
+        self.assertIn("发现新版本", dlg.lbl_update_status.text())
+        self.assertIn("v9.9.9", dlg.lbl_update_status.text())
+
+        same = {"tag": "v1.0.0", "url": "", "published_at": ""}
+        dlg._on_manual_check_result(same)
+        self.assertIn("当前已是最新版本", dlg.lbl_update_status.text())
+
+        dlg._on_manual_check_result(None)
+        self.assertIn("无法连接版本服务器", dlg.lbl_update_status.text())
+
+        rate = {"rate_limited": True}
+        dlg._on_manual_check_result(rate)
+        self.assertIn("限流", dlg.lbl_update_status.text())
+
     def test_appearance_page_updates_edge_auto_hide(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

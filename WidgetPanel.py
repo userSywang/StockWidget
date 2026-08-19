@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QMenu, QVBoxLayout, QHBoxLa
 from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
 from HotkeyManager import GlobalHotkeyManager, normalize_hotkey
+import QuoteSource
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -248,12 +249,15 @@ class FloatLabel(QWidget):
         self._pressed_kline_code = ""
         self._edge_collapsed = False
         self._edge_expanded_geometry = None
+        self._bs_logged_in = False
 
         self.timer = QTimer(self)
         self.timer.setInterval(max(1, self.refresh_seconds)*1000)
         self.timer.timeout.connect(self._refresh_from_function)
-        self.timer.start()
+        # 首屏占位：异步 refresh 完成前先渲染一行"加载中…"，避免空 model 触发 _fit_to_contents 后出现"一条线"
+        self._seed_loading_placeholder()
         self._refresh_from_function(force=True)
+        self.timer.start()
         self._defer_fit()
 
         self._keep_top_timer = QTimer(self)
@@ -546,6 +550,23 @@ class FloatLabel(QWidget):
         self.table.setFont(self.font)
         self.table.horizontalHeader().setFont(self.font)
         self._defer_fit()
+
+    def _seed_loading_placeholder(self):
+        """兜底占位：仅在 model 为空时调用，写一行"加载中…"，保证 _fit_to_contents 不会算出 0 行的极薄条。"""
+        try:
+            if self.model.rowCount() > 0:
+                return
+            visible_headers = [h for h in self.ALL_HEADERS if self.header_is_visible(h)] or list(self.ALL_HEADERS)
+            placeholders = [""] * len(visible_headers)
+            if visible_headers:
+                placeholders[0] = "加载中…"
+            placeholders[-1] = "—"
+            meta = [{"placeholder": True}]
+            right_cols = [i for i, h in enumerate(visible_headers) if h not in ("名称", "K线", "卖一")]
+            self.model.set_align_right_cols(right_cols)
+            self.model.set_rows_headers([placeholders], visible_headers, meta=meta)
+        except Exception:
+            pass
 
     def _apply_row_heights(self):
         fm = self.table.fontMetrics()
@@ -990,27 +1011,15 @@ class FloatLabel(QWidget):
         requested_codes = normalize_codes(codes)
         if getattr(self, "data_source", {}).get("mode") == "custom":
             return self._get_custom_price(requested_codes)
-        label = ",".join(requested_codes)
-        if not label:
+        if not requested_codes:
             raise Exception("暂无数据，请添加自选")
 
         row_by_code = {}
         sign_by_code = {}
         quote_by_code = {}
-        url = 'https://hq.sinajs.cn/list=' + label
-        headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
-        r = getter(url, headers=headers, timeout=3)
-        r.encoding = 'gbk'
-        for line in r.text.split('\n'):
-            if not line or '"' not in line:
-                continue
-            heads = line.split('="')[0].split('_')
-            parts = line.split('="')[1].split(',')
-            if len(parts) < 30:
-                continue
-
-            code          = heads[2]
+        parsed_quotes = QuoteSource.fetch_sina_quotes(requested_codes, getter=getter)
+        for code, parts in parsed_quotes.items():
             name          = parts[0]
             opening_price = float(parts[1] or 0)   # 开盘
             prev_close    = float(parts[2] or 0)   # 昨收
@@ -1291,141 +1300,29 @@ class FloatLabel(QWidget):
 
     @staticmethod
     def _eastmoney_secid(code):
-        code = normalize_codes([code])
-        if not code:
-            return ""
-        code = code[0]
-        market = "1" if code.startswith("sh") else "0"
-        return f"{market}.{code[2:]}"
+        return QuoteSource.eastmoney_secid(code)
 
     def _parse_tencent_daily_payload(self, code, payload):
-        data = ((payload or {}).get("data") or {}).get(code) or {}
-        klines = data.get("qfqday") or data.get("day") or []
-        rows = []
-        for parts in klines:
-            if not isinstance(parts, (list, tuple)) or len(parts) < 6:
-                continue
-            try:
-                rows.append({
-                    "date": str(parts[0]),
-                    "open": float(parts[1]),
-                    "close": float(parts[2]),
-                    "high": float(parts[3]),
-                    "low": float(parts[4]),
-                    "volume": float(parts[5]),
-                    "amount": float(parts[6]) if len(parts) > 6 else 0.0,
-                })
-            except Exception:
-                continue
-        return rows
+        return QuoteSource.parse_tencent_daily_payload(code, payload)
 
     def _get_tencent_daily_klines(self, code, limit=20):
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
-        url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},day,,,{int(limit)},qfq"
-        response = getter(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-        return self._parse_tencent_daily_payload(code, response.json())
+        return QuoteSource.fetch_tencent_daily_klines(code, limit, getter=getter)
 
     def _get_eastmoney_daily_klines(self, code, limit=20):
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
-        headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
-        secid = self._eastmoney_secid(code)
-        if not secid:
-            return []
-        url = (
-            "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-            f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
-            "&fields2=f51,f52,f53,f54,f55,f56,f57"
-            f"&klt=101&fqt=1&lmt={int(limit)}&end=20500101"
-        )
-        response = getter(url, headers=headers, timeout=5)
-        payload = response.json()
-        klines = (((payload or {}).get("data") or {}).get("klines") or [])
-        rows = []
-        for raw in klines:
-            parts = str(raw).split(",")
-            if len(parts) < 6:
-                continue
-            try:
-                rows.append({
-                    "date": parts[0],
-                    "open": float(parts[1]),
-                    "close": float(parts[2]),
-                    "high": float(parts[3]),
-                    "low": float(parts[4]),
-                    "volume": float(parts[5]),
-                    "amount": float(parts[6]) if len(parts) > 6 else 0.0,
-                })
-            except Exception:
-                continue
-        return rows
+        return QuoteSource.fetch_eastmoney_daily_klines(code, limit, getter=getter)
 
     @staticmethod
     def _intraday_minute_index(time_text):
-        text = str(time_text or "").strip()
-        if " " in text:
-            text = text.split()[-1]
-        parts = text.split(":")
-        if len(parts) < 2:
-            return None
-        try:
-            hour = int(parts[0])
-            minute = int(parts[1])
-        except Exception:
-            return None
-        total = hour * 60 + minute
-        if 9 * 60 + 30 <= total <= 11 * 60 + 30:
-            return total - (9 * 60 + 30)
-        if 13 * 60 <= total <= 15 * 60:
-            return 121 + total - (13 * 60)
-        return None
+        return QuoteSource.intraday_minute_index(time_text)
 
     def _parse_eastmoney_intraday_payload(self, payload):
-        data = (payload or {}).get("data") or {}
-        trends = data.get("trends") or []
-        points = []
-        prev_close = 0.0
-        try:
-            prev_close = float(data.get("preClose") or data.get("pre_close") or 0.0)
-        except Exception:
-            prev_close = 0.0
-        for raw in trends:
-            parts = str(raw or "").split(",")
-            if len(parts) < 3:
-                continue
-            minute = self._intraday_minute_index(parts[0])
-            if minute is None:
-                continue
-            try:
-                price = float(parts[2] or 0.0)
-            except Exception:
-                continue
-            if price <= 0:
-                continue
-            point = {"minute": minute, "price": price}
-            if len(parts) > 7:
-                try:
-                    avg = float(parts[7] or 0.0)
-                    if avg > 0:
-                        point["avg"] = avg
-                except Exception:
-                    pass
-            points.append(point)
-        points.sort(key=lambda item: item["minute"])
-        return {"points": points, "prev_close": prev_close, "max_minute": 241}
+        return QuoteSource.parse_eastmoney_intraday_payload(payload)
 
     def _get_eastmoney_intraday_trend(self, code):
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
-        secid = self._eastmoney_secid(code)
-        if not secid:
-            return {}
-        headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
-        url = (
-            "https://push2his.eastmoney.com/api/qt/stock/trends2/get"
-            f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11"
-            "&fields2=f51,f52,f53,f54,f55,f56,f57,f58&iscr=0&iscca=0&ndays=1"
-        )
-        response = getter(url, headers=headers, timeout=5)
-        return self._parse_eastmoney_intraday_payload(response.json())
+        return QuoteSource.fetch_eastmoney_intraday_trend(code, getter=getter)
 
     def _get_intraday_trends(self, codes):
         result = {}
@@ -1453,11 +1350,7 @@ class FloatLabel(QWidget):
 
     @staticmethod
     def _baostock_code(code):
-        code = normalize_codes([code])
-        if not code:
-            return ""
-        code = code[0]
-        return f"{code[:2]}.{code[2:]}"
+        return QuoteSource.baostock_code(code)
 
     def _get_baostock_daily_klines(self, code, limit=20):
         import baostock as bs
@@ -1468,10 +1361,10 @@ class FloatLabel(QWidget):
 
         end_date = date.today()
         start_date = end_date - timedelta(days=max(30, int(limit) * 3))
-        login = bs.login()
+        self._ensure_baostock_login()
+        if not getattr(self, "_bs_logged_in", False):
+            return []
         try:
-            if getattr(login, "error_code", "0") != "0":
-                raise RuntimeError(getattr(login, "error_msg", "baostock login failed"))
             fields = "date,code,open,high,low,close,volume,amount"
             result = bs.query_history_k_data_plus(
                 bs_code,
@@ -1499,11 +1392,27 @@ class FloatLabel(QWidget):
                 except Exception:
                     continue
             return rows[-int(limit):]
-        finally:
-            try:
-                bs.logout()
-            except Exception:
-                pass
+        except Exception:
+            self._bs_logged_in = False
+            return []
+
+    def _ensure_baostock_login(self):
+        """复用全局 baostock 登录态：仅在未登录时调用一次 login，避免每只股票都阻塞 ~2s。"""
+        if getattr(self, "_bs_logged_in", False):
+            return
+        try:
+            import baostock as bs
+        except Exception:
+            self._bs_logged_in = False
+            return
+        try:
+            login = bs.login()
+            if getattr(login, "error_code", "0") == "0":
+                self._bs_logged_in = True
+            else:
+                self._bs_logged_in = False
+        except Exception:
+            self._bs_logged_in = False
 
     def _get_daily_klines(self, codes, limit=20):
         daily_by_code = {}
@@ -1519,23 +1428,21 @@ class FloatLabel(QWidget):
                 continue
 
             errors = []
+            rows = []
             try:
-                rows = self._get_baostock_daily_klines(code, limit)
+                rows = self._get_tencent_daily_klines(code, limit)
             except Exception as exc:
-                errors.append(f"Baostock:{type(exc).__name__}")
-                rows = []
-            if not rows:
-                try:
-                    rows = self._get_tencent_daily_klines(code, limit)
-                except Exception as exc:
-                    errors.append(f"腾讯:{type(exc).__name__}")
-                    rows = []
+                errors.append(f"腾讯:{type(exc).__name__}")
             if not rows:
                 try:
                     rows = self._get_eastmoney_daily_klines(code, limit)
                 except Exception as exc:
                     errors.append(f"东财:{type(exc).__name__}")
-                    rows = []
+            if not rows:
+                try:
+                    rows = self._get_baostock_daily_klines(code, limit)
+                except Exception as exc:
+                    errors.append(f"Baostock:{type(exc).__name__}")
             if rows:
                 daily_by_code[code] = rows
                 if isinstance(cache, dict):
@@ -2475,13 +2382,7 @@ class FloatLabel(QWidget):
         headers = [self.ALL_HEADERS[i] for i in cols]
         header_notes = {}
         if "策略状态" in headers:
-            daily_labels = [
-                str(meta.get("strategy_daily_label") or "").strip()
-                for meta in (sign_data or [])
-                if isinstance(meta, dict) and meta.get("strategy_daily_label")
-            ]
-            if daily_labels:
-                header_notes[headers.index("策略状态")] = daily_labels[0]
+            pass  # 不再将"实时/日线"追加到"策略状态"列名，避免列标题被挤
 
         proj_rows, proj_meta = [], []
         for r, row in enumerate(full_rows):
@@ -3256,6 +3157,13 @@ class FloatLabel(QWidget):
                 self._refresh_executor = None
         except Exception:
             pass
+        try:
+            if getattr(self, "_bs_logged_in", False):
+                import baostock as bs
+                bs.logout()
+        except Exception:
+            pass
+        self._bs_logged_in = False
 
     def enterEvent(self, event):
         super().enterEvent(event)

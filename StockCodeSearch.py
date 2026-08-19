@@ -1,6 +1,9 @@
 import json
 import os
 import sys
+from datetime import date
+
+import requests
 
 from StockLogic import normalize_code_or_none
 
@@ -36,6 +39,58 @@ def _compact(text):
 
 _INDEX_CACHE = {}
 
+_UPDATE_REPO = os.environ.get("STOCKWIDGET_UPDATE_REPO", "userSywang/StockWidget")
+_UPDATE_BRANCH = os.environ.get("STOCKWIDGET_UPDATE_BRANCH", "main")
+REMOTE_INDEX_URL = f"https://raw.githubusercontent.com/{_UPDATE_REPO}/{_UPDATE_BRANCH}/resources/stock_codes_list.json"
+
+
+def downloaded_index_path():
+    """后台下载的代码索引缓存路径（%APPDATA%/StockWidget）。"""
+    root = os.getenv("APPDATA") or os.path.expanduser("~")
+    return os.path.join(root, "StockWidget", "stock_codes_list.json")
+
+
+def _index_updated_today(path):
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except Exception:
+        return False
+    updated_at = str((payload or {}).get("updated_at") or "")
+    return updated_at.startswith(date.today().strftime("%Y-%m-%d"))
+
+
+def refresh_code_index_from_remote(getter=None, force=False, cache_path=None):
+    """后台拉取远端代码索引到本地缓存，成功后使内存索引缓存失效。
+
+    当天已刷新过则跳过（force=True 强制）。返回 True 表示缓存已更新。
+    任何失败都静默返回 False，保持旧的本地数据可用。
+    """
+    cache_path = cache_path or downloaded_index_path()
+    if not force and _index_updated_today(cache_path):
+        return False
+    getter = getter or requests.get
+    try:
+        response = getter(REMOTE_INDEX_URL, timeout=5, headers={"User-Agent": "StockWidget"})
+        if getattr(response, "status_code", 0) != 200:
+            return False
+        payload = json.loads(response.text)
+    except Exception:
+        return False
+    codes = payload.get("codes") if isinstance(payload, dict) else None
+    if not isinstance(codes, dict) or not codes:
+        return False
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        tmp = cache_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False)
+        os.replace(tmp, cache_path)
+    except Exception:
+        return False
+    _INDEX_CACHE.pop("default", None)
+    return True
+
 
 def load_stock_code_index(path=None):
     cache_key = path or "default"
@@ -44,6 +99,9 @@ def load_stock_code_index(path=None):
     candidates = []
     if path:
         candidates.append(path)
+    else:
+        # 后台下载的缓存（每日自动更新）优先于打包时内置的静态索引
+        candidates.append(downloaded_index_path())
     base = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))
     candidates.append(os.path.join(base, "resources", "stock_codes_list.json"))
     for candidate in candidates:
