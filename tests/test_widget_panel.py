@@ -586,6 +586,36 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(win._daily_kline_cache, {})
         self.assertEqual(calls, ["saved", ("refresh", True)])
 
+    def test_set_strategy_alert_config_enables_strategy_display_for_positions(self):
+        win = FloatLabel.__new__(FloatLabel)
+        calls = []
+        win.strategy_alert_config = {"enabled": False, "positions": []}
+        win.strategy_profit_visible = False
+        win.strategy_stop_visible = False
+        win.strategy_status_visible = False
+        win._daily_kline_cache = {}
+        win._latest_strategy_states = []
+        win._latest_quotes = {}
+        win._latest_daily_by_code = {}
+        win._strategy_push_sent_keys = set()
+        win._strategy_push_sent_at = {}
+        win.strategy_alert_history = []
+        win._reproject_cached_display = lambda: calls.append("reprojected")
+        win._notify_change = lambda: calls.append("saved")
+        win._is_market_fetch_time = lambda: False
+        win._refresh_from_function = lambda force=False: calls.append(("refresh", force))
+
+        FloatLabel.set_strategy_alert_config(win, {
+            "enabled": False,
+            "positions": [{"code": "002384", "cost_price": 199.869, "strategy_id": "default"}],
+        })
+
+        self.assertTrue(win.strategy_alert_config["enabled"])
+        self.assertTrue(win.strategy_profit_visible)
+        self.assertTrue(win.strategy_stop_visible)
+        self.assertTrue(win.strategy_status_visible)
+        self.assertEqual(win.strategy_alert_config["positions"][0]["code"], "sz002384")
+
     def test_set_strategy_alert_config_updates_cached_stop_line_immediately(self):
         win = FloatLabel.__new__(FloatLabel)
         calls = []

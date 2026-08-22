@@ -2761,6 +2761,11 @@ class FloatLabel(QWidget):
     def set_strategy_alert_config(self, config):
         old_config = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))
         new_config = normalize_strategy_alert_config(config)
+        if new_config.get("positions"):
+            new_config["enabled"] = True
+            self.strategy_profit_visible = True
+            self.strategy_stop_visible = True
+            self.strategy_status_visible = True
         changed_codes = self._strategy_config_changed_codes(old_config, new_config)
         self.strategy_alert_config = new_config
         self._daily_kline_cache = {}
