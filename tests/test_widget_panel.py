@@ -1830,6 +1830,45 @@ class WidgetPanelTests(unittest.TestCase):
             "2026-08-11",
         )
 
+    def test_price_alert_pushes_respect_today_ignore(self):
+        class FakeHttp:
+            def __init__(self):
+                self.posts = []
+
+            def post(self, url, json=None, timeout=None):
+                self.posts.append((url, json, timeout))
+
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = FakeHttp()
+        win._price_alert_push_sent_keys = set()
+        win._price_alert_push_sent_at = {}
+        win._price_alert_push_sent_today = {}
+        win._now = lambda: datetime(2026, 8, 10, 10, 0)
+        win.strategy_alert_config = {
+            "notifications": {
+                "remote_push": True,
+                "remote_channel": "wecom",
+                "webhook_url": "https://example.test/webhook",
+                "push_cooldown_minutes": 30,
+            },
+        }
+        alert = {
+            "triggered": True,
+            "name": "Test",
+            "direction": "below",
+            "price": 145.0,
+            "current_price": 144.5,
+            "message": "stop",
+        }
+        win._desktop_alert_ignored_today = {
+            FloatLabel._price_alert_ignore_key("sh603259", alert): "2026-08-10"
+        }
+
+        pushed = FloatLabel._send_price_alert_pushes(win, {"sh603259": [alert]})
+
+        self.assertFalse(pushed)
+        self.assertEqual(win._http.posts, [])
+
     def test_set_price_alerts_clears_deleted_index_alert_state_and_push_cache(self):
         win = FloatLabel.__new__(FloatLabel)
         win.price_alerts = [{

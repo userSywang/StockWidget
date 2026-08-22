@@ -2138,6 +2138,8 @@ class FloatLabel(QWidget):
                 if not isinstance(alert, dict) or not alert.get("triggered"):
                     continue
                 key = f"{code}|{alert.get('direction')}|{float(alert.get('price', 0.0)):.4f}|{alert.get('message', '')}"
+                if self._is_desktop_alert_ignored(self._price_alert_ignore_key(code, alert), now_dt):
+                    continue
                 daily_key = f"{today_key}|{key}"
                 if sent_today.get(key) == today_key or daily_key in sent_keys:
                     continue
@@ -2181,6 +2183,14 @@ class FloatLabel(QWidget):
             alert.get("direction", ""),
             f"{float(alert.get('price', 0.0)):.4f}",
             str(alert.get("message") or ""),
+        )
+
+    @staticmethod
+    def _price_alert_ignore_key(code, alert):
+        alert = normalize_price_alerts([alert])[0] if isinstance(alert, dict) else normalize_price_alerts([{}])[0]
+        return (
+            f"{code}|价格提醒|{alert.get('direction', '')}|"
+            f"{float(alert.get('price', 0.0)):.4f}|{str(alert.get('message') or '')}"
         )
 
     @staticmethod
