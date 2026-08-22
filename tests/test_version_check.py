@@ -6,6 +6,7 @@ import unittest
 
 from VersionCheck import (
     APP_VERSION,
+    BRANCH,
     UpdateChecker,
     _parse_version,
     apply_update_and_restart,
@@ -41,6 +42,9 @@ class _FakeGetter:
 
 
 class VersionCheckTests(unittest.TestCase):
+    def test_default_update_branch_tracks_current_release_branch(self):
+        self.assertEqual(BRANCH, "codex/strategy-alerts-page")
+
     def test_parse_version_basic(self):
         self.assertEqual(_parse_version("v1.2.3"), (1, 2, 3))
         self.assertEqual(_parse_version("1.0"), (1, 0, 0))

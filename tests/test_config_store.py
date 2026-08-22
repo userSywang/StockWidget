@@ -25,6 +25,17 @@ class ConfigStoreTests(unittest.TestCase):
             self.assertEqual(json.loads(Path(str(path) + ".bak").read_text(encoding="utf-8")), {"old": 1})
             self.assertFalse(Path(str(path) + ".tmp").exists())
 
+    def test_save_config_keeps_limited_timestamp_backups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(save_config({"value": 0}, base_dir=tmp))
+            for idx in range(1, 5):
+                save_config({"value": idx}, base_dir=tmp, keep_backups=2)
+
+            backups = sorted(path.parent.glob("SW_config_*.json.bak"))
+            self.assertEqual(len(backups), 2)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"value": 4})
+            self.assertEqual(json.loads(Path(str(path) + ".bak").read_text(encoding="utf-8")), {"value": 3})
+
 
 if __name__ == "__main__":
     unittest.main()

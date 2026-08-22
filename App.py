@@ -90,7 +90,6 @@ class App(QApplication):
         self.win.raise_()
         self.win.activateWindow()
         self.win.setFocus(Qt.ActiveWindowFocusReason)
-        self.save_now()
 
         # 版本更新检测
         self._update_checker = UpdateChecker(on_result=self._on_update_check_result)
