@@ -2,6 +2,7 @@
 
 import os
 import re
+from glob import glob
 
 
 def _app_version():
@@ -60,10 +61,24 @@ def _build_version_file():
 _VERSION_FILE = _build_version_file()
 
 
+def _root_dlls(package_name):
+    import importlib.util
+
+    spec = importlib.util.find_spec(package_name)
+    if spec is None or not spec.origin:
+        return []
+    package_dir = os.path.dirname(spec.origin)
+    return [(path, package_name) for path in glob(os.path.join(package_dir, "*.dll"))]
+
+
+_EXTRA_BINARIES = _root_dlls("PySide6") + _root_dlls("shiboken6")
+_EXCLUDED_BINARY_NAMES = {"icuuc.dll", "icudt78.dll"}
+
+
 a = Analysis(
     ['StockWidget.py'],
     pathex=[],
-    binaries=[],
+    binaries=_EXTRA_BINARIES,
     datas=[('StockWidget.ico', '.'), ('resources', 'resources')],
     hiddenimports=[],
     hookspath=[],
@@ -73,6 +88,10 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+a.binaries = [
+    entry for entry in a.binaries
+    if entry[0].lower() not in _EXCLUDED_BINARY_NAMES
+]
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -85,8 +104,13 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
+    upx=False,
+    upx_exclude=[
+        'PySide6*.dll',
+        'Qt6*.dll',
+        'shiboken6*.dll',
+        '*.pyd',
+    ],
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
