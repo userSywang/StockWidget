@@ -65,6 +65,23 @@ class QuoteSourceTests(unittest.TestCase):
     def test_fetch_sina_quotes_empty_codes(self):
         self.assertEqual(QuoteSource.fetch_sina_quotes([], getter=lambda *a, **k: None), {})
 
+    def test_parse_eastmoney_realtime_metrics_payload(self):
+        payload = {
+            "data": {
+                "diff": [
+                    {"f12": "603259", "f14": "Test A", "f8": 1.03, "f10": 0.58},
+                    {"f12": "002384", "f14": "Test B", "f8": "-", "f10": None},
+                ]
+            }
+        }
+
+        metrics = QuoteSource.parse_eastmoney_realtime_metrics_payload(payload)
+
+        self.assertEqual(metrics["sh603259"]["turnover_rate"], 1.03)
+        self.assertEqual(metrics["sh603259"]["volume_ratio"], 0.58)
+        self.assertEqual(metrics["sz002384"]["turnover_rate"], 0.0)
+        self.assertEqual(metrics["sz002384"]["volume_ratio"], 0.0)
+
     def test_parse_tencent_daily_payload(self):
         payload = {
             "data": {

@@ -150,6 +150,58 @@ def fetch_eastmoney_daily_klines(code, limit=20, getter=None):
     return rows
 
 
+def _to_float(value, default=0.0):
+    try:
+        text = str(value).strip()
+        if text in ("", "-", "--", "None"):
+            return float(default)
+        return float(text)
+    except Exception:
+        return float(default)
+
+
+def parse_eastmoney_realtime_metrics_payload(payload):
+    """解析东财实时行情补充字段，返回 {code: {turnover_rate, volume_ratio}}。
+
+    fields: f8=换手率，f10=量比。
+    """
+    diffs = (((payload or {}).get("data") or {}).get("diff") or [])
+    result = {}
+    for item in diffs:
+        if not isinstance(item, dict):
+            continue
+        code = normalize_codes([item.get("f12")])
+        if not code:
+            continue
+        result[code[0]] = {
+            "turnover_rate": _to_float(item.get("f8")),
+            "volume_ratio": _to_float(item.get("f10")),
+        }
+    return result
+
+
+def fetch_eastmoney_realtime_metrics(codes, getter=None):
+    """拉取东财实时补充字段：换手率/量比。失败交给调用方处理。"""
+    requested = [
+        code for code in normalize_codes(codes)
+        if str(code).startswith(("sh", "sz"))
+    ]
+    secids = [eastmoney_secid(code) for code in requested]
+    secids = [secid for secid in secids if secid]
+    if not secids:
+        return {}
+    getter = _resolve_getter(getter)
+    headers = {"Referer": "https://quote.eastmoney.com", "User-Agent": "Mozilla/5.0"}
+    url = (
+        "https://push2.eastmoney.com/api/qt/ulist.np/get"
+        "?fltt=2"
+        f"&secids={','.join(secids)}"
+        "&fields=f12,f14,f8,f10"
+    )
+    response = getter(url, headers=headers, timeout=5)
+    return parse_eastmoney_realtime_metrics_payload(response.json())
+
+
 def parse_eastmoney_intraday_payload(payload):
     """解析东财分时响应 JSON，返回 {points, prev_close, max_minute}。"""
     data = (payload or {}).get("data") or {}

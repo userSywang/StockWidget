@@ -131,7 +131,7 @@ class FloatLabel(QWidget):
         self.groups = normalize_groups(groups_cfg, codes_cfg)
         self.codes = flatten_group_codes(self.groups)
         # 列标题列表（提前定义，供后续旧配置解析使用）
-        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"]
+        self.ALL_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "换手", "量比", "成交量", "成交额", "均价", "K线", "MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态", "备注"]
 
         # 列显示标志（独立属性）
         # 解析旧 flags 配置以做回退
@@ -152,6 +152,8 @@ class FloatLabel(QWidget):
         # 买一/卖一 使用单一开关 b1s1_visible（用户要求不要拆分控制）
         self.b1s1_visible = bool(cfg.get("b1s1_visible", (old_flags.get("买一", False) or old_flags.get("卖一", False))))
         self.commi_visible = bool(cfg.get("commi_visible", old_flags.get("委比", False)))
+        self.turnover_visible = bool(cfg.get("turnover_visible", old_flags.get("换手", False)))
+        self.volume_ratio_visible = bool(cfg.get("volume_ratio_visible", old_flags.get("量比", False)))
         self.vol_visible = bool(cfg.get("vol_visible", old_flags.get("成交量", False)))
         self.amount_visible = bool(cfg.get("amount_visible", old_flags.get("成交额", False)))
         self.avg_visible = bool(cfg.get("avg_visible", old_flags.get("均价", False)))
@@ -312,6 +314,8 @@ class FloatLabel(QWidget):
             "change_pct_visible": bool(getattr(self, 'change_pct_visible', False)),
             "b1s1_visible": bool(getattr(self, 'b1s1_visible', False)),
             "commi_visible": bool(getattr(self, 'commi_visible', False)),
+            "turnover_visible": bool(getattr(self, 'turnover_visible', False)),
+            "volume_ratio_visible": bool(getattr(self, 'volume_ratio_visible', False)),
             "vol_visible": bool(getattr(self, 'vol_visible', False)),
             "amount_visible": bool(getattr(self, 'amount_visible', False)),
             "avg_visible": bool(getattr(self, 'avg_visible', False)),
@@ -490,6 +494,10 @@ class FloatLabel(QWidget):
                 return bool(getattr(self, 'b1s1_visible', False))
             if header == "委比":
                 return bool(getattr(self, 'commi_visible', False))
+            if header == "换手":
+                return bool(getattr(self, 'turnover_visible', False))
+            if header == "量比":
+                return bool(getattr(self, 'volume_ratio_visible', False))
             if header == "成交量":
                 return bool(getattr(self, 'vol_visible', False))
             if header == "成交额":
@@ -876,6 +884,8 @@ class FloatLabel(QWidget):
         volume = num("volume")
         amount = num("amount")
         avg = num("avg", current_price if current_price else prev_close)
+        turnover_rate = num("turnover_rate")
+        volume_ratio = num("volume_ratio")
         etf = len(code) > 2 and code[2] in ("1", "5")
         decimals = 3 if etf else 2
         arrow = " "
@@ -896,6 +906,8 @@ class FloatLabel(QWidget):
             "-",
             "-",
             "-",
+            f"{turnover_rate:.2f}%" if turnover_rate else "-",
+            f"{volume_ratio:.2f}" if volume_ratio else "-",
             f"{volume}" if volume < 1e4 else (f"{volume/1e4:.2f}万" if volume < 1e8 else f"{volume/1e8:.2f}亿"),
             f"{amount/1e4:.2f}万" if amount < 1e8 else (f"{amount/1e8:.2f}亿" if amount < 1e12 else f"{amount/1e12:.2f}万亿"),
             f"{avg:.{decimals}f}" if avg else "-",
@@ -915,6 +927,8 @@ class FloatLabel(QWidget):
             "change_pct": change_pct,
             "volume": volume,
             "amount": amount,
+            "turnover_rate": turnover_rate,
+            "volume_ratio": volume_ratio,
             "open": opening_price,
             "high": high_price,
             "low": low_price,
@@ -976,6 +990,8 @@ class FloatLabel(QWidget):
                 "change_pct": self._custom_value(item, "change_pct", ["change_pct", "pct", "percent"]),
                 "volume": self._custom_value(item, "volume", ["volume", "vol"]),
                 "amount": self._custom_value(item, "amount", ["amount", "turnover"]),
+                "turnover_rate": self._custom_value(item, "turnover_rate", ["turnover_rate", "turnoverRate", "turnover_pct"]),
+                "volume_ratio": self._custom_value(item, "volume_ratio", ["volume_ratio", "volumeRatio", "volume_rate"]),
                 "open": self._custom_value(item, "open", ["open", "opening_price"]),
                 "high": self._custom_value(item, "high", ["high", "high_price"]),
                 "low": self._custom_value(item, "low", ["low", "low_price"]),
@@ -1019,6 +1035,11 @@ class FloatLabel(QWidget):
         quote_by_code = {}
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
         parsed_quotes = QuoteSource.fetch_sina_quotes(requested_codes, getter=getter)
+        realtime_metrics = {}
+        try:
+            realtime_metrics = QuoteSource.fetch_eastmoney_realtime_metrics(requested_codes, getter=getter)
+        except Exception:
+            realtime_metrics = {}
         for code, parts in parsed_quotes.items():
             name          = parts[0]
             opening_price = float(parts[1] or 0)   # 开盘
@@ -1030,6 +1051,9 @@ class FloatLabel(QWidget):
             first_sell    = float(parts[7] or 0)   # 卖一
             deals_vol     = float(parts[8] or 0)   # 成交量
             deals_amt     = float(parts[9] or 0)   # 成交额
+            metrics        = realtime_metrics.get(code, {})
+            turnover_rate  = float(metrics.get("turnover_rate", 0.0) or 0.0)
+            volume_ratio   = float(metrics.get("volume_ratio", 0.0) or 0.0)
             purchaser     = [int(x or 0) for x in parts[10:19:2]]  # 买盘，股数
             pur_price     = [float(x or 0) for x in parts[11:20:2]]  # 买盘，价格
             seller        = [int(x or 0) for x in parts[20:29:2]]  # 卖盘，股数
@@ -1157,6 +1181,8 @@ class FloatLabel(QWidget):
                     b1_label,
                     s1_label,
                     f"{committee:+.2f}%",
+                    f"{turnover_rate:.2f}%" if turnover_rate else "-",
+                    f"{volume_ratio:.2f}" if volume_ratio else "-",
                     f"{deals_vol}" if deals_vol<1e4 else (f"{deals_vol/1e4:.2f}万" if deals_vol<1e8 else f"{deals_vol/1e8:.2f}亿"),
                     f"{deals_amt/1e4:.2f}万" if deals_amt<1e8 else (f"{deals_amt/1e8:.2f}亿" if deals_amt<1e12 else f"{deals_amt/1e12:.2f}万亿"),
                     f"{avg:.2f}",
@@ -1172,6 +1198,8 @@ class FloatLabel(QWidget):
                     b1_label,
                     s1_label,
                     f"{committee:+.2f}%",
+                    f"{turnover_rate:.2f}%" if turnover_rate else "-",
+                    f"{volume_ratio:.2f}" if volume_ratio else "-",
                     f"{deals_vol}" if deals_vol<1e4 else (f"{deals_vol/1e4:.2f}万" if deals_vol<1e8 else f"{deals_vol/1e8:.2f}亿"),
                     f"{deals_amt/1e4:.2f}万" if deals_amt<1e8 else (f"{deals_amt/1e8:.2f}亿" if deals_amt<1e12 else f"{deals_amt/1e12:.2f}万亿"),
                     f"{avg:.3f}",
@@ -1192,6 +1220,8 @@ class FloatLabel(QWidget):
                 "change_pct": change_pct,
                 "volume": deals_vol,
                 "amount": deals_amt,
+                "turnover_rate": turnover_rate,
+                "volume_ratio": volume_ratio,
                 "open": opening_price,
                 "high": high_price,
                 "low": low_price,
@@ -1212,6 +1242,8 @@ class FloatLabel(QWidget):
                 "-",
                 "-",
                 "无数据",
+                "-",
+                "-",
                 "-",
                 "-",
                 "-",
@@ -2402,7 +2434,7 @@ class FloatLabel(QWidget):
                 projected[0] = meta.get("text", "")
                 proj_rows.append(projected)
             else:
-                proj_rows.append([row[i] for i in cols])
+                proj_rows.append([row[i] if i < len(row) else "-" for i in cols])
             proj_meta.append(meta)
 
         # 右对齐：除了名称、K线、卖一外的所有列都右对齐
@@ -2847,6 +2879,10 @@ class FloatLabel(QWidget):
                 prev = bool(getattr(self, 'b1s1_visible', False)); self.b1s1_visible = checked
             elif header == "委比":
                 prev = bool(getattr(self, 'commi_visible', False)); self.commi_visible = checked
+            elif header == "换手":
+                prev = bool(getattr(self, 'turnover_visible', False)); self.turnover_visible = checked
+            elif header == "量比":
+                prev = bool(getattr(self, 'volume_ratio_visible', False)); self.volume_ratio_visible = checked
             elif header == "成交量":
                 prev = bool(getattr(self, 'vol_visible', False)); self.vol_visible = checked
             elif header == "成交额":

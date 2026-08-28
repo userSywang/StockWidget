@@ -255,6 +255,18 @@ class SettingsDialog(QDialog):
         cb_commi.stateChanged.connect(partial(self._on_cb_changed, "委比"))
         self.cbs.append(cb_commi)
         gl_flag_order.addWidget(cb_commi, 1, 0)
+
+        cb_turnover = QCheckBox("换手")
+        cb_turnover.setChecked(self.win.header_is_visible("换手"))
+        cb_turnover.stateChanged.connect(partial(self._on_cb_changed, "换手"))
+        self.cbs.append(cb_turnover)
+        gl_flag_order.addWidget(cb_turnover, 2, 0)
+
+        cb_volume_ratio = QCheckBox("量比")
+        cb_volume_ratio.setChecked(self.win.header_is_visible("量比"))
+        cb_volume_ratio.stateChanged.connect(partial(self._on_cb_changed, "量比"))
+        self.cbs.append(cb_volume_ratio)
+        gl_flag_order.addWidget(cb_volume_ratio, 2, 1)
         
         # 买一/卖一显示模式：数量 / 价格 / 数量和价格
         self.cmb_b1s1_display = QComboBox()

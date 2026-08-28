@@ -14,7 +14,7 @@ from HotkeyManager import HotkeyResult, normalize_hotkey
 from WidgetPanel import FloatLabel
 
 
-BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "成交量", "成交额", "均价", "K线"]
+BASE_HEADERS = ["代码", "名称", "现价", "涨跌值", "涨跌幅", "买一", "卖一", "委比", "换手", "量比", "成交量", "成交额", "均价", "K线"]
 STRATEGY_HEADERS = BASE_HEADERS + ["MA5", "MA10", "MA20", "持仓盈亏", "止损线", "策略状态"]
 NOTE_HEADERS = STRATEGY_HEADERS + ["备注"]
 
@@ -225,6 +225,58 @@ class WidgetPanelTests(unittest.TestCase):
             win.shutdown_background()
             win.close()
 
+    def test_get_price_enriches_turnover_and_volume_ratio_from_eastmoney(self):
+        class FakeResponse:
+            def __init__(self, text="", payload=None):
+                self.text = text
+                self.encoding = None
+                self._payload = payload or {}
+
+            def json(self):
+                return self._payload
+
+        class FakeHttp:
+            def __init__(self):
+                self.calls = []
+
+            def get(self, url, headers=None, timeout=None):
+                self.calls.append(url)
+                if "hq.sinajs.cn" in url:
+                    fields = [
+                        "Test A", "10.00", "9.90", "10.20", "10.30", "9.80",
+                        "10.19", "10.20", "123456", "1260000",
+                    ]
+                    fields.extend(["0"] * 20)
+                    fields.extend(["2026-08-28", "14:25:00", "00"])
+                    return FakeResponse(f'var hq_str_sh600000="{",".join(fields)}";')
+                return FakeResponse(payload={
+                    "data": {
+                        "diff": [
+                            {"f12": "600000", "f8": 1.23, "f10": 0.88},
+                        ]
+                    }
+                })
+
+        cfg = {"groups": [{"name": "Default", "codes": ["sh600000"]}], "checked_codes": ["sh600000"]}
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            fake_http = FakeHttp()
+            win._http = fake_http
+
+            row_by_code, _sign_by_code, quote_by_code = win._get_price(["sh600000"])
+
+            self.assertEqual(row_by_code["sh600000"][win.ALL_HEADERS.index("换手")], "1.23%")
+            self.assertEqual(row_by_code["sh600000"][win.ALL_HEADERS.index("量比")], "0.88")
+            self.assertEqual(quote_by_code["sh600000"]["turnover_rate"], 1.23)
+            self.assertEqual(quote_by_code["sh600000"]["volume_ratio"], 0.88)
+            self.assertTrue(any("push2.eastmoney.com" in url for url in fake_http.calls))
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_current_config_persists_code_tags(self):
         cfg = {
             "groups": [{"name": "默认", "codes": ["sh603259"]}],
@@ -240,6 +292,34 @@ class WidgetPanelTests(unittest.TestCase):
             self.assertEqual(win.code_tags["sh603259"]["holding"], "hold")
             self.assertEqual(win.current_config()["code_tags"]["sh603259"]["cycle"], "short")
             self.assertFalse(win.current_config()["price_alert_badge_visible"])
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
+    def test_turnover_and_volume_ratio_flags_are_persisted(self):
+        cfg = {
+            "groups": [{"name": "Default", "codes": ["sh600000"]}],
+            "checked_codes": ["sh600000"],
+            "turnover_visible": True,
+            "volume_ratio_visible": False,
+        }
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            calls = []
+            win._notify_change = lambda: calls.append("saved")
+            win._reproject_cached_display = lambda: True
+
+            self.assertTrue(win.header_is_visible("换手"))
+            self.assertFalse(win.header_is_visible("量比"))
+            win.set_flag("量比", True)
+
+            saved = win.current_config()
+            self.assertTrue(saved["turnover_visible"])
+            self.assertTrue(saved["volume_ratio_visible"])
+            self.assertIn("saved", calls)
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()
@@ -457,7 +537,7 @@ class WidgetPanelTests(unittest.TestCase):
             {"sh603259": {"points": [{"minute": 0, "price": 10.0}, {"minute": 1, "price": 10.2}], "prev_close": 10.0}},
         )
 
-        k_cell = rows[1][BASE_HEADERS.index("K线")]
+        k_cell = next(cell for cell in rows[1] if isinstance(cell, dict) and "k" in cell)
         self.assertEqual(k_cell["k"], (10.0, 10.2, 10.3, 9.9, 10.0))
 
     def test_kline_price_axis_uses_linear_price_mapping(self):
