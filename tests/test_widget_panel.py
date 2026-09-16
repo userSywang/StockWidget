@@ -29,6 +29,67 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(normalize_hotkey("小键盘."), "decimal")
         self.assertEqual(normalize_hotkey(""), "decimal")
 
+    def test_news_first_fetch_seeds_seen_messages_without_popup(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": True, "important_only": True, "interval_seconds": 30}
+        win._news_alert_initialized = False
+        win._news_seen_ids = []
+        alerts = []
+        saves = []
+        win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append((text, ignore_key))
+        win._schedule_news_state_save = lambda: saves.append(True)
+
+        changed = FloatLabel._apply_news_items(win, [{
+            "id": "cls:1", "source": "财联社", "title": "已有消息",
+            "published_at": "2026-09-16 09:00:00", "timestamp": 1,
+            "important": True, "url": "", "stocks": [],
+        }])
+
+        self.assertTrue(changed)
+        self.assertTrue(win._news_alert_initialized)
+        self.assertEqual(win._news_seen_ids, ["cls:1"])
+        self.assertEqual(alerts, [])
+        self.assertEqual(saves, [True])
+
+    def test_news_subsequent_fetch_only_pops_new_important_messages(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": True, "important_only": True, "interval_seconds": 30}
+        win._news_alert_initialized = True
+        win._news_seen_ids = ["cls:1"]
+        win._news_last_source = "财联社"
+        alerts = []
+        win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append((text, ignore_key))
+        win._schedule_news_state_save = lambda: None
+
+        FloatLabel._apply_news_items(win, [
+            {"id": "cls:3", "source": "财联社", "title": "普通消息", "published_at": "10:02", "timestamp": 3, "important": False, "url": "", "stocks": []},
+            {"id": "cls:2", "source": "财联社", "title": "重要消息", "published_at": "10:01", "timestamp": 2, "important": True, "url": "", "stocks": []},
+            {"id": "cls:1", "source": "财联社", "title": "旧消息", "published_at": "10:00", "timestamp": 1, "important": True, "url": "", "stocks": []},
+        ])
+
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("重要消息", alerts[0][0])
+        self.assertEqual(alerts[0][1], "news|all")
+        self.assertEqual(win._news_seen_ids[:3], ["cls:3", "cls:2", "cls:1"])
+
+    def test_news_source_switch_reseeds_without_popup(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": True, "important_only": False, "interval_seconds": 30}
+        win._news_alert_initialized = True
+        win._news_seen_ids = ["cls:1"]
+        win._news_last_source = "财联社"
+        alerts = []
+        win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append(text)
+        win._schedule_news_state_save = lambda: None
+
+        FloatLabel._apply_news_items(win, [{
+            "id": "eastmoney:1", "source": "东方财富", "title": "备用源已有消息",
+            "published_at": "10:01", "timestamp": 2, "important": True, "url": "", "stocks": [],
+        }])
+
+        self.assertEqual(alerts, [])
+        self.assertEqual(win._news_last_source, "东方财富")
+
     def test_update_hotkey_registers_numpad_decimal(self):
         win = FloatLabel.__new__(FloatLabel)
         calls = []

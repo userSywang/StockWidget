@@ -15,6 +15,7 @@ from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
 from HotkeyManager import GlobalHotkeyManager, normalize_hotkey
 import QuoteSource
+import NewsSource
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -101,10 +102,17 @@ class FloatLabel(QWidget):
         self.code_tags          = self._normalize_code_tags(cfg.get("code_tags", {}))
         self.code_notes         = self._normalize_code_notes(cfg.get("code_notes", {}))
         self.data_source        = self._normalize_data_source(cfg.get("data_source", {}))
+        self.news_alert_config  = NewsSource.normalize_news_alert_config(cfg.get("news_alert_config", {}))
+        self._news_alert_initialized = bool(cfg.get("news_alert_initialized", False))
+        self._news_seen_ids = self._normalize_news_seen_ids(cfg.get("news_seen_ids", []))
+        self._news_last_source = str(cfg.get("news_last_source") or "").strip()
         self._latest_quotes     = {}
         self._http              = requests.Session()
+        self._news_http         = requests.Session()
         self._refresh_executor  = ThreadPoolExecutor(max_workers=1)
         self._refresh_future    = None
+        self._news_executor     = ThreadPoolExecutor(max_workers=1)
+        self._news_future       = None
         self._refresh_previous_quotes = {}
         self._refresh_again_requested = False
         self._refresh_again_force = False
@@ -262,6 +270,13 @@ class FloatLabel(QWidget):
         self.timer.start()
         self._defer_fit()
 
+        self._news_timer = QTimer(self)
+        self._news_timer.setInterval(self.news_alert_config["interval_seconds"] * 1000)
+        self._news_timer.timeout.connect(self._poll_news)
+        if self.news_alert_config.get("enabled"):
+            self._news_timer.start()
+            QTimer.singleShot(5000, self._start_news_polling)
+
         self._keep_top_timer = QTimer(self)
         self._keep_top_timer.setInterval(1000)  # 每 1000ms 检查一次
         self._keep_top_timer.timeout.connect(self._ensure_on_top)
@@ -345,7 +360,24 @@ class FloatLabel(QWidget):
             "hotkey": self.hotkey,
             "start_on_boot": bool(self.start_on_boot),
             "data_source": self.data_source,
+            "news_alert_config": NewsSource.normalize_news_alert_config(self.news_alert_config),
+            "news_alert_initialized": bool(getattr(self, "_news_alert_initialized", False)),
+            "news_seen_ids": self._normalize_news_seen_ids(getattr(self, "_news_seen_ids", [])),
+            "news_last_source": str(getattr(self, "_news_last_source", "") or ""),
         }
+
+    @staticmethod
+    def _normalize_news_seen_ids(values):
+        if not isinstance(values, (list, tuple)):
+            return []
+        result = []
+        for value in values:
+            item_id = str(value or "").strip()
+            if item_id and item_id not in result:
+                result.append(item_id)
+            if len(result) >= 300:
+                break
+        return result
 
     @staticmethod
     def _normalize_code_tags(code_tags):
@@ -2305,6 +2337,7 @@ class FloatLabel(QWidget):
         layout.setSpacing(8)
         label = QLabel(toast)
         label.setObjectName("alert_toast_label")
+        label.setTextFormat(Qt.PlainText)
         label.setWordWrap(True)
         label.setMinimumWidth(220)
         label.setMaximumWidth(340)
@@ -2381,15 +2414,15 @@ class FloatLabel(QWidget):
             return ""
         picked = [lines[0]]
         for line in lines[1:]:
-            if line.startswith(("标的：", "代码：", "盈亏：", "成本价：", "止损线：", "止盈线：", "变动：", "状态：")):
+            if line.startswith(("标的：", "代码：", "盈亏：", "成本价：", "止损线：", "止盈线：", "变动：", "状态：", "来源：", "时间：")):
                 picked.append(line)
             if len(picked) >= 6:
                 break
         return "\n".join(picked)
 
-    def show_desktop_alert(self, text, ignore_key=None):
+    def show_desktop_alert(self, text, ignore_key=None, force=False):
         notifications = normalize_strategy_alert_config(getattr(self, "strategy_alert_config", {}))["notifications"]
-        if not notifications.get("desktop_popup"):
+        if not force and not notifications.get("desktop_popup"):
             return
         if ignore_key and self._is_desktop_alert_ignored(ignore_key):
             return
@@ -2407,6 +2440,89 @@ class FloatLabel(QWidget):
         self._alert_toasts = toasts
         self._relayout_alert_toasts()
         toast.show()
+
+    @staticmethod
+    def _news_alert_text(item):
+        title = str(item.get("title") or "实时消息").strip()
+        source = str(item.get("source") or "财经快讯").strip()
+        published_at = str(item.get("published_at") or "").strip()
+        lines = [f"## {title}", f">来源：{source}"]
+        if published_at:
+            lines.append(f">时间：{published_at}")
+        return "\n".join(lines)
+
+    def _apply_news_items(self, items):
+        config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        if not config.get("enabled") or not items:
+            return False
+        clean_items = [item for item in items if isinstance(item, dict) and str(item.get("id") or "").strip()]
+        if not clean_items:
+            return False
+        previous = self._normalize_news_seen_ids(getattr(self, "_news_seen_ids", []))
+        previous_set = set(previous)
+        fetched_ids = [str(item.get("id")).strip() for item in clean_items]
+        self._news_seen_ids = self._normalize_news_seen_ids(fetched_ids + previous)
+        source = str(clean_items[0].get("source") or "").strip()
+        last_source = str(getattr(self, "_news_last_source", "") or "").strip()
+
+        if not bool(getattr(self, "_news_alert_initialized", False)) or (last_source and source != last_source):
+            self._news_alert_initialized = True
+            self._news_last_source = source
+            self._schedule_news_state_save()
+            return True
+        self._news_last_source = source
+
+        unseen = [item for item in clean_items if str(item.get("id")).strip() not in previous_set]
+        if config.get("important_only"):
+            unseen = [item for item in unseen if item.get("important")]
+        for item in reversed(unseen[:3]):
+            self.show_desktop_alert(self._news_alert_text(item), ignore_key="news|all", force=True)
+        if fetched_ids and self._news_seen_ids != previous:
+            self._schedule_news_state_save()
+            return True
+        return False
+
+    def _schedule_news_state_save(self):
+        if getattr(self, "_news_save_pending", False):
+            return
+        self._news_save_pending = True
+        QTimer.singleShot(60000, self._flush_news_state_save)
+
+    def _flush_news_state_save(self):
+        if not getattr(self, "_news_save_pending", False):
+            return
+        self._news_save_pending = False
+        self._notify_change()
+
+    def _start_news_polling(self):
+        if NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("enabled"):
+            self._poll_news()
+
+    def _poll_news(self):
+        config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        if not config.get("enabled"):
+            return
+        future = getattr(self, "_news_future", None)
+        if future is not None and not future.done():
+            return
+        executor = getattr(self, "_news_executor", None)
+        if executor is None:
+            return
+        self._news_future = executor.submit(NewsSource.fetch_fast_news, self._news_http, 20)
+        self._poll_news_future()
+
+    def _poll_news_future(self):
+        future = getattr(self, "_news_future", None)
+        if future is None:
+            return
+        if not future.done():
+            QTimer.singleShot(50, self._poll_news_future)
+            return
+        self._news_future = None
+        try:
+            self._apply_news_items(future.result())
+        except Exception:
+            pass
 
     def send_strategy_push_test(self):
         self._send_strategy_push_text("## 策略测试推送\n>状态：策略远程推送已配置")
@@ -2840,6 +2956,20 @@ class FloatLabel(QWidget):
         self._notify_change()
         self._refresh_from_function()
 
+    def set_news_alert_config(self, config):
+        old_config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        self.news_alert_config = NewsSource.normalize_news_alert_config(config)
+        timer = getattr(self, "_news_timer", None)
+        if timer is not None:
+            timer.setInterval(self.news_alert_config["interval_seconds"] * 1000)
+            if self.news_alert_config.get("enabled"):
+                timer.start()
+                if not old_config.get("enabled"):
+                    self._poll_news()
+            else:
+                timer.stop()
+        self._notify_change()
+
     def set_flag(self, idx, checked: bool):
         """设置指标显示标志。idx 可以是整数索引（向后兼容）或列标题字符串"""
         # 兼容老版本：若传整数索引，转为列标题
@@ -3195,9 +3325,28 @@ class FloatLabel(QWidget):
 
     def shutdown_background(self):
         try:
+            news_timer = getattr(self, "_news_timer", None)
+            if news_timer is not None and news_timer.isActive():
+                news_timer.stop()
+        except Exception:
+            pass
+        try:
             timer = getattr(self, "_hotkey_watchdog_timer", None)
             if timer is not None and timer.isActive():
                 timer.stop()
+        except Exception:
+            pass
+        try:
+            news_executor = getattr(self, "_news_executor", None)
+            if news_executor is not None:
+                news_executor.shutdown(wait=False, cancel_futures=True)
+                self._news_executor = None
+        except Exception:
+            pass
+        try:
+            news_http = getattr(self, "_news_http", None)
+            if news_http is not None:
+                news_http.close()
         except Exception:
             pass
         self._unregister_hotkey()

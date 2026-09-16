@@ -45,6 +45,7 @@ class FakeWindow:
         self.code_names = {"sh000001": "上证指数"}
         self.lookup_names = {}
         self.data_source = {"mode": "sina", "url_template": "", "headers": {}, "fields": {}}
+        self.news_alert_config = {"enabled": True, "important_only": True, "interval_seconds": 30}
         self.font = type("Font", (), {"family": lambda self: "Microsoft YaHei", "pointSize": lambda self: 10})()
 
     def header_is_visible(self, header):
@@ -74,6 +75,9 @@ class FakeWindow:
 
     def set_data_source(self, data_source):
         self.data_source = data_source
+
+    def set_news_alert_config(self, config):
+        self.news_alert_config = config
 
     def set_market_amount_visible(self, visible):
         self.market_amount_visible = visible
@@ -1379,6 +1383,35 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(win.data_source["url_template"], "https://example.test/quote?codes={codes}")
         self.assertEqual(win.data_source["headers"]["Authorization"], "Bearer demo")
         self.assertTrue(dlg.edit_data_url.isEnabled())
+        dlg.close()
+
+    def test_news_alert_controls_update_window_config(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.chk_news_alert_enabled.setChecked(False)
+        dlg.chk_news_important_only.setChecked(False)
+        dlg.cmb_news_interval.setCurrentIndex(dlg.cmb_news_interval.findData(60))
+        dlg._on_news_alert_config_changed()
+
+        self.assertFalse(win.news_alert_config["enabled"])
+        self.assertFalse(win.news_alert_config["important_only"])
+        self.assertEqual(win.news_alert_config["interval_seconds"], 60)
+        self.assertFalse(dlg.chk_news_important_only.isEnabled())
+        self.assertFalse(dlg.cmb_news_interval.isEnabled())
+        dlg.close()
+
+    def test_news_alert_controls_fit_inside_data_source_page(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        dlg.tabs.setCurrentWidget(dlg.tab_source)
+        dlg.show()
+        self.app.processEvents()
+
+        page_rect = dlg.tab_source.rect().translated(dlg.tab_source.mapToGlobal(QPoint(0, 0)))
+        for widget in (dlg.chk_news_alert_enabled, dlg.chk_news_important_only, dlg.cmb_news_interval):
+            rect = widget.rect().translated(widget.mapToGlobal(QPoint(0, 0)))
+            self.assertTrue(page_rect.contains(rect), f"{widget} is clipped")
         dlg.close()
 
     def test_market_amount_checkbox_updates_window(self):
