@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QLabel, QColorDialog, QComboBox, QAbstractItemView,
     QCheckBox, QListWidget, QListWidgetItem, QKeySequenceEdit, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QDoubleSpinBox, QSpinBox, QScrollArea, QRadioButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QMenu, QMessageBox
+    QTableWidget, QTableWidgetItem, QHeaderView, QMenu, QMessageBox, QSizePolicy
 )
 from WidgetPanel import FloatLabel
 from StockLogic import (
@@ -49,7 +49,8 @@ class SettingsDialog(QDialog):
         main.addWidget(self.tabs)
 
         # tab index -> 实际 tab 顺序：0=自选列表 / 1=显示数据 / 2=策略 / 3=外观 / 4=常规 / 5=数据源
-        # 尺寸按各页内容测量：宽度取"控件最宽组合 + 内边距"为上限，避免无意义的横向拉伸；高度同样按内容给最小值。
+        # 固定画布：所有页面共用一个尺寸（取各页所需最大值），窗口锁定不可拖拽缩放；
+        # tab_sizes 记录各页最小参考尺寸，内容不足一页的向下留白（顶部对齐）。
         self.tab_sizes = {
             0: QSize(450, 600),  # 自选列表（tab_sizes[0].width 需 ∈ [420, 460]）
             1: QSize(440, 680),  # 显示数据
@@ -58,11 +59,13 @@ class SettingsDialog(QDialog):
             4: QSize(440, 580),  # 常规（确保快捷键 + 图标 + 更新 + 开机启动 4 个控件完整显示）
             5: QSize(480, 260),  # 数据源
         }
-        self._apply_tab_size(0)
+        self._apply_fixed_canvas()
 
         # ---- 第一页 ----
         tab_0 = QWidget()
         code_settings = QVBoxLayout(tab_0)
+        code_settings.setContentsMargins(8, 8, 8, 8)
+        code_settings.setSpacing(8)
 
         # 1.自选列表
         g_codes = QGroupBox("自选列表")
@@ -103,7 +106,6 @@ class SettingsDialog(QDialog):
         btn_col.addWidget(self.btn_code_to_strategy)
         btn_col.addWidget(self.btn_code_to_alert)
         # 强制按钮容器顶部对齐 + 不可被拉伸
-        from PySide6.QtWidgets import QSizePolicy
         btn_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_container.setMaximumWidth(80)
 
@@ -177,6 +179,8 @@ class SettingsDialog(QDialog):
         # ---- 第二页 ----
         tab_1 = QWidget()
         data_settings = QVBoxLayout(tab_1)
+        data_settings.setContentsMargins(8, 8, 8, 8)
+        data_settings.setSpacing(8)
 
         # 2.刷新间隔
         g_interval = QGroupBox("刷新间隔")
@@ -190,7 +194,7 @@ class SettingsDialog(QDialog):
         v = QVBoxLayout(g_interval)
         v.setContentsMargins(6,6,6,6)
         v.addWidget(self.cmb_interval)
-        data_settings.addWidget(g_interval)
+        data_settings.addWidget(g_interval, 0, Qt.AlignTop)
 
         # 3.显示选项
         # 3.1复选框组
@@ -223,7 +227,7 @@ class SettingsDialog(QDialog):
         self.cmb_namelength.setCurrentIndex(idx_name if idx_name>=0 else 1)
         self.cmb_namelength.setEnabled(self.win.header_is_visible("名称"))
         gl_flag_name.addWidget(self.cmb_namelength, 1, 1)
-        gl_flags.addWidget(g_flag_name, 0, 0)
+        gl_flags.addWidget(g_flag_name, 0, 0, Qt.AlignTop)
 
         g_flag_price = QGroupBox("价格")
         gl_flag_price = QGridLayout(g_flag_price)
@@ -236,7 +240,7 @@ class SettingsDialog(QDialog):
             cb.stateChanged.connect(partial(self._on_cb_changed, h))
             self.cbs.append(cb)
             gl_flag_price.addWidget(cb, i, 0)
-        gl_flags.addWidget(g_flag_price, 1, 0)
+        gl_flags.addWidget(g_flag_price, 1, 0, Qt.AlignTop)
 
         g_flag_order = QGroupBox("盘口")
         gl_flag_order = QGridLayout(g_flag_order)
@@ -279,7 +283,7 @@ class SettingsDialog(QDialog):
         self.cmb_b1s1_display.setCurrentIndex(idx_mode if idx_mode>=0 else 0)
         self.cmb_b1s1_display.setEnabled(self.win.b1s1_visible)
         gl_flag_order.addWidget(self.cmb_b1s1_display, 0, 1)
-        gl_flags.addWidget(g_flag_order, 0, 1)
+        gl_flags.addWidget(g_flag_order, 0, 1, Qt.AlignTop)
 
         g_flag_deal = QGroupBox("成交")
         gl_flag_deal = QGridLayout(g_flag_deal)
@@ -291,7 +295,7 @@ class SettingsDialog(QDialog):
             cb.stateChanged.connect(partial(self._on_cb_changed, cb_texts[i]))
             self.cbs.append(cb)
             gl_flag_deal.addWidget(cb, i-8, 0)
-        gl_flags.addWidget(g_flag_deal, 1, 1)
+        gl_flags.addWidget(g_flag_deal, 1, 1, Qt.AlignTop)
 
         g_flag_other = QGroupBox("其他")
         gl_flag_other = QGridLayout(g_flag_other)
@@ -306,7 +310,7 @@ class SettingsDialog(QDialog):
         self.chk_price_alert_badge_visible = QCheckBox("价格提醒标识")
         self.chk_price_alert_badge_visible.setChecked(bool(getattr(self.win, "price_alert_badge_visible", True)))
         gl_flag_other.addWidget(self.chk_price_alert_badge_visible, 1, 0)
-        gl_flags.addWidget(g_flag_other, 2, 0)
+        gl_flags.addWidget(g_flag_other, 2, 0, Qt.AlignTop)
 
         g_flag_strategy = QGroupBox("均线/策略")
         gl_flag_strategy = QGridLayout(g_flag_strategy)
@@ -318,14 +322,16 @@ class SettingsDialog(QDialog):
             cb.stateChanged.connect(partial(self._on_cb_changed, header))
             self.cbs.append(cb)
             gl_flag_strategy.addWidget(cb, i // 2, i % 2)
-        gl_flags.addWidget(g_flag_strategy, 2, 1)
-
-        data_settings.addWidget(g_flags)
+        gl_flags.addWidget(g_flag_strategy, 2, 1, Qt.AlignTop)
+        gl_flags.setRowStretch(3, 1)
+        data_settings.addWidget(g_flags, 0, Qt.AlignTop)
 
         self.tabs.addTab(tab_1, "显示数据")
 
         tab_source = QWidget()
         source_settings = QVBoxLayout(tab_source)
+        source_settings.setContentsMargins(8, 8, 8, 8)
+        source_settings.setSpacing(8)
         source_cfg = getattr(self.win, "data_source", {}) or {}
         if not isinstance(source_cfg, dict):
             source_cfg = {}
@@ -505,7 +511,7 @@ class SettingsDialog(QDialog):
         self.edit_warning_text = QLineEdit(getattr(self.win, "warning_text", DEFAULT_WARNING_TEXT))
         lay_warning.addWidget(self.chk_warning_visible, 0, 0)
         lay_warning.addWidget(self.edit_warning_text, 0, 1)
-        data_settings.addWidget(g_warning)
+        data_settings.addWidget(g_warning, 0, Qt.AlignTop)
 
         g_market = QGroupBox("市场概览")
         g_market.setContentsMargins(3, 8, 3, 4)
@@ -513,7 +519,9 @@ class SettingsDialog(QDialog):
         self.chk_market_amount_visible = QCheckBox("显示沪深成交额估算")
         self.chk_market_amount_visible.setChecked(bool(getattr(self.win, "market_amount_visible", False)))
         lay_market.addWidget(self.chk_market_amount_visible, 0, 0)
-        data_settings.addWidget(g_market)
+        data_settings.addWidget(g_market, 0, Qt.AlignTop)
+        # 尾部弹簧：所有分组顶格排列，剩余空白集中到页底
+        data_settings.addStretch(1)
 
         self._loading_alert_editor = False
         self._loading_target_editor = False
@@ -534,8 +542,8 @@ class SettingsDialog(QDialog):
         # ---- 第四页：策略 ----
         tab_strategy = QWidget()
         strategy_main_layout = QVBoxLayout(tab_strategy)
-        strategy_main_layout.setContentsMargins(4, 4, 4, 4)
-        strategy_main_layout.setSpacing(4)
+        strategy_main_layout.setContentsMargins(8, 8, 8, 8)
+        strategy_main_layout.setSpacing(8)
 
         self.strategy_subtabs = QTabWidget()
         self.strategy_subtabs.setStyleSheet("QTabWidget::pane { border: 1px solid #c0c0c0; background: #f0f0f0; }")
@@ -545,10 +553,15 @@ class SettingsDialog(QDialog):
         tab_position_strategy = QScrollArea()
         tab_position_strategy.setWidgetResizable(True)
         tab_position_strategy.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 滚动区背景与页面底色统一，避免白色色块
+        tab_position_strategy.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
         tab_position_strategy_content = QWidget()
         position_strategy_layout = QVBoxLayout(tab_position_strategy_content)
-        position_strategy_layout.setContentsMargins(4, 4, 4, 4)
-        position_strategy_layout.setSpacing(4)
+        position_strategy_layout.setContentsMargins(8, 8, 8, 8)
+        position_strategy_layout.setSpacing(8)
 
         # 持仓列表 GroupBox
         g_strategy_positions = QGroupBox("持仓列表")
@@ -617,7 +630,6 @@ class SettingsDialog(QDialog):
         self.strategy_config_group = g_strategy_config
         self.strategy_rules_group = g_strategy_config
         g_strategy_config.setContentsMargins(6,14,6,8)
-        g_strategy_config.setMinimumHeight(450)
         config_layout = QVBoxLayout(g_strategy_config)
         config_layout.setSpacing(8)
 
@@ -643,7 +655,7 @@ class SettingsDialog(QDialog):
 
         # 参数覆盖状态列表（直接显示，无需模板引用文本）
         self.list_strategy_params = QListWidget()
-        self.list_strategy_params.setFixedHeight(320)
+        self.list_strategy_params.setMinimumHeight(240)
         config_layout.addWidget(self.list_strategy_params)
 
         # 参数编辑区（默认隐藏，点击编辑后显示）
@@ -786,14 +798,24 @@ class SettingsDialog(QDialog):
         self.strategy_subtabs.addTab(tab_position_strategy, "持仓策略")
 
         # ===== 子Tab 2: 策略库 =====
+        # 模板切换时分组显隐变化较多，整页装进滚动区：画布不变，高度变化由滚动条吸收
+        tab_strategy_library_scroll = QScrollArea()
+        tab_strategy_library_scroll.setWidgetResizable(True)
+        tab_strategy_library_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        tab_strategy_library_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # 滚动区背景与页面底色统一，避免出现刺眼的白色色块
+        tab_strategy_library_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
         tab_strategy_library = QWidget()
         strategy_library_layout = QVBoxLayout(tab_strategy_library)
-        strategy_library_layout.setContentsMargins(4, 4, 4, 4)
-        strategy_library_layout.setSpacing(4)
+        strategy_library_layout.setContentsMargins(8, 8, 8, 8)
+        strategy_library_layout.setSpacing(8)
 
         # 模板列表 + 模板编辑
         library_splitter = QHBoxLayout()
-        library_splitter.setSpacing(6)
+        library_splitter.setSpacing(8)
 
         # 左侧：模板列表
         g_template_list = QGroupBox("模板列表")
@@ -805,8 +827,11 @@ class SettingsDialog(QDialog):
         self.btn_template_new.setVisible(False)
         template_list_layout.addWidget(self.btn_template_new)
         self.list_strategy_templates = QListWidget()
-        self.list_strategy_templates.setFixedWidth(160)
-        template_list_layout.addWidget(self.list_strategy_templates)
+        self.list_strategy_templates.setMinimumWidth(200)
+        # 列表宽度占满左列、高度吃满剩余空间，与右侧编辑区等高，保留边距间隔
+        self.list_strategy_templates.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        template_list_layout.addWidget(self.list_strategy_templates, 1)
+        g_template_list.setFixedWidth(230)
         library_splitter.addWidget(g_template_list)
 
         # 右侧：模板编辑
@@ -838,6 +863,11 @@ class SettingsDialog(QDialog):
         rules_scroll.setWidgetResizable(True)
         rules_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         rules_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # 背景与整体统一，避免白色色块
+        rules_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
         rules_scroll_content = QWidget()
         template_rules_layout = QVBoxLayout(rules_scroll_content)
         template_rules_layout.setSpacing(4)
@@ -1006,7 +1036,8 @@ class SettingsDialog(QDialog):
         template_rules_layout.addWidget(self.g_template_turtle)
         rules_scroll.setWidget(rules_scroll_content)
         self.template_rules_scroll = rules_scroll
-        template_edit_layout.addWidget(rules_scroll)
+        # 滚动区吃掉模板编辑区的剩余高度
+        template_edit_layout.addWidget(rules_scroll, 1)
         self.table_template_action_rules = QTableWidget(0, 7)
         self.table_template_action_rules.setHorizontalHeaderLabels(["启用", "指标", "比较", "参数", "计提单位", "动作", "附加"])
         self.table_template_action_rules.setMinimumHeight(240)
@@ -1052,7 +1083,8 @@ class SettingsDialog(QDialog):
         template_edit_layout.addLayout(template_btn_layout)
 
         library_splitter.addWidget(g_template_edit)
-        strategy_library_layout.addLayout(library_splitter)
+        # 模板列表+编辑区整行撑满页面高度（保留边距间隔），下方不再大片留白
+        strategy_library_layout.addLayout(library_splitter, 1)
 
         # 条件构建器
         g_condition_builder = QGroupBox("条件构建器（自定义规则）")
@@ -1105,14 +1137,15 @@ class SettingsDialog(QDialog):
         lbl_condition_hint.setStyleSheet("color: #666666;")
         condition_layout.addWidget(lbl_condition_hint)
         strategy_library_layout.addWidget(g_condition_builder)
-        strategy_library_layout.addStretch(1)
 
-        self.strategy_subtabs.addTab(tab_strategy_library, "策略库")
+        tab_strategy_library_scroll.setWidget(tab_strategy_library)
+        self.strategy_subtabs.addTab(tab_strategy_library_scroll, "策略库")
 
         # ===== 子Tab 3: 触发日志 =====
         tab_strategy_history = QWidget()
         strategy_history_layout = QVBoxLayout(tab_strategy_history)
-        strategy_history_layout.setContentsMargins(6, 6, 6, 6)
+        strategy_history_layout.setContentsMargins(8, 8, 8, 8)
+        strategy_history_layout.setSpacing(8)
         self.list_strategy_history = QListWidget()
         self.list_strategy_history.setMinimumHeight(260)
         strategy_history_layout.addWidget(self.list_strategy_history)
@@ -1129,6 +1162,8 @@ class SettingsDialog(QDialog):
         # ---- 第四页 ----
         tab_2 = QWidget()
         appearance_settings = QVBoxLayout(tab_2)
+        appearance_settings.setContentsMargins(8, 8, 8, 8)
+        appearance_settings.setSpacing(8)
 
         # 表格外观
         g_table = QGroupBox("表格外观")
@@ -1225,12 +1260,15 @@ class SettingsDialog(QDialog):
         gl_font.addWidget(self.slider_line,2,2,1,3)
         gl_font.addWidget(self.lbl_line,2,5,1,1)
         appearance_settings.addWidget(g_font)
+        appearance_settings.addStretch(1)
 
         self.tabs.addTab(tab_2, "外观")
 
         # ---- 第五页 ----
         tab_3 = QWidget()
         other_settings = QVBoxLayout(tab_3)
+        other_settings.setContentsMargins(8, 8, 8, 8)
+        other_settings.setSpacing(8)
 
         # 1.快捷键
         g_hotkey = QGroupBox("快捷键")
@@ -1292,6 +1330,7 @@ class SettingsDialog(QDialog):
         )
         gl_update.addWidget(self.chk_check_updates_on_startup, 1, 0, 1, 2)
         other_settings.addWidget(g_update)
+        other_settings.addStretch(1)
 
         self.tabs.addTab(tab_3, "常规")
         self.tabs.addTab(self.tab_source, "数据源")
@@ -1447,7 +1486,6 @@ class SettingsDialog(QDialog):
             pass
         self.cmb_icon.currentIndexChanged.connect(self._on_icon_changed)
         self.btn_pick_icon.clicked.connect(self._pick_custom_icon)
-        self.tabs.currentChanged.connect(self._apply_tab_size)
         self.cmb_b1s1_display.currentIndexChanged.connect(self._on_b1s1_display_changed)
         self.cb_short_code.stateChanged.connect(self._on_short_code_toggled)
 
@@ -3575,17 +3613,19 @@ class SettingsDialog(QDialog):
         self.win.set_flag("买一", state)
         self.cmb_b1s1_display.setEnabled(state)
 
-    def _apply_tab_size(self, index: int):
-        # 统一取“全部页面所需的最大自然尺寸”（sizeHint 随字体/DPI 自适应），
-        # tab_sizes 仅作下限；避免高 DPI/大字体环境下窗口被压到内容装不下导致控件挤压。
-        size = self.tab_sizes.get(index, QSize(420, 400))
+    def _apply_fixed_canvas(self):
+        # 固定画布：尺寸 = max(各页最小参考尺寸) 与 sizeHint（随字体/DPI 自适应）取大，
+        # 再限制在屏幕可用范围内，然后锁定窗口，用户不可拖拽缩放——
+        # 按钮漂移、控件挤压等布局问题的根源（窗口被拉伸）因此消失。
+        target_w = max(s.width() for s in self.tab_sizes.values())
+        target_h = max(s.height() for s in self.tab_sizes.values())
         hint = self.sizeHint()
         try:
             min_hint = self.minimumSizeHint()
         except Exception:
             min_hint = QSize(0, 0)
-        target_w = max(size.width(), hint.width(), min_hint.width())
-        target_h = max(size.height(), hint.height(), min_hint.height())
+        target_w = max(target_w, hint.width(), min_hint.width())
+        target_h = max(target_h, hint.height(), min_hint.height())
         try:
             from PySide6.QtGui import QGuiApplication
             screen = QGuiApplication.primaryScreen()
@@ -3595,10 +3635,7 @@ class SettingsDialog(QDialog):
                 target_h = min(target_h, max(360, avail.height() - 60))
         except Exception:
             pass
-        self.setMinimumSize(QSize(360, 360))
-        self.setMaximumWidth(16777215)
-        self.setMaximumHeight(16777215)
-        self.resize(QSize(target_w, target_h))
+        self.setFixedSize(QSize(target_w, target_h))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -3607,7 +3644,7 @@ class SettingsDialog(QDialog):
         if not getattr(self, "_sized_on_show", False):
             self._sized_on_show = True
             old_w, old_h = self.width(), self.height()
-            self._apply_tab_size(self.tabs.currentIndex())
+            self._apply_fixed_canvas()
             if (self.width(), self.height()) != (old_w, old_h):
                 try:
                     from PySide6.QtGui import QGuiApplication
