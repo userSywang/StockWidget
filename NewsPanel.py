@@ -1,3 +1,4 @@
+import ctypes
 from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal, QTimer, QUrl
@@ -21,6 +22,7 @@ class NewsPanel(QWidget):
     important_only_changed = Signal(bool)
     mute_today_changed = Signal(bool)
     pin_changed = Signal(bool)
+    visibility_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Window)
@@ -220,6 +222,21 @@ class NewsPanel(QWidget):
             self.showNormal()
         self.raise_()
         self.activateWindow()
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = int(self.winId())
+            user32.ShowWindow(hwnd, 9)
+            user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.visibility_changed.emit(True)
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.visibility_changed.emit(False)
 
     def closeEvent(self, event):
         event.ignore()

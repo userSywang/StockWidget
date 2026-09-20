@@ -78,7 +78,10 @@ class App(QApplication):
         self.tray.setToolTip(APP_NAME)
         menu = QMenu()
         menu.addAction(QAction("显示/隐藏 浮窗", self, triggered=self.toggle_win))
-        menu.addAction(QAction("实时资讯", self, triggered=self.win.open_news_panel))
+        self.news_action = QAction("实时资讯窗口", self, checkable=True)
+        self.news_action.toggled.connect(self.win.set_news_panel_visible)
+        self.win.news_visibility_changed.connect(self._sync_news_action)
+        menu.addAction(self.news_action)
         menu.addAction(QAction("设置…", self, triggered=self.open_settings))
         menu.addSeparator()
         menu.addAction(QAction("退出", self, triggered=self.quit_app))
@@ -103,6 +106,11 @@ class App(QApplication):
 
         # 代码索引后台刷新（每日一次；远端文件由 update-codes 工作流自动维护）
         QTimer.singleShot(5000, self._refresh_code_index_async)
+
+    def _sync_news_action(self, visible):
+        self.news_action.blockSignals(True)
+        self.news_action.setChecked(bool(visible))
+        self.news_action.blockSignals(False)
 
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick): self.toggle_win()

@@ -43,6 +43,7 @@ DEFAULT_HOTKEY = "decimal"
 
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
+    news_visibility_changed = Signal(bool)
     def __init__(self, cfg: dict):
         super().__init__()
         self._on_change = (lambda: None)
@@ -2587,6 +2588,7 @@ class FloatLabel(QWidget):
         panel.important_only_changed.connect(self._set_news_important_only)
         panel.mute_today_changed.connect(self._set_news_muted_today)
         panel.pin_changed.connect(self._set_news_window_pinned)
+        panel.visibility_changed.connect(self.news_visibility_changed.emit)
         panel.set_important_only(
             NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("important_only")
         )
@@ -2614,6 +2616,14 @@ class FloatLabel(QWidget):
     def open_news_panel(self):
         self._show_news_panel(auto_show=False)
         self._poll_news(force=True)
+
+    def set_news_panel_visible(self, visible):
+        if visible:
+            self.open_news_panel()
+            return
+        panel = getattr(self, "_news_panel", None)
+        if panel is not None:
+            panel.hide()
 
     def _set_news_important_only(self, enabled):
         config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
@@ -3304,8 +3314,10 @@ class FloatLabel(QWidget):
             act_open_settings.setEnabled(False)
         menu.addAction(act_open_settings)
 
-        act_open_news = QAction("实时资讯", menu)
-        act_open_news.triggered.connect(self.open_news_panel)
+        act_open_news = QAction("实时资讯窗口", menu, checkable=True)
+        panel = getattr(self, "_news_panel", None)
+        act_open_news.setChecked(bool(panel is not None and panel.isVisible()))
+        act_open_news.toggled.connect(self.set_news_panel_visible)
         menu.addAction(act_open_news)
 
         menu.addSeparator()

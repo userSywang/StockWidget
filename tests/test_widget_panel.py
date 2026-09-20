@@ -187,6 +187,27 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertFalse(FloatLabel._is_desktop_alert_ignored(win, "news|all"))
         self.assertEqual(len(saves), 2)
 
+    def test_context_menu_news_action_is_a_window_toggle(self):
+        cfg = {"groups": [{"name": "默认", "codes": ["sh000001"]}]}
+        with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
+            win = FloatLabel(cfg)
+        try:
+            changes = []
+            win.set_news_panel_visible = lambda visible: changes.append(bool(visible))
+
+            menu = win._build_context_menu()
+            action = next(item for item in menu.actions() if item.text() == "实时资讯窗口")
+
+            self.assertTrue(action.isCheckable())
+            self.assertFalse(action.isChecked())
+            action.setChecked(True)
+            self.assertEqual(changes, [True])
+        finally:
+            win.timer.stop()
+            win._keep_top_timer.stop()
+            win.shutdown_background()
+            win.close()
+
     def test_update_hotkey_registers_numpad_decimal(self):
         win = FloatLabel.__new__(FloatLabel)
         calls = []
