@@ -94,6 +94,18 @@ class NewsPanelTests(unittest.TestCase):
         self.assertTrue(panel.pin_button.isChecked())
         panel.close()
 
+    def test_manual_open_restores_minimized_window(self):
+        panel = NewsPanel()
+        panel.showMinimized()
+        self.app.processEvents()
+
+        panel.show_news(auto_show=False)
+        self.app.processEvents()
+
+        self.assertTrue(panel.isVisible())
+        self.assertFalse(panel.isMinimized())
+        panel.close()
+
     def test_setting_same_importance_filter_does_not_rebuild(self):
         panel = NewsPanel()
         rebuilds = []

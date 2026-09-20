@@ -2608,7 +2608,7 @@ class FloatLabel(QWidget):
         panel = self._ensure_news_panel()
         panel.set_items(self._news_items)
         panel.set_muted_today(self._is_desktop_alert_ignored("news|all"))
-        panel.show_news(auto_show=auto_show)
+        panel.show_news(auto_show=auto_show, anchor=self)
         QTimer.singleShot(350, self._collapse_to_edge_if_needed)
 
     def open_news_panel(self):

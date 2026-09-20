@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal, QUrl
+from PySide6.QtCore import Qt, Signal, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -196,16 +196,30 @@ class NewsPanel(QWidget):
             text += f" · 本地三日 {max(0, int(cached_count))} 条"
         self.subtitle.setText(text)
 
-    def show_news(self, auto_show=False):
+    def show_news(self, auto_show=False, anchor=None):
         if auto_show and self._muted_today:
             return
         if not self.isVisible():
-            screen = QApplication.primaryScreen().availableGeometry()
+            target_screen = None
+            if anchor is not None:
+                target_screen = QApplication.screenAt(anchor.frameGeometry().center())
+            target_screen = target_screen or QApplication.primaryScreen()
+            screen = target_screen.availableGeometry()
             self.move(screen.right() - self.width() - 24, screen.top() + 48)
             self.show()
-        self.raise_()
         if not auto_show:
-            self.activateWindow()
+            self._activate_manual()
+            QTimer.singleShot(0, self._activate_manual)
+        else:
+            self.raise_()
+
+    def _activate_manual(self):
+        if not self.isVisible():
+            return
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def closeEvent(self, event):
         event.ignore()
