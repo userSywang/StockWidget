@@ -30,6 +30,8 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.apply_config({"mini_items": 2, "mini_opacity": 70, "mini_width": 420, "mini_font_size": 10})
         panel.set_items([news_item(i) for i in range(10)])
 
+        self.assertEqual(panel.ROW_HEIGHT, 93)
+        self.assertEqual(panel.EXPANDED_ITEMS, 4)
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         panel.expand_view()

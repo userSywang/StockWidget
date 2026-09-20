@@ -17,8 +17,8 @@ from PySide6.QtWidgets import (
 
 class MiniNewsPanel(QWidget):
     MAX_ITEMS = 50
-    EXPANDED_ITEMS = 6
-    ROW_HEIGHT = 62
+    EXPANDED_ITEMS = 4
+    ROW_HEIGHT = 93
 
     open_full_requested = Signal()
     disable_requested = Signal()
