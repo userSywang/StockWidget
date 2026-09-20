@@ -34,14 +34,17 @@ class WidgetPanelTests(unittest.TestCase):
         win.news_alert_config = {"enabled": True, "important_only": True, "interval_seconds": 30}
         win._news_alert_initialized = False
         win._news_seen_ids = []
+        win._news_items = []
         alerts = []
         saves = []
         win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append((text, ignore_key))
         win._schedule_news_state_save = lambda: saves.append(True)
+        win._schedule_news_cache_save = lambda: None
+        now_ts = int(datetime.now().timestamp())
 
         changed = FloatLabel._apply_news_items(win, [{
             "id": "cls:1", "source": "财联社", "title": "已有消息",
-            "published_at": "2026-09-16 09:00:00", "timestamp": 1,
+            "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "timestamp": now_ts,
             "important": True, "url": "", "stocks": [],
         }])
 
@@ -61,11 +64,13 @@ class WidgetPanelTests(unittest.TestCase):
         win._news_items = []
         win._show_news_panel = lambda items, auto_show=False: shown.append((items, auto_show))
         win._schedule_news_state_save = lambda: None
+        win._schedule_news_cache_save = lambda: None
+        now_ts = int(datetime.now().timestamp())
 
         FloatLabel._apply_news_items(win, [
-            {"id": "cls:3", "source": "财联社", "title": "普通消息", "published_at": "10:02", "timestamp": 3, "important": False, "url": "", "stocks": []},
-            {"id": "cls:2", "source": "财联社", "title": "重要消息", "published_at": "10:01", "timestamp": 2, "important": True, "url": "", "stocks": []},
-            {"id": "cls:1", "source": "财联社", "title": "旧消息", "published_at": "10:00", "timestamp": 1, "important": True, "url": "", "stocks": []},
+            {"id": "cls:3", "source": "财联社", "title": "普通消息", "published_at": "10:02", "timestamp": now_ts, "important": False, "url": "", "stocks": []},
+            {"id": "cls:2", "source": "财联社", "title": "重要消息", "published_at": "10:01", "timestamp": now_ts - 1, "important": True, "url": "", "stocks": []},
+            {"id": "cls:1", "source": "财联社", "title": "旧消息", "published_at": "10:00", "timestamp": now_ts - 2, "important": True, "url": "", "stocks": []},
         ])
 
         self.assertEqual(len(shown), 1)
@@ -83,14 +88,91 @@ class WidgetPanelTests(unittest.TestCase):
         win._news_items = []
         win._show_news_panel = lambda items, auto_show=False: shown.append((items, auto_show))
         win._schedule_news_state_save = lambda: None
+        win._schedule_news_cache_save = lambda: None
 
         FloatLabel._apply_news_items(win, [{
             "id": "eastmoney:1", "source": "东方财富", "title": "备用源已有消息",
-            "published_at": "10:01", "timestamp": 2, "important": True, "url": "", "stocks": [],
+            "published_at": "10:01", "timestamp": int(datetime.now().timestamp()), "important": True, "url": "", "stocks": [],
         }])
 
         self.assertEqual(shown, [])
         self.assertEqual(win._news_last_source, "东方财富")
+
+    def test_news_history_bootstrap_never_opens_timeline_as_new_alerts(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": True, "important_only": False, "interval_seconds": 30, "source": "sina"}
+        win._news_alert_initialized = True
+        win._news_seen_ids = ["sina:latest"]
+        win._news_last_source = "新浪财经"
+        win._news_items = []
+        shown = []
+        win._show_news_panel = lambda items, auto_show=False: shown.append((items, auto_show))
+        win._schedule_news_state_save = lambda: None
+        win._schedule_news_cache_save = lambda: None
+
+        FloatLabel._apply_news_items(win, [{
+            "id": "sina:history", "source": "新浪财经", "title": "历史补档",
+            "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": int(datetime.now().timestamp()), "important": True, "url": "", "stocks": [],
+        }], seed_only=True)
+
+        self.assertEqual(shown, [])
+        self.assertEqual(win._news_items[0]["id"], "sina:history")
+
+    def test_news_polling_bootstraps_three_days_only_without_cache(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": True, "important_only": False, "interval_seconds": 30, "source": "sina"}
+        win._news_future = None
+        win._news_http = object()
+        win._news_bootstrap_needed = True
+        calls = []
+
+        class FakeExecutor:
+            def submit(self, function, *args):
+                calls.append((function, args))
+                return object()
+
+        win._news_executor = FakeExecutor()
+        win._poll_news_future = lambda: None
+
+        FloatLabel._poll_news(win)
+
+        self.assertIs(calls[0][0], __import__("NewsSource").fetch_sina_recent_news)
+        self.assertFalse(win._news_bootstrap_needed)
+
+    def test_manual_news_refresh_works_when_background_alerts_are_disabled(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {"enabled": False, "important_only": False, "interval_seconds": 30, "source": "sina"}
+        win._news_future = None
+        win._news_http = object()
+        win._news_bootstrap_needed = True
+        calls = []
+
+        class FakeExecutor:
+            def submit(self, function, *args):
+                calls.append((function, args))
+                return object()
+
+        win._news_executor = FakeExecutor()
+        win._poll_news_future = lambda: None
+
+        FloatLabel._poll_news(win, force=True)
+
+        self.assertIs(calls[0][0], __import__("NewsSource").fetch_sina_recent_news)
+
+        win._news_items = []
+        win._news_seen_ids = []
+        win._news_alert_initialized = True
+        win._news_last_source = "新浪财经"
+        win._schedule_news_cache_save = lambda: None
+        win._schedule_news_state_save = lambda: None
+        FloatLabel._apply_news_items(win, [{
+            "id": "sina:manual", "source": "新浪财经", "title": "手动刷新",
+            "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": int(datetime.now().timestamp()), "important": False, "url": "", "stocks": [],
+        }], manual=True)
+
+        self.assertEqual(win._news_items[0]["id"], "sina:manual")
 
     def test_update_hotkey_registers_numpad_decimal(self):
         win = FloatLabel.__new__(FloatLabel)

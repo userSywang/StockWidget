@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 
 import NewsSource
 
@@ -140,6 +141,29 @@ class NewsSourceTests(unittest.TestCase):
         self.assertEqual(rows[0]["source"], "新浪财经")
         self.assertEqual(session.calls[0][1]["params"]["zhibo_id"], 152)
         self.assertEqual(session.calls[0][1]["params"]["page_size"], 10)
+
+    def test_fetch_sina_recent_news_stops_after_reaching_three_day_cutoff(self):
+        session = FakeSession([
+            FakeResponse({"result": {"data": {"feed": {"list": [
+                {"id": 3, "rich_text": "【今天】正文", "create_time": "2026-09-20 10:00:00"},
+                {"id": 2, "rich_text": "【昨天】正文", "create_time": "2026-09-19 10:00:00"},
+            ]}}}}),
+            FakeResponse({"result": {"data": {"feed": {"list": [
+                {"id": 1, "rich_text": "【过期】正文", "create_time": "2026-09-16 09:00:00"},
+            ]}}}}),
+        ])
+
+        rows = NewsSource.fetch_sina_recent_news(
+            session=session,
+            days=3,
+            page_size=2,
+            max_pages=10,
+            now=datetime(2026, 9, 20, 12, 0, 0),
+        )
+
+        self.assertEqual([row["id"] for row in rows], ["sina:3", "sina:2"])
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(session.calls[1][1]["params"]["page"], 2)
 
 
 if __name__ == "__main__":

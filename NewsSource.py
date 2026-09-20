@@ -3,7 +3,7 @@ import html
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
@@ -194,12 +194,12 @@ def fetch_cls_news(session=None, page_size=20):
     return parse_cls_payload(_response_json(response))
 
 
-def fetch_sina_news(session=None, page_size=20):
+def fetch_sina_news(session=None, page_size=20, page=1):
     session = session or requests.Session()
     response = session.get(
         SINA_NEWS_URL,
         params={
-            "page": 1,
+            "page": max(1, int(page)),
             "page_size": max(1, min(50, int(page_size))),
             "zhibo_id": 152,
         },
@@ -207,6 +207,28 @@ def fetch_sina_news(session=None, page_size=20):
         timeout=10,
     )
     return parse_sina_payload(_response_json(response))
+
+
+def fetch_sina_recent_news(session=None, days=3, page_size=50, max_pages=100, now=None):
+    session = session or requests.Session()
+    current = now if isinstance(now, datetime) else datetime.now()
+    cutoff = int((current - timedelta(days=max(1, int(days)))).timestamp())
+    rows = []
+    seen_ids = set()
+    for page in range(1, max(1, int(max_pages)) + 1):
+        page_rows = fetch_sina_news(session=session, page_size=page_size, page=page)
+        if not page_rows:
+            break
+        new_ids = {row["id"] for row in page_rows if row.get("id") not in seen_ids}
+        if not new_ids:
+            break
+        seen_ids.update(new_ids)
+        rows.extend(row for row in page_rows if int(row.get("timestamp") or 0) >= cutoff)
+        oldest = min((int(row.get("timestamp") or 0) for row in page_rows), default=0)
+        if oldest <= cutoff or len(page_rows) < max(1, min(50, int(page_size))):
+            break
+    deduped = {row["id"]: row for row in rows if row.get("id")}
+    return sorted(deduped.values(), key=lambda row: int(row.get("timestamp") or 0), reverse=True)
 
 
 def fetch_eastmoney_news(session=None, page_size=20):

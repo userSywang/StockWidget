@@ -38,6 +38,22 @@ class NewsPanelTests(unittest.TestCase):
         self.assertIn("09月20日", panel.date_heading_texts()[0])
         panel.close()
 
+    def test_timeline_loads_large_cache_in_batches(self):
+        panel = NewsPanel()
+        panel.set_items([
+            {"id": f"sina:{idx}", "title": f"消息{idx}", "summary": "", "published_at": "2026-09-20 10:02:00", "timestamp": idx, "source": "新浪财经", "important": False, "category": "", "url": ""}
+            for idx in range(260)
+        ])
+
+        self.assertEqual(len(panel.items()), 260)
+        self.assertEqual(panel.visible_item_count(), 120)
+        self.assertTrue(panel.load_more_button.isVisibleTo(panel.content))
+
+        panel._load_more()
+
+        self.assertEqual(panel.visible_item_count(), 240)
+        panel.close()
+
 
 if __name__ == "__main__":
     unittest.main()

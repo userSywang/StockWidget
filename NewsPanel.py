@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 
 class NewsPanel(QWidget):
+    BATCH_SIZE = 120
     refresh_requested = Signal()
     important_only_changed = Signal(bool)
     mute_today_requested = Signal()
@@ -30,6 +31,8 @@ class NewsPanel(QWidget):
         self._visible_count = 0
         self._date_headings = []
         self._muted_today = False
+        self._display_limit = self.BATCH_SIZE
+        self.load_more_button = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -117,9 +120,11 @@ class NewsPanel(QWidget):
 
     def set_items(self, items):
         valid = [dict(item) for item in items or [] if isinstance(item, dict) and item.get("id")]
-        valid = sorted(valid, key=lambda item: int(item.get("timestamp") or 0), reverse=True)[:100]
+        valid = sorted(valid, key=lambda item: int(item.get("timestamp") or 0), reverse=True)[:5000]
         if valid == self._items:
             return
+        if not self._items:
+            self._display_limit = self.BATCH_SIZE
         self._items = valid
         self._rebuild()
 
@@ -127,6 +132,7 @@ class NewsPanel(QWidget):
         self.important_checkbox.blockSignals(True)
         self.important_checkbox.setChecked(bool(enabled))
         self.important_checkbox.blockSignals(False)
+        self._display_limit = self.BATCH_SIZE
         self._rebuild()
 
     def set_muted_today(self, muted):
@@ -134,8 +140,11 @@ class NewsPanel(QWidget):
         self.mute_button.setText("今日已静音" if self._muted_today else "今日静音")
         self.mute_button.setEnabled(not self._muted_today)
 
-    def set_source_name(self, source):
-        self.subtitle.setText(f"{str(source or '财经快讯')} 7×24")
+    def set_source_name(self, source, cached_count=None):
+        text = f"{str(source or '财经快讯')} 7×24"
+        if cached_count is not None:
+            text += f" · 本地三日 {max(0, int(cached_count))} 条"
+        self.subtitle.setText(text)
 
     def show_news(self, auto_show=False):
         if auto_show and self._muted_today:
@@ -153,10 +162,12 @@ class NewsPanel(QWidget):
         self.hide()
 
     def _on_important_toggled(self, enabled):
+        self._display_limit = self.BATCH_SIZE
         self._rebuild()
         self.important_only_changed.emit(bool(enabled))
 
     def _clear_timeline(self):
+        self.load_more_button = None
         while self.timeline.count():
             item = self.timeline.takeAt(0)
             widget = item.widget()
@@ -181,7 +192,8 @@ class NewsPanel(QWidget):
         self._clear_timeline()
         important_only = self.important_checkbox.isChecked()
         visible = [item for item in self._items if not important_only or item.get("important")]
-        self._visible_count = len(visible)
+        rendered = visible[:self._display_limit]
+        self._visible_count = len(rendered)
         self._date_headings = []
         last_date = None
         if not visible:
@@ -191,7 +203,7 @@ class NewsPanel(QWidget):
             self.timeline.addWidget(empty)
             self.timeline.addStretch(1)
             return
-        for item in visible:
+        for item in rendered:
             date_text, time_text = self._date_and_time(item)
             if date_text != last_date:
                 heading = QLabel(date_text)
@@ -200,7 +212,16 @@ class NewsPanel(QWidget):
                 self._date_headings.append(date_text)
                 last_date = date_text
             self.timeline.addWidget(self._create_item(item, time_text))
+        self.load_more_button = QPushButton(f"加载更多（剩余 {len(visible) - len(rendered)} 条）")
+        self.load_more_button.setObjectName("quietButton")
+        self.load_more_button.clicked.connect(self._load_more)
+        self.load_more_button.setVisible(len(rendered) < len(visible))
+        self.timeline.addWidget(self.load_more_button, 0, Qt.AlignHCenter)
         self.timeline.addStretch(1)
+
+    def _load_more(self):
+        self._display_limit += self.BATCH_SIZE
+        self._rebuild()
 
     def _create_item(self, item, time_text):
         row = QWidget(self.content)

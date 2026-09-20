@@ -16,6 +16,7 @@ from Display import PriceAlertNameDelegate
 from HotkeyManager import GlobalHotkeyManager, normalize_hotkey
 import QuoteSource
 import NewsSource
+import NewsCache
 from NewsPanel import NewsPanel
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
@@ -107,7 +108,15 @@ class FloatLabel(QWidget):
         self._news_alert_initialized = bool(cfg.get("news_alert_initialized", False))
         self._news_seen_ids = self._normalize_news_seen_ids(cfg.get("news_seen_ids", []))
         self._news_last_source = str(cfg.get("news_last_source") or "").strip()
-        self._news_items = []
+        self._news_items = NewsCache.load_news_cache()
+        if self._news_items:
+            cached_ids = [str(item.get("id") or "") for item in self._news_items]
+            self._news_seen_ids = self._normalize_news_seen_ids(cached_ids + self._news_seen_ids)
+            self._news_alert_initialized = True
+            if not self._news_last_source:
+                self._news_last_source = str(self._news_items[0].get("source") or "").strip()
+        self._news_bootstrap_needed = not bool(self._news_items)
+        self._news_cache_save_pending = False
         self._news_panel = None
         self._latest_quotes     = {}
         self._http              = requests.Session()
@@ -2444,9 +2453,9 @@ class FloatLabel(QWidget):
         self._relayout_alert_toasts()
         toast.show()
 
-    def _apply_news_items(self, items):
+    def _apply_news_items(self, items, seed_only=False, manual=False):
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
-        if not config.get("enabled") or not items:
+        if (not config.get("enabled") and not manual) or not items:
             return False
         clean_items = [item for item in items if isinstance(item, dict) and str(item.get("id") or "").strip()]
         if not clean_items:
@@ -2459,22 +2468,19 @@ class FloatLabel(QWidget):
         last_source = str(getattr(self, "_news_last_source", "") or "").strip()
 
         cached = list(getattr(self, "_news_items", []) or [])
-        merged = clean_items + cached
-        deduped = []
-        cache_ids = set()
-        for item in merged:
-            item_id = str(item.get("id") or "").strip()
-            if not item_id or item_id in cache_ids:
-                continue
-            cache_ids.add(item_id)
-            deduped.append(item)
-            if len(deduped) >= 100:
-                break
-        self._news_items = deduped
+        self._news_items = NewsCache.merge_news_items(cached, clean_items)
+        if self._news_items != cached:
+            self._schedule_news_cache_save()
         panel = getattr(self, "_news_panel", None)
         if panel is not None:
             panel.set_items(self._news_items)
-            panel.set_source_name(source)
+            panel.set_source_name(source, len(self._news_items))
+
+        if seed_only:
+            self._news_alert_initialized = True
+            self._news_last_source = source
+            self._schedule_news_state_save()
+            return True
 
         if not bool(getattr(self, "_news_alert_initialized", False)) or (last_source and source != last_source):
             self._news_alert_initialized = True
@@ -2486,7 +2492,7 @@ class FloatLabel(QWidget):
         unseen = [item for item in clean_items if str(item.get("id")).strip() not in previous_set]
         if config.get("important_only"):
             unseen = [item for item in unseen if item.get("important")]
-        if unseen:
+        if unseen and config.get("enabled"):
             self._show_news_panel(unseen, auto_show=True)
         if fetched_ids and self._news_seen_ids != previous:
             self._schedule_news_state_save()
@@ -2505,13 +2511,28 @@ class FloatLabel(QWidget):
         self._news_save_pending = False
         self._notify_change()
 
+    def _schedule_news_cache_save(self):
+        if getattr(self, "_news_cache_save_pending", False):
+            return
+        self._news_cache_save_pending = True
+        QTimer.singleShot(3000, self._flush_news_cache_save)
+
+    def _flush_news_cache_save(self):
+        if not getattr(self, "_news_cache_save_pending", False):
+            return
+        self._news_cache_save_pending = False
+        try:
+            NewsCache.save_news_cache(getattr(self, "_news_items", []))
+        except Exception:
+            pass
+
     def _start_news_polling(self):
         if NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("enabled"):
             self._poll_news()
 
-    def _poll_news(self):
+    def _poll_news(self, force=False):
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
-        if not config.get("enabled"):
+        if not config.get("enabled") and not force:
             return
         future = getattr(self, "_news_future", None)
         if future is not None and not future.done():
@@ -2519,12 +2540,25 @@ class FloatLabel(QWidget):
         executor = getattr(self, "_news_executor", None)
         if executor is None:
             return
-        self._news_future = executor.submit(
-            NewsSource.fetch_fast_news,
-            self._news_http,
-            30,
-            config.get("source", "sina"),
-        )
+        source = config.get("source", "sina")
+        bootstrap = bool(getattr(self, "_news_bootstrap_needed", False)) and source == "sina"
+        self._news_bootstrap_needed = False
+        self._news_future_seed_only = bootstrap
+        self._news_future_manual = bool(force)
+        if bootstrap:
+            self._news_future = executor.submit(
+                NewsSource.fetch_sina_recent_news,
+                self._news_http,
+                3,
+                50,
+            )
+        else:
+            self._news_future = executor.submit(
+                NewsSource.fetch_fast_news,
+                self._news_http,
+                30,
+                source,
+            )
         self._poll_news_future()
 
     def _poll_news_future(self):
@@ -2535,8 +2569,12 @@ class FloatLabel(QWidget):
             QTimer.singleShot(50, self._poll_news_future)
             return
         self._news_future = None
+        seed_only = bool(getattr(self, "_news_future_seed_only", False))
+        self._news_future_seed_only = False
+        manual = bool(getattr(self, "_news_future_manual", False))
+        self._news_future_manual = False
         try:
-            self._apply_news_items(future.result())
+            self._apply_news_items(future.result(), seed_only=seed_only, manual=manual)
         except Exception:
             pass
 
@@ -2545,24 +2583,24 @@ class FloatLabel(QWidget):
         if panel is not None:
             return panel
         panel = NewsPanel()
-        panel.refresh_requested.connect(self._poll_news)
+        panel.refresh_requested.connect(lambda: self._poll_news(force=True))
         panel.important_only_changed.connect(self._set_news_important_only)
         panel.mute_today_requested.connect(self._mute_news_today)
         panel.set_important_only(
             NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("important_only")
         )
         panel.set_muted_today(self._is_desktop_alert_ignored("news|all"))
-        panel.set_source_name(getattr(self, "_news_last_source", "") or "新浪财经")
+        panel.set_source_name(
+            getattr(self, "_news_last_source", "") or "新浪财经",
+            len(getattr(self, "_news_items", [])),
+        )
         panel.set_items(getattr(self, "_news_items", []))
         self._news_panel = panel
         return panel
 
     def _show_news_panel(self, items=None, auto_show=False):
         if items:
-            cached = list(getattr(self, "_news_items", []) or [])
-            known = {str(item.get("id") or "") for item in cached if isinstance(item, dict)}
-            cached = [dict(item) for item in items if isinstance(item, dict) and str(item.get("id") or "") not in known] + cached
-            self._news_items = cached[:100]
+            self._news_items = NewsCache.merge_news_items(getattr(self, "_news_items", []), items)
         panel = self._ensure_news_panel()
         panel.set_items(self._news_items)
         panel.set_muted_today(self._is_desktop_alert_ignored("news|all"))
@@ -2570,7 +2608,7 @@ class FloatLabel(QWidget):
 
     def open_news_panel(self):
         self._show_news_panel(auto_show=False)
-        self._poll_news()
+        self._poll_news(force=True)
 
     def _set_news_important_only(self, enabled):
         config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
@@ -3392,6 +3430,8 @@ class FloatLabel(QWidget):
         self.hide()
 
     def shutdown_background(self):
+        if getattr(self, "_news_cache_save_pending", False):
+            self._flush_news_cache_save()
         try:
             news_panel = getattr(self, "_news_panel", None)
             if news_panel is not None:
