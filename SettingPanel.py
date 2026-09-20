@@ -388,10 +388,6 @@ class SettingsDialog(QDialog):
         self.chk_news_mini_enabled.setChecked(news_cfg["mini_enabled"])
         self.chk_news_mini_pinned = QCheckBox("迷你置顶")
         self.chk_news_mini_pinned.setChecked(news_cfg["mini_pinned"])
-        self.cmb_news_mini_items = QComboBox()
-        self.cmb_news_mini_items.addItem("1 条", userData=1)
-        self.cmb_news_mini_items.addItem("2 条", userData=2)
-        self.cmb_news_mini_items.setCurrentIndex(self.cmb_news_mini_items.findData(news_cfg["mini_items"]))
         self.spin_news_mini_opacity = QSpinBox()
         self.spin_news_mini_opacity.setRange(20, 100)
         self.spin_news_mini_opacity.setSuffix("%")
@@ -413,9 +409,6 @@ class SettingsDialog(QDialog):
         mini_toggle_row = QHBoxLayout()
         mini_toggle_row.addWidget(self.chk_news_mini_enabled)
         mini_toggle_row.addWidget(self.chk_news_mini_pinned)
-        mini_toggle_row.addSpacing(8)
-        mini_toggle_row.addWidget(QLabel("收起显示"))
-        mini_toggle_row.addWidget(self.cmb_news_mini_items)
         mini_toggle_row.addStretch(1)
         gl_news_source.addLayout(mini_toggle_row, 4, 0, 1, 2)
         mini_style_row = QHBoxLayout()
@@ -1526,7 +1519,6 @@ class SettingsDialog(QDialog):
         self.cmb_news_source.currentIndexChanged.connect(self._on_news_alert_config_changed)
         self.chk_news_mini_enabled.toggled.connect(self._on_news_alert_config_changed)
         self.chk_news_mini_pinned.toggled.connect(self._on_news_alert_config_changed)
-        self.cmb_news_mini_items.currentIndexChanged.connect(self._on_news_alert_config_changed)
         self.spin_news_mini_opacity.valueChanged.connect(self._on_news_alert_config_changed)
         self.spin_news_mini_width.valueChanged.connect(self._on_news_alert_config_changed)
         self.spin_news_mini_font.valueChanged.connect(self._on_news_alert_config_changed)
@@ -3659,7 +3651,7 @@ class SettingsDialog(QDialog):
             ).get("window_pinned", False),
             "mini_enabled": self.chk_news_mini_enabled.isChecked(),
             "mini_pinned": self.chk_news_mini_pinned.isChecked(),
-            "mini_items": self.cmb_news_mini_items.currentData(),
+            "mini_items": 1,
             "mini_opacity": self.spin_news_mini_opacity.value(),
             "mini_width": self.spin_news_mini_width.value(),
             "mini_font_size": self.spin_news_mini_font.value(),
@@ -3679,7 +3671,6 @@ class SettingsDialog(QDialog):
         self.cmb_news_source.setEnabled(active)
         for widget in (
             self.chk_news_mini_pinned,
-            self.cmb_news_mini_items,
             self.spin_news_mini_opacity,
             self.spin_news_mini_width,
             self.spin_news_mini_font,

@@ -1409,7 +1409,6 @@ class SettingsPanelTests(unittest.TestCase):
 
         dlg.chk_news_mini_enabled.setChecked(True)
         dlg.chk_news_mini_pinned.setChecked(False)
-        dlg.cmb_news_mini_items.setCurrentIndex(dlg.cmb_news_mini_items.findData(2))
         dlg.spin_news_mini_opacity.setValue(68)
         dlg.spin_news_mini_width.setValue(460)
         dlg.spin_news_mini_font.setValue(11)
@@ -1417,7 +1416,7 @@ class SettingsPanelTests(unittest.TestCase):
 
         self.assertTrue(win.news_alert_config["mini_enabled"])
         self.assertFalse(win.news_alert_config["mini_pinned"])
-        self.assertEqual(win.news_alert_config["mini_items"], 2)
+        self.assertEqual(win.news_alert_config["mini_items"], 1)
         self.assertEqual(win.news_alert_config["mini_opacity"], 68)
         self.assertEqual(win.news_alert_config["mini_width"], 460)
         self.assertEqual(win.news_alert_config["mini_font_size"], 11)
@@ -1438,7 +1437,6 @@ class SettingsPanelTests(unittest.TestCase):
             dlg.cmb_news_source,
             dlg.cmb_news_interval,
             dlg.chk_news_mini_enabled,
-            dlg.cmb_news_mini_items,
             dlg.spin_news_mini_opacity,
             dlg.spin_news_mini_width,
             dlg.spin_news_mini_font,

@@ -25,12 +25,12 @@ class MiniNewsPanelTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_collapsed_view_shows_one_or_two_rows_and_hover_expands(self):
+    def test_collapsed_view_shows_only_latest_row_and_hover_expands(self):
         panel = MiniNewsPanel()
         panel.apply_config({"mini_items": 2, "mini_opacity": 70, "mini_width": 420, "mini_font_size": 10})
         panel.set_items([news_item(i) for i in range(10)])
 
-        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * 2 + 2)
+        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         panel.expand_view()
         self.assertTrue(panel.is_expanded())
@@ -40,7 +40,7 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.list_widget.scrollToBottom()
         panel.collapse_view()
         self.assertFalse(panel.is_expanded())
-        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * 2 + 2)
+        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
         self.assertEqual(panel.list_widget.verticalScrollBar().value(), 0)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         panel.close()

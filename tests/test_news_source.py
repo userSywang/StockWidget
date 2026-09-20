@@ -42,7 +42,7 @@ class NewsSourceTests(unittest.TestCase):
         })
 
         self.assertTrue(config["mini_enabled"])
-        self.assertEqual(config["mini_items"], 2)
+        self.assertEqual(config["mini_items"], 1)
         self.assertEqual(config["mini_opacity"], 20)
         self.assertEqual(config["mini_width"], 620)
         self.assertEqual(config["mini_font_size"], 14)

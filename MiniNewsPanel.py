@@ -74,13 +74,17 @@ class MiniNewsPanel(QWidget):
             QLabel#miniNewsStatus { color: #aeb7c6; }
             QListWidget#miniNewsList { background: transparent; border: 0; outline: 0; color: #eef1f5; }
             QListWidget#miniNewsList::item { border-bottom: 1px solid rgba(255,255,255,28); padding: 5px 2px; }
+            QScrollBar:vertical { background: transparent; width: 3px; margin: 2px 0; }
+            QScrollBar::handle:vertical { background: rgba(190,198,210,105); min-height: 24px; border-radius: 1px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; background: transparent; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
             QPushButton#miniNewsButton, QPushButton#miniNewsClose { color: #d9dee8; background: rgba(255,255,255,18); border: 0; padding: 3px 7px; }
             QPushButton#miniNewsButton:hover, QPushButton#miniNewsClose:hover { background: rgba(255,255,255,40); }
         """)
         self._update_height()
 
     def apply_config(self, config):
-        self._collapsed_items = 2 if int(config.get("mini_items", 1)) == 2 else 1
+        self._collapsed_items = 1
         opacity = max(20, min(100, int(config.get("mini_opacity", 75))))
         self._background_alpha = round(255 * opacity / 100)
         width = max(320, min(620, int(config.get("mini_width", 420))))
