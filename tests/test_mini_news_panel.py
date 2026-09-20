@@ -34,6 +34,10 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.EXPANDED_ITEMS, 4)
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
+        self.assertEqual(
+            panel.list_widget.item(0).textAlignment(),
+            int(Qt.AlignLeft | Qt.AlignTop),
+        )
         panel.expand_view()
         self.assertTrue(panel.is_expanded())
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * panel.EXPANDED_ITEMS + 2)
@@ -64,7 +68,7 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.close()
 
     def test_summary_limit_uses_added_message_height(self):
-        summary = "甲" * 80
+        summary = "甲" * 120
 
         text = MiniNewsPanel._item_text({
             "published_at": "2026-09-20 10:30:00",
@@ -72,8 +76,8 @@ class MiniNewsPanelTests(unittest.TestCase):
             "summary": summary,
         })
 
-        self.assertEqual(MiniNewsPanel.SUMMARY_LIMIT, 66)
-        self.assertEqual(text.splitlines()[1], "甲" * 66 + "…")
+        self.assertEqual(MiniNewsPanel.SUMMARY_LIMIT, 96)
+        self.assertEqual(text.splitlines()[1], "甲" * 96 + "…")
 
 
 if __name__ == "__main__":

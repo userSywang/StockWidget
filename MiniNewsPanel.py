@@ -19,7 +19,7 @@ class MiniNewsPanel(QWidget):
     MAX_ITEMS = 50
     EXPANDED_ITEMS = 4
     ROW_HEIGHT = 93
-    SUMMARY_LIMIT = 66
+    SUMMARY_LIMIT = 96
 
     open_full_requested = Signal()
     disable_requested = Signal()
@@ -114,12 +114,14 @@ class MiniNewsPanel(QWidget):
         for row in self._items:
             item = QListWidgetItem(self._item_text(row))
             item.setSizeHint(QSize(0, self.ROW_HEIGHT))
+            item.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
             item.setForeground(QColor("#ff665e" if row.get("important") else "#eef1f5"))
             item.setToolTip(str(row.get("title") or ""))
             self.list_widget.addItem(item)
         if not self._items:
             empty = QListWidgetItem("暂无符合条件的消息")
             empty.setSizeHint(QSize(0, self.ROW_HEIGHT))
+            empty.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
             empty.setForeground(QColor("#aeb7c6"))
             self.list_widget.addItem(empty)
         self.list_widget.scrollToTop()
