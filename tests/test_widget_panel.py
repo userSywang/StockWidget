@@ -51,14 +51,15 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(alerts, [])
         self.assertEqual(saves, [True])
 
-    def test_news_subsequent_fetch_only_pops_new_important_messages(self):
+    def test_news_subsequent_fetch_opens_timeline_for_new_important_messages(self):
         win = FloatLabel.__new__(FloatLabel)
         win.news_alert_config = {"enabled": True, "important_only": True, "interval_seconds": 30}
         win._news_alert_initialized = True
         win._news_seen_ids = ["cls:1"]
         win._news_last_source = "财联社"
-        alerts = []
-        win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append((text, ignore_key))
+        shown = []
+        win._news_items = []
+        win._show_news_panel = lambda items, auto_show=False: shown.append((items, auto_show))
         win._schedule_news_state_save = lambda: None
 
         FloatLabel._apply_news_items(win, [
@@ -67,9 +68,9 @@ class WidgetPanelTests(unittest.TestCase):
             {"id": "cls:1", "source": "财联社", "title": "旧消息", "published_at": "10:00", "timestamp": 1, "important": True, "url": "", "stocks": []},
         ])
 
-        self.assertEqual(len(alerts), 1)
-        self.assertIn("重要消息", alerts[0][0])
-        self.assertEqual(alerts[0][1], "news|all")
+        self.assertEqual(len(shown), 1)
+        self.assertTrue(shown[0][1])
+        self.assertEqual(shown[0][0][0]["title"], "重要消息")
         self.assertEqual(win._news_seen_ids[:3], ["cls:3", "cls:2", "cls:1"])
 
     def test_news_source_switch_reseeds_without_popup(self):
@@ -78,8 +79,9 @@ class WidgetPanelTests(unittest.TestCase):
         win._news_alert_initialized = True
         win._news_seen_ids = ["cls:1"]
         win._news_last_source = "财联社"
-        alerts = []
-        win.show_desktop_alert = lambda text, ignore_key=None, **_kwargs: alerts.append(text)
+        shown = []
+        win._news_items = []
+        win._show_news_panel = lambda items, auto_show=False: shown.append((items, auto_show))
         win._schedule_news_state_save = lambda: None
 
         FloatLabel._apply_news_items(win, [{
@@ -87,7 +89,7 @@ class WidgetPanelTests(unittest.TestCase):
             "published_at": "10:01", "timestamp": 2, "important": True, "url": "", "stocks": [],
         }])
 
-        self.assertEqual(alerts, [])
+        self.assertEqual(shown, [])
         self.assertEqual(win._news_last_source, "东方财富")
 
     def test_update_hotkey_registers_numpad_decimal(self):

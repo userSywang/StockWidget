@@ -30,6 +30,35 @@ class FakeSession:
 
 
 class NewsSourceTests(unittest.TestCase):
+    def test_parse_sina_payload_normalizes_timeline_message(self):
+        payload = {
+            "result": {
+                "data": {
+                    "feed": {
+                        "list": [{
+                            "id": 5103630,
+                            "rich_text": "<b>【深蓝航天完成试车】</b> 发动机完成测试。",
+                            "create_time": "2026-09-20 09:49:01",
+                            "is_focus": 1,
+                            "tag": [{"name": "公司"}],
+                            "docurl": "https://finance.sina.cn/example.html",
+                            "ext": '{"stocks":[{"symbol":"sh600519"}]}',
+                        }]
+                    }
+                }
+            }
+        }
+
+        rows = NewsSource.parse_sina_payload(payload)
+
+        self.assertEqual(rows[0]["id"], "sina:5103630")
+        self.assertEqual(rows[0]["source"], "新浪财经")
+        self.assertEqual(rows[0]["title"], "深蓝航天完成试车")
+        self.assertEqual(rows[0]["summary"], "发动机完成测试。")
+        self.assertEqual(rows[0]["category"], "公司")
+        self.assertTrue(rows[0]["important"])
+        self.assertEqual(rows[0]["stocks"], ["600519"])
+
     def test_parse_cls_payload_normalizes_message(self):
         payload = {
             "data": {
@@ -77,6 +106,7 @@ class NewsSourceTests(unittest.TestCase):
     def test_fetch_fast_news_falls_back_to_eastmoney(self):
         session = FakeSession([
             RuntimeError("CLS unavailable"),
+            RuntimeError("Sina unavailable"),
             FakeResponse({
                 "data": {
                     "fastNewsList": [{
@@ -94,7 +124,22 @@ class NewsSourceTests(unittest.TestCase):
         rows = NewsSource.fetch_fast_news(session=session, page_size=10)
 
         self.assertEqual(rows[0]["source"], "东方财富")
-        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(len(session.calls), 3)
+
+    def test_fetch_sina_news_uses_public_feed_parameters(self):
+        session = FakeSession([FakeResponse({
+            "result": {"data": {"feed": {"list": [{
+                "id": 1,
+                "rich_text": "【市场快讯】正文",
+                "create_time": "2026-09-20 10:00:00",
+            }]}}}
+        })])
+
+        rows = NewsSource.fetch_sina_news(session=session, page_size=10)
+
+        self.assertEqual(rows[0]["source"], "新浪财经")
+        self.assertEqual(session.calls[0][1]["params"]["zhibo_id"], 152)
+        self.assertEqual(session.calls[0][1]["params"]["page_size"], 10)
 
 
 if __name__ == "__main__":

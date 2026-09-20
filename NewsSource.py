@@ -1,5 +1,6 @@
 import hashlib
 import html
+import json
 import re
 import uuid
 from datetime import datetime
@@ -9,10 +10,12 @@ import requests
 
 CLS_NEWS_URL = "https://www.cls.cn/v1/roll/get_roll_list"
 EASTMONEY_NEWS_URL = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
+SINA_NEWS_URL = "https://zhibo.sina.com.cn/api/zhibo/feed"
 DEFAULT_NEWS_ALERT_CONFIG = {
     "enabled": True,
-    "important_only": True,
+    "important_only": False,
     "interval_seconds": 30,
+    "source": "sina",
 }
 
 
@@ -24,10 +27,14 @@ def normalize_news_alert_config(value):
         interval = 30
     if interval not in (15, 30, 60):
         interval = 30
+    source = str(value.get("source") or "sina").strip().lower()
+    if source not in ("sina", "cls", "auto"):
+        source = "sina"
     return {
         "enabled": bool(value.get("enabled", True)),
-        "important_only": bool(value.get("important_only", True)),
+        "important_only": bool(value.get("important_only", False)),
         "interval_seconds": interval,
+        "source": source,
     }
 
 
@@ -40,13 +47,68 @@ def _stock_codes(values):
     result = []
     for value in values or []:
         if isinstance(value, dict):
-            raw = value.get("StockID") or value.get("stock_id") or value.get("code")
+            raw = value.get("StockID") or value.get("stock_id") or value.get("code") or value.get("symbol")
         else:
             raw = value
         match = re.search(r"(?<!\d)(\d{6})(?!\d)", str(raw or ""))
         if match and match.group(1) not in result:
             result.append(match.group(1))
     return result
+
+
+def _split_bracket_title(text):
+    text = _clean_text(text)
+    match = re.match(r"^[【\[]([^】\]]+)[】\]]\s*(.*)$", text)
+    if not match:
+        sentence = re.match(r"^(.{1,42}?[。！？!?])\s*(.*)$", text)
+        if sentence:
+            return sentence.group(1).strip(), sentence.group(2).strip()
+        if len(text) > 42:
+            return text[:42].rstrip() + "…", text[42:].strip()
+        return text, ""
+    return match.group(1).strip(), match.group(2).strip()
+
+
+def parse_sina_payload(payload):
+    rows = []
+    result = payload.get("result", {}) if isinstance(payload, dict) else {}
+    items = result.get("data", {}).get("feed", {}).get("list", []) if isinstance(result, dict) else []
+    important_terms = ("突发", "重磅", "央行", "证监会", "国务院", "降息", "降准", "停牌", "复牌")
+    for item in items or []:
+        if not isinstance(item, dict) or item.get("id") is None:
+            continue
+        title, summary = _split_bracket_title(item.get("rich_text"))
+        if not title:
+            continue
+        published_at = str(item.get("create_time") or "").strip()
+        try:
+            timestamp = int(datetime.strptime(published_at, "%Y-%m-%d %H:%M:%S").timestamp())
+        except (TypeError, ValueError):
+            timestamp = 0
+        tags = item.get("tag") if isinstance(item.get("tag"), list) else []
+        category = " / ".join(
+            str(tag.get("name") or "").strip() for tag in tags
+            if isinstance(tag, dict) and str(tag.get("name") or "").strip()
+        )
+        try:
+            ext = json.loads(item.get("ext") or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            ext = {}
+        stocks = ext.get("stocks", []) if isinstance(ext, dict) else []
+        full_text = f"{title} {summary}"
+        rows.append({
+            "id": f"sina:{item.get('id')}",
+            "source": "新浪财经",
+            "title": title,
+            "summary": summary,
+            "published_at": published_at,
+            "timestamp": timestamp,
+            "important": bool(item.get("is_focus") or item.get("top_value")) or any(term in full_text for term in important_terms),
+            "category": category,
+            "stocks": _stock_codes(stocks),
+            "url": str(item.get("docurl") or ext.get("docurl") or "").strip(),
+        })
+    return rows
 
 
 def parse_cls_payload(payload):
@@ -132,6 +194,21 @@ def fetch_cls_news(session=None, page_size=20):
     return parse_cls_payload(_response_json(response))
 
 
+def fetch_sina_news(session=None, page_size=20):
+    session = session or requests.Session()
+    response = session.get(
+        SINA_NEWS_URL,
+        params={
+            "page": 1,
+            "page_size": max(1, min(50, int(page_size))),
+            "zhibo_id": 152,
+        },
+        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn/7x24/"},
+        timeout=10,
+    )
+    return parse_sina_payload(_response_json(response))
+
+
 def fetch_eastmoney_news(session=None, page_size=20):
     session = session or requests.Session()
     response = session.get(
@@ -150,15 +227,19 @@ def fetch_eastmoney_news(session=None, page_size=20):
     return parse_eastmoney_payload(_response_json(response))
 
 
-def fetch_fast_news(session=None, page_size=20):
+def fetch_fast_news(session=None, page_size=20, source="auto"):
     session = session or requests.Session()
-    try:
-        rows = fetch_cls_news(session=session, page_size=page_size)
-        if rows:
-            return rows
-    except Exception:
-        pass
-    try:
-        return fetch_eastmoney_news(session=session, page_size=page_size)
-    except Exception:
-        return []
+    source = str(source or "auto").strip().lower()
+    fetchers = {
+        "sina": (fetch_sina_news, fetch_cls_news, fetch_eastmoney_news),
+        "cls": (fetch_cls_news, fetch_sina_news, fetch_eastmoney_news),
+        "auto": (fetch_cls_news, fetch_sina_news, fetch_eastmoney_news),
+    }.get(source, (fetch_sina_news, fetch_cls_news, fetch_eastmoney_news))
+    for fetcher in fetchers:
+        try:
+            rows = fetcher(session=session, page_size=page_size)
+            if rows:
+                return rows
+        except Exception:
+            continue
+    return []

@@ -78,6 +78,7 @@ class App(QApplication):
         self.tray.setToolTip(APP_NAME)
         menu = QMenu()
         menu.addAction(QAction("显示/隐藏 浮窗", self, triggered=self.toggle_win))
+        menu.addAction(QAction("实时资讯", self, triggered=self.win.open_news_panel))
         menu.addAction(QAction("设置…", self, triggered=self.open_settings))
         menu.addSeparator()
         menu.addAction(QAction("退出", self, triggered=self.quit_app))

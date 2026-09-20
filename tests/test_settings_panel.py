@@ -1392,11 +1392,13 @@ class SettingsPanelTests(unittest.TestCase):
         dlg.chk_news_alert_enabled.setChecked(False)
         dlg.chk_news_important_only.setChecked(False)
         dlg.cmb_news_interval.setCurrentIndex(dlg.cmb_news_interval.findData(60))
+        dlg.cmb_news_source.setCurrentIndex(dlg.cmb_news_source.findData("sina"))
         dlg._on_news_alert_config_changed()
 
         self.assertFalse(win.news_alert_config["enabled"])
         self.assertFalse(win.news_alert_config["important_only"])
         self.assertEqual(win.news_alert_config["interval_seconds"], 60)
+        self.assertEqual(win.news_alert_config["source"], "sina")
         self.assertFalse(dlg.chk_news_important_only.isEnabled())
         self.assertFalse(dlg.cmb_news_interval.isEnabled())
         dlg.close()
@@ -1409,7 +1411,7 @@ class SettingsPanelTests(unittest.TestCase):
         self.app.processEvents()
 
         page_rect = dlg.tab_source.rect().translated(dlg.tab_source.mapToGlobal(QPoint(0, 0)))
-        for widget in (dlg.chk_news_alert_enabled, dlg.chk_news_important_only, dlg.cmb_news_interval):
+        for widget in (dlg.chk_news_alert_enabled, dlg.chk_news_important_only, dlg.cmb_news_source, dlg.cmb_news_interval):
             rect = widget.rect().translated(widget.mapToGlobal(QPoint(0, 0)))
             self.assertTrue(page_rect.contains(rect), f"{widget} is clipped")
         dlg.close()

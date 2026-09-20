@@ -369,7 +369,7 @@ class SettingsDialog(QDialog):
         gl_news_source = QGridLayout(g_news_source)
         gl_news_source.setHorizontalSpacing(8)
         gl_news_source.setVerticalSpacing(6)
-        self.chk_news_alert_enabled = QCheckBox("启用桌面消息")
+        self.chk_news_alert_enabled = QCheckBox("启用实时资讯")
         self.chk_news_alert_enabled.setChecked(news_cfg["enabled"])
         self.chk_news_important_only = QCheckBox("仅重要消息")
         self.chk_news_important_only.setChecked(news_cfg["important_only"])
@@ -378,11 +378,19 @@ class SettingsDialog(QDialog):
             self.cmb_news_interval.addItem(f"{seconds} 秒", userData=seconds)
         interval_index = self.cmb_news_interval.findData(news_cfg["interval_seconds"])
         self.cmb_news_interval.setCurrentIndex(interval_index if interval_index >= 0 else 1)
+        self.cmb_news_source = QComboBox()
+        self.cmb_news_source.addItem("新浪财经 7×24", userData="sina")
+        self.cmb_news_source.addItem("财联社快讯", userData="cls")
+        self.cmb_news_source.addItem("自动选择", userData="auto")
+        source_index = self.cmb_news_source.findData(news_cfg["source"])
+        self.cmb_news_source.setCurrentIndex(source_index if source_index >= 0 else 0)
         gl_news_source.addWidget(self.chk_news_alert_enabled, 0, 0)
         gl_news_source.addWidget(self.chk_news_important_only, 0, 1)
-        gl_news_source.addWidget(QLabel("检查间隔："), 1, 0)
-        gl_news_source.addWidget(self.cmb_news_interval, 1, 1)
-        gl_news_source.addWidget(QLabel("来源：财联社（东方财富备用）"), 2, 0, 1, 2)
+        gl_news_source.addWidget(QLabel("消息来源："), 1, 0)
+        gl_news_source.addWidget(self.cmb_news_source, 1, 1)
+        gl_news_source.addWidget(QLabel("检查间隔："), 2, 0)
+        gl_news_source.addWidget(self.cmb_news_interval, 2, 1)
+        gl_news_source.addWidget(QLabel("接口不可用时自动切换备用源"), 3, 0, 1, 2)
         source_settings.addWidget(g_news_source)
         source_settings.addStretch(1)
         self._sync_data_source_enabled()
@@ -1479,6 +1487,7 @@ class SettingsDialog(QDialog):
         self.chk_news_alert_enabled.toggled.connect(self._on_news_alert_config_changed)
         self.chk_news_important_only.toggled.connect(self._on_news_alert_config_changed)
         self.cmb_news_interval.currentIndexChanged.connect(self._on_news_alert_config_changed)
+        self.cmb_news_source.currentIndexChanged.connect(self._on_news_alert_config_changed)
         self.cmb_namelength.currentIndexChanged.connect(self._on_name_length_changed)
         self.chk_default_color.toggled.connect(self._on_default_color_toggled)
         self.btn_fg.clicked.connect(self.pick_fg)
@@ -3602,6 +3611,7 @@ class SettingsDialog(QDialog):
             "enabled": self.chk_news_alert_enabled.isChecked(),
             "important_only": self.chk_news_important_only.isChecked(),
             "interval_seconds": self.cmb_news_interval.currentData(),
+            "source": self.cmb_news_source.currentData(),
         })
         setter = getattr(self.win, "set_news_alert_config", None)
         if callable(setter):
@@ -3613,6 +3623,7 @@ class SettingsDialog(QDialog):
         enabled = self.chk_news_alert_enabled.isChecked()
         self.chk_news_important_only.setEnabled(enabled)
         self.cmb_news_interval.setEnabled(enabled)
+        self.cmb_news_source.setEnabled(enabled)
 
     def _on_default_color_toggled(self, checked: bool):
         self.btn_fg.setEnabled(not checked)
