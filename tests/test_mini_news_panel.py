@@ -63,6 +63,18 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.items()[0]["id"], "news:79")
         panel.close()
 
+    def test_summary_limit_uses_added_message_height(self):
+        summary = "甲" * 80
+
+        text = MiniNewsPanel._item_text({
+            "published_at": "2026-09-20 10:30:00",
+            "title": "测试资讯",
+            "summary": summary,
+        })
+
+        self.assertEqual(MiniNewsPanel.SUMMARY_LIMIT, 66)
+        self.assertEqual(text.splitlines()[1], "甲" * 66 + "…")
+
 
 if __name__ == "__main__":
     unittest.main()

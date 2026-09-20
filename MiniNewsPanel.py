@@ -19,6 +19,7 @@ class MiniNewsPanel(QWidget):
     MAX_ITEMS = 50
     EXPANDED_ITEMS = 4
     ROW_HEIGHT = 93
+    SUMMARY_LIMIT = 66
 
     open_full_requested = Signal()
     disable_requested = Signal()
@@ -225,8 +226,8 @@ class MiniNewsPanel(QWidget):
                 break
         first = f"{time_text}  {title}" if time_text else title
         if summary and summary != title:
-            excerpt = summary[:44].rstrip()
-            if len(summary) > 44:
+            excerpt = summary[:MiniNewsPanel.SUMMARY_LIMIT].rstrip()
+            if len(summary) > MiniNewsPanel.SUMMARY_LIMIT:
                 excerpt += "…"
             return first + "\n" + excerpt
         return first
