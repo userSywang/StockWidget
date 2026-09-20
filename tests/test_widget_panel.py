@@ -174,6 +174,19 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(win._news_items[0]["id"], "sina:manual")
 
+    def test_news_mute_can_be_enabled_and_restored(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win._desktop_alert_ignored_today = {}
+        saves = []
+        win._notify_change = lambda: saves.append(True)
+
+        FloatLabel._set_news_muted_today(win, True)
+        self.assertTrue(FloatLabel._is_desktop_alert_ignored(win, "news|all"))
+
+        FloatLabel._set_news_muted_today(win, False)
+        self.assertFalse(FloatLabel._is_desktop_alert_ignored(win, "news|all"))
+        self.assertEqual(len(saves), 2)
+
     def test_update_hotkey_registers_numpad_decimal(self):
         win = FloatLabel.__new__(FloatLabel)
         calls = []

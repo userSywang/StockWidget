@@ -3,7 +3,8 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QLabel
 
 from NewsPanel import NewsPanel
 
@@ -46,12 +47,61 @@ class NewsPanelTests(unittest.TestCase):
         ])
 
         self.assertEqual(len(panel.items()), 260)
-        self.assertEqual(panel.visible_item_count(), 120)
+        self.assertEqual(panel.visible_item_count(), 15)
         self.assertTrue(panel.load_more_button.isVisibleTo(panel.content))
 
         panel._load_more()
 
-        self.assertEqual(panel.visible_item_count(), 240)
+        self.assertEqual(panel.visible_item_count(), 30)
+        panel.close()
+
+    def test_important_items_use_red_visual_roles(self):
+        panel = NewsPanel()
+        panel.set_items([{
+            "id": "sina:important", "title": "重要消息", "summary": "正文",
+            "published_at": "2026-09-20 10:02:00", "timestamp": 1,
+            "source": "新浪财经", "important": True, "category": "市场", "url": "",
+        }])
+
+        object_names = {label.objectName() for label in panel.content.findChildren(QLabel)}
+
+        self.assertIn("importantNewsTime", object_names)
+        self.assertIn("importantNewsTitle", object_names)
+        self.assertIn("importantNewsSummary", object_names)
+        panel.close()
+
+    def test_mute_button_can_restore_notifications(self):
+        panel = NewsPanel()
+        changes = []
+        panel.mute_today_changed.connect(changes.append)
+
+        panel.set_muted_today(True)
+        self.assertTrue(panel.mute_button.isEnabled())
+        self.assertEqual(panel.mute_button.text(), "恢复今日弹出")
+        panel.mute_button.click()
+
+        self.assertEqual(changes, [False])
+        self.assertFalse(panel.is_muted_today())
+        panel.close()
+
+    def test_news_window_is_not_topmost_until_pin_is_enabled(self):
+        panel = NewsPanel()
+
+        self.assertFalse(bool(panel.windowFlags() & Qt.WindowStaysOnTopHint))
+        panel.set_pinned(True)
+
+        self.assertTrue(bool(panel.windowFlags() & Qt.WindowStaysOnTopHint))
+        self.assertTrue(panel.pin_button.isChecked())
+        panel.close()
+
+    def test_setting_same_importance_filter_does_not_rebuild(self):
+        panel = NewsPanel()
+        rebuilds = []
+        panel._rebuild = lambda: rebuilds.append(True)
+
+        panel.set_important_only(False)
+
+        self.assertEqual(rebuilds, [])
         panel.close()
 
 

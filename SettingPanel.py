@@ -3612,6 +3612,9 @@ class SettingsDialog(QDialog):
             "important_only": self.chk_news_important_only.isChecked(),
             "interval_seconds": self.cmb_news_interval.currentData(),
             "source": self.cmb_news_source.currentData(),
+            "window_pinned": NewsSource.normalize_news_alert_config(
+                getattr(self.win, "news_alert_config", {})
+            ).get("window_pinned", False),
         })
         setter = getattr(self.win, "set_news_alert_config", None)
         if callable(setter):

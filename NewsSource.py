@@ -16,6 +16,7 @@ DEFAULT_NEWS_ALERT_CONFIG = {
     "important_only": False,
     "interval_seconds": 30,
     "source": "sina",
+    "window_pinned": False,
 }
 
 
@@ -35,6 +36,7 @@ def normalize_news_alert_config(value):
         "important_only": bool(value.get("important_only", False)),
         "interval_seconds": interval,
         "source": source,
+        "window_pinned": bool(value.get("window_pinned", False)),
     }
 
 
@@ -73,7 +75,6 @@ def parse_sina_payload(payload):
     rows = []
     result = payload.get("result", {}) if isinstance(payload, dict) else {}
     items = result.get("data", {}).get("feed", {}).get("list", []) if isinstance(result, dict) else []
-    important_terms = ("突发", "重磅", "央行", "证监会", "国务院", "降息", "降准", "停牌", "复牌")
     for item in items or []:
         if not isinstance(item, dict) or item.get("id") is None:
             continue
@@ -95,7 +96,6 @@ def parse_sina_payload(payload):
         except (TypeError, ValueError, json.JSONDecodeError):
             ext = {}
         stocks = ext.get("stocks", []) if isinstance(ext, dict) else []
-        full_text = f"{title} {summary}"
         rows.append({
             "id": f"sina:{item.get('id')}",
             "source": "新浪财经",
@@ -103,7 +103,7 @@ def parse_sina_payload(payload):
             "summary": summary,
             "published_at": published_at,
             "timestamp": timestamp,
-            "important": bool(item.get("is_focus") or item.get("top_value")) or any(term in full_text for term in important_terms),
+            "important": bool(item.get("is_focus") or item.get("top_value")),
             "category": category,
             "stocks": _stock_codes(stocks),
             "url": str(item.get("docurl") or ext.get("docurl") or "").strip(),

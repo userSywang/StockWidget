@@ -2585,11 +2585,15 @@ class FloatLabel(QWidget):
         panel = NewsPanel()
         panel.refresh_requested.connect(lambda: self._poll_news(force=True))
         panel.important_only_changed.connect(self._set_news_important_only)
-        panel.mute_today_requested.connect(self._mute_news_today)
+        panel.mute_today_changed.connect(self._set_news_muted_today)
+        panel.pin_changed.connect(self._set_news_window_pinned)
         panel.set_important_only(
             NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("important_only")
         )
         panel.set_muted_today(self._is_desktop_alert_ignored("news|all"))
+        panel.set_pinned(
+            NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("window_pinned")
+        )
         panel.set_source_name(
             getattr(self, "_news_last_source", "") or "新浪财经",
             len(getattr(self, "_news_items", [])),
@@ -2605,6 +2609,7 @@ class FloatLabel(QWidget):
         panel.set_items(self._news_items)
         panel.set_muted_today(self._is_desktop_alert_ignored("news|all"))
         panel.show_news(auto_show=auto_show)
+        QTimer.singleShot(350, self._collapse_to_edge_if_needed)
 
     def open_news_panel(self):
         self._show_news_panel(auto_show=False)
@@ -2617,11 +2622,26 @@ class FloatLabel(QWidget):
         config["important_only"] = bool(enabled)
         self.set_news_alert_config(config)
 
-    def _mute_news_today(self):
-        self._ignore_desktop_alert_today("news|all")
+    def _set_news_muted_today(self, muted):
+        if muted:
+            self._ignore_desktop_alert_today("news|all")
+        else:
+            ignored = dict(getattr(self, "_desktop_alert_ignored_today", {}) or {})
+            if "news|all" in ignored:
+                ignored.pop("news|all", None)
+                self._desktop_alert_ignored_today = ignored
+                self._notify_change()
         panel = getattr(self, "_news_panel", None)
         if panel is not None:
-            panel.set_muted_today(True)
+            panel.set_muted_today(bool(muted))
+
+    def _set_news_window_pinned(self, pinned):
+        config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
+        if config.get("window_pinned") == bool(pinned):
+            return
+        config["window_pinned"] = bool(pinned)
+        self.news_alert_config = NewsSource.normalize_news_alert_config(config)
+        self._notify_change()
 
     def send_strategy_push_test(self):
         self._send_strategy_push_text("## 策略测试推送\n>状态：策略远程推送已配置")
@@ -3070,6 +3090,7 @@ class FloatLabel(QWidget):
         panel = getattr(self, "_news_panel", None)
         if panel is not None:
             panel.set_important_only(self.news_alert_config.get("important_only"))
+            panel.set_pinned(self.news_alert_config.get("window_pinned"))
         self._notify_change()
 
     def set_flag(self, idx, checked: bool):

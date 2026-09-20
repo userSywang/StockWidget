@@ -49,7 +49,7 @@ class NewsCacheTests(unittest.TestCase):
             loaded = NewsCache.load_news_cache(base_dir=tmp, now=now)
 
             self.assertEqual([row["id"] for row in loaded], ["sina:2"])
-            self.assertEqual(json.loads(Path(path).read_text(encoding="utf-8"))["version"], 1)
+            self.assertEqual(json.loads(Path(path).read_text(encoding="utf-8"))["version"], 2)
             self.assertFalse(Path(path + ".tmp").exists())
 
     def test_load_drops_expired_and_malformed_rows(self):
@@ -57,7 +57,7 @@ class NewsCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(NewsCache.news_cache_path(base_dir=tmp))
             path.parent.mkdir(parents=True)
-            path.write_text(json.dumps({"items": [
+            path.write_text(json.dumps({"version": 2, "items": [
                 news_item("sina:new", "2026-09-20 10:00:00"),
                 news_item("sina:old", "2026-09-10 10:00:00"),
                 {"title": "没有ID"},
@@ -66,6 +66,18 @@ class NewsCacheTests(unittest.TestCase):
             loaded = NewsCache.load_news_cache(base_dir=tmp, now=now)
 
             self.assertEqual([row["id"] for row in loaded], ["sina:new"])
+
+    def test_load_discards_old_importance_classification_cache(self):
+        now = datetime(2026, 9, 20, 12, 0, 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(NewsCache.news_cache_path(base_dir=tmp))
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({
+                "version": 1,
+                "items": [news_item("sina:legacy", "2026-09-20 10:00:00")],
+            }), encoding="utf-8")
+
+            self.assertEqual(NewsCache.load_news_cache(base_dir=tmp, now=now), [])
 
 
 if __name__ == "__main__":

@@ -60,6 +60,19 @@ class NewsSourceTests(unittest.TestCase):
         self.assertTrue(rows[0]["important"])
         self.assertEqual(rows[0]["stocks"], ["600519"])
 
+    def test_sina_importance_uses_source_flag_not_keyword_guessing(self):
+        payload = {"result": {"data": {"feed": {"list": [{
+            "id": 5103631,
+            "rich_text": "【突发重磅】正文",
+            "create_time": "2026-09-20 09:50:01",
+            "is_focus": 0,
+            "top_value": 0,
+        }]}}}}
+
+        rows = NewsSource.parse_sina_payload(payload)
+
+        self.assertFalse(rows[0]["important"])
+
     def test_parse_cls_payload_normalizes_message(self):
         payload = {
             "data": {

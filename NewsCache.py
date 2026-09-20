@@ -6,7 +6,7 @@ from ConfigStore import config_path
 
 
 NEWS_CACHE_FILE = "realtime_news_cache.json"
-NEWS_CACHE_VERSION = 1
+NEWS_CACHE_VERSION = 2
 NEWS_CACHE_DAYS = 3
 NEWS_CACHE_MAX_ITEMS = 5000
 
@@ -61,6 +61,8 @@ def load_news_cache(base_dir=None, now=None, days=NEWS_CACHE_DAYS):
         with open(news_cache_path(base_dir=base_dir), "r", encoding="utf-8") as file:
             payload = json.load(file)
     except Exception:
+        return []
+    if not isinstance(payload, dict) or payload.get("version") != NEWS_CACHE_VERSION:
         return []
     items = payload.get("items", []) if isinstance(payload, dict) else []
     return merge_news_items([], items, now=now, days=days)
