@@ -1403,6 +1403,27 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertFalse(dlg.cmb_news_interval.isEnabled())
         dlg.close()
 
+    def test_mini_news_controls_update_compact_window_config(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        dlg.chk_news_mini_enabled.setChecked(True)
+        dlg.chk_news_mini_pinned.setChecked(False)
+        dlg.cmb_news_mini_items.setCurrentIndex(dlg.cmb_news_mini_items.findData(2))
+        dlg.spin_news_mini_opacity.setValue(68)
+        dlg.spin_news_mini_width.setValue(460)
+        dlg.spin_news_mini_font.setValue(11)
+        dlg._on_news_alert_config_changed()
+
+        self.assertTrue(win.news_alert_config["mini_enabled"])
+        self.assertFalse(win.news_alert_config["mini_pinned"])
+        self.assertEqual(win.news_alert_config["mini_items"], 2)
+        self.assertEqual(win.news_alert_config["mini_opacity"], 68)
+        self.assertEqual(win.news_alert_config["mini_width"], 460)
+        self.assertEqual(win.news_alert_config["mini_font_size"], 11)
+        self.assertTrue(dlg.spin_news_mini_opacity.isEnabled())
+        dlg.close()
+
     def test_news_alert_controls_fit_inside_data_source_page(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)
@@ -1411,7 +1432,17 @@ class SettingsPanelTests(unittest.TestCase):
         self.app.processEvents()
 
         page_rect = dlg.tab_source.rect().translated(dlg.tab_source.mapToGlobal(QPoint(0, 0)))
-        for widget in (dlg.chk_news_alert_enabled, dlg.chk_news_important_only, dlg.cmb_news_source, dlg.cmb_news_interval):
+        for widget in (
+            dlg.chk_news_alert_enabled,
+            dlg.chk_news_important_only,
+            dlg.cmb_news_source,
+            dlg.cmb_news_interval,
+            dlg.chk_news_mini_enabled,
+            dlg.cmb_news_mini_items,
+            dlg.spin_news_mini_opacity,
+            dlg.spin_news_mini_width,
+            dlg.spin_news_mini_font,
+        ):
             rect = widget.rect().translated(widget.mapToGlobal(QPoint(0, 0)))
             self.assertTrue(page_rect.contains(rect), f"{widget} is clipped")
         dlg.close()

@@ -33,6 +33,7 @@ class MiniNewsPanel(QWidget):
         self._background_alpha = 190
         self._expanded = False
         self._drag_offset = None
+        self._pinned = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 10)
@@ -47,7 +48,7 @@ class MiniNewsPanel(QWidget):
         header.addWidget(self.title_label)
         header.addWidget(self.status_label)
         header.addStretch(1)
-        self.expand_button = QPushButton("展开")
+        self.expand_button = QPushButton("完整")
         self.expand_button.setObjectName("miniNewsButton")
         self.expand_button.clicked.connect(self.open_full_requested.emit)
         header.addWidget(self.expand_button)
@@ -63,6 +64,7 @@ class MiniNewsPanel(QWidget):
         self.list_widget.setWordWrap(True)
         self.list_widget.setSelectionMode(QAbstractItemView.NoSelection)
         self.list_widget.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.list_widget.itemDoubleClicked.connect(lambda _item: self.open_full_requested.emit())
         root.addWidget(self.list_widget)
@@ -85,7 +87,15 @@ class MiniNewsPanel(QWidget):
         font_size = max(9, min(14, int(config.get("mini_font_size", 10))))
         self.setFixedWidth(width)
         self.setFont(QFont("Microsoft YaHei", font_size))
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, bool(config.get("mini_pinned", True)))
+        pinned = bool(config.get("mini_pinned", True))
+        if self._pinned != pinned:
+            geometry = self.geometry()
+            visible = self.isVisible()
+            self._pinned = pinned
+            self.setWindowFlag(Qt.WindowStaysOnTopHint, pinned)
+            if visible:
+                self.setGeometry(geometry)
+                self.show()
         self._update_height()
         self.update()
 
@@ -121,11 +131,13 @@ class MiniNewsPanel(QWidget):
         if self._expanded:
             return
         self._expanded = True
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._update_height()
 
     def collapse_view(self):
         self._expanded = False
         self.list_widget.scrollToTop()
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._update_height()
 
     def show_mini(self, anchor=None):
@@ -203,7 +215,14 @@ class MiniNewsPanel(QWidget):
         time_text = raw[11:16] if len(raw) >= 16 else raw[-5:]
         title = " ".join(str(item.get("title") or "财经快讯").split())
         summary = " ".join(str(item.get("summary") or "").split())
+        for prefix in (f"【{title}】", title):
+            if summary.startswith(prefix):
+                summary = summary[len(prefix):].lstrip(" ：:，,")
+                break
         first = f"{time_text}  {title}" if time_text else title
         if summary and summary != title:
-            return first + "\n" + summary[:64]
+            excerpt = summary[:44].rstrip()
+            if len(summary) > 44:
+                excerpt += "…"
+            return first + "\n" + excerpt
         return first

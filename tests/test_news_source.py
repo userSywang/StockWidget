@@ -31,6 +31,23 @@ class FakeSession:
 
 
 class NewsSourceTests(unittest.TestCase):
+    def test_news_config_normalizes_mini_window_options(self):
+        config = NewsSource.normalize_news_alert_config({
+            "mini_enabled": True,
+            "mini_items": 9,
+            "mini_opacity": 5,
+            "mini_width": 900,
+            "mini_font_size": 30,
+            "mini_pinned": False,
+        })
+
+        self.assertTrue(config["mini_enabled"])
+        self.assertEqual(config["mini_items"], 2)
+        self.assertEqual(config["mini_opacity"], 20)
+        self.assertEqual(config["mini_width"], 620)
+        self.assertEqual(config["mini_font_size"], 14)
+        self.assertFalse(config["mini_pinned"])
+
     def test_parse_sina_payload_normalizes_timeline_message(self):
         payload = {
             "result": {

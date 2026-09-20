@@ -384,6 +384,25 @@ class SettingsDialog(QDialog):
         self.cmb_news_source.addItem("自动选择", userData="auto")
         source_index = self.cmb_news_source.findData(news_cfg["source"])
         self.cmb_news_source.setCurrentIndex(source_index if source_index >= 0 else 0)
+        self.chk_news_mini_enabled = QCheckBox("迷你资讯")
+        self.chk_news_mini_enabled.setChecked(news_cfg["mini_enabled"])
+        self.chk_news_mini_pinned = QCheckBox("迷你置顶")
+        self.chk_news_mini_pinned.setChecked(news_cfg["mini_pinned"])
+        self.cmb_news_mini_items = QComboBox()
+        self.cmb_news_mini_items.addItem("1 条", userData=1)
+        self.cmb_news_mini_items.addItem("2 条", userData=2)
+        self.cmb_news_mini_items.setCurrentIndex(self.cmb_news_mini_items.findData(news_cfg["mini_items"]))
+        self.spin_news_mini_opacity = QSpinBox()
+        self.spin_news_mini_opacity.setRange(20, 100)
+        self.spin_news_mini_opacity.setSuffix("%")
+        self.spin_news_mini_opacity.setValue(news_cfg["mini_opacity"])
+        self.spin_news_mini_width = QSpinBox()
+        self.spin_news_mini_width.setRange(320, 620)
+        self.spin_news_mini_width.setSuffix(" px")
+        self.spin_news_mini_width.setValue(news_cfg["mini_width"])
+        self.spin_news_mini_font = QSpinBox()
+        self.spin_news_mini_font.setRange(9, 14)
+        self.spin_news_mini_font.setValue(news_cfg["mini_font_size"])
         gl_news_source.addWidget(self.chk_news_alert_enabled, 0, 0)
         gl_news_source.addWidget(self.chk_news_important_only, 0, 1)
         gl_news_source.addWidget(QLabel("消息来源："), 1, 0)
@@ -391,6 +410,23 @@ class SettingsDialog(QDialog):
         gl_news_source.addWidget(QLabel("检查间隔："), 2, 0)
         gl_news_source.addWidget(self.cmb_news_interval, 2, 1)
         gl_news_source.addWidget(QLabel("接口不可用时自动切换备用源"), 3, 0, 1, 2)
+        mini_toggle_row = QHBoxLayout()
+        mini_toggle_row.addWidget(self.chk_news_mini_enabled)
+        mini_toggle_row.addWidget(self.chk_news_mini_pinned)
+        mini_toggle_row.addSpacing(8)
+        mini_toggle_row.addWidget(QLabel("收起显示"))
+        mini_toggle_row.addWidget(self.cmb_news_mini_items)
+        mini_toggle_row.addStretch(1)
+        gl_news_source.addLayout(mini_toggle_row, 4, 0, 1, 2)
+        mini_style_row = QHBoxLayout()
+        mini_style_row.addWidget(QLabel("背景"))
+        mini_style_row.addWidget(self.spin_news_mini_opacity)
+        mini_style_row.addWidget(QLabel("宽度"))
+        mini_style_row.addWidget(self.spin_news_mini_width)
+        mini_style_row.addWidget(QLabel("字号"))
+        mini_style_row.addWidget(self.spin_news_mini_font)
+        mini_style_row.addStretch(1)
+        gl_news_source.addLayout(mini_style_row, 5, 0, 1, 2)
         source_settings.addWidget(g_news_source)
         source_settings.addStretch(1)
         self._sync_data_source_enabled()
@@ -1488,6 +1524,12 @@ class SettingsDialog(QDialog):
         self.chk_news_important_only.toggled.connect(self._on_news_alert_config_changed)
         self.cmb_news_interval.currentIndexChanged.connect(self._on_news_alert_config_changed)
         self.cmb_news_source.currentIndexChanged.connect(self._on_news_alert_config_changed)
+        self.chk_news_mini_enabled.toggled.connect(self._on_news_alert_config_changed)
+        self.chk_news_mini_pinned.toggled.connect(self._on_news_alert_config_changed)
+        self.cmb_news_mini_items.currentIndexChanged.connect(self._on_news_alert_config_changed)
+        self.spin_news_mini_opacity.valueChanged.connect(self._on_news_alert_config_changed)
+        self.spin_news_mini_width.valueChanged.connect(self._on_news_alert_config_changed)
+        self.spin_news_mini_font.valueChanged.connect(self._on_news_alert_config_changed)
         self.cmb_namelength.currentIndexChanged.connect(self._on_name_length_changed)
         self.chk_default_color.toggled.connect(self._on_default_color_toggled)
         self.btn_fg.clicked.connect(self.pick_fg)
@@ -3615,6 +3657,12 @@ class SettingsDialog(QDialog):
             "window_pinned": NewsSource.normalize_news_alert_config(
                 getattr(self.win, "news_alert_config", {})
             ).get("window_pinned", False),
+            "mini_enabled": self.chk_news_mini_enabled.isChecked(),
+            "mini_pinned": self.chk_news_mini_pinned.isChecked(),
+            "mini_items": self.cmb_news_mini_items.currentData(),
+            "mini_opacity": self.spin_news_mini_opacity.value(),
+            "mini_width": self.spin_news_mini_width.value(),
+            "mini_font_size": self.spin_news_mini_font.value(),
         })
         setter = getattr(self.win, "set_news_alert_config", None)
         if callable(setter):
@@ -3624,9 +3672,19 @@ class SettingsDialog(QDialog):
 
     def _sync_news_alert_enabled(self):
         enabled = self.chk_news_alert_enabled.isChecked()
-        self.chk_news_important_only.setEnabled(enabled)
-        self.cmb_news_interval.setEnabled(enabled)
-        self.cmb_news_source.setEnabled(enabled)
+        mini_enabled = self.chk_news_mini_enabled.isChecked()
+        active = enabled or mini_enabled
+        self.chk_news_important_only.setEnabled(active)
+        self.cmb_news_interval.setEnabled(active)
+        self.cmb_news_source.setEnabled(active)
+        for widget in (
+            self.chk_news_mini_pinned,
+            self.cmb_news_mini_items,
+            self.spin_news_mini_opacity,
+            self.spin_news_mini_width,
+            self.spin_news_mini_font,
+        ):
+            widget.setEnabled(mini_enabled)
 
     def _on_default_color_toggled(self, checked: bool):
         self.btn_fg.setEnabled(not checked)

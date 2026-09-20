@@ -201,6 +201,68 @@ class WidgetPanelTests(unittest.TestCase):
         self.assertEqual(calls[0][1][-1], "auto")
         self.assertFalse(win._news_future_seed_only)
 
+    def test_mini_news_uses_existing_polling_when_desktop_alerts_are_disabled(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {
+            "enabled": False,
+            "mini_enabled": True,
+            "important_only": False,
+            "interval_seconds": 30,
+            "source": "sina",
+        }
+        win._news_future = None
+        win._news_http = object()
+        win._news_bootstrap_needed = False
+        calls = []
+
+        class FakeExecutor:
+            def submit(self, function, *args):
+                calls.append((function, args))
+                return object()
+
+        win._news_executor = FakeExecutor()
+        win._poll_news_future = lambda: None
+
+        FloatLabel._poll_news(win)
+
+        self.assertEqual(len(calls), 1)
+        self.assertIs(calls[0][0], __import__("NewsSource").fetch_fast_news)
+
+    def test_applying_news_updates_existing_mini_panel(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {
+            "enabled": False,
+            "mini_enabled": True,
+            "important_only": False,
+            "interval_seconds": 30,
+            "source": "sina",
+        }
+        win._news_alert_initialized = False
+        win._news_seen_ids = []
+        win._news_items = []
+        win._news_last_source = ""
+        win._schedule_news_cache_save = lambda: None
+        win._schedule_news_state_save = lambda: None
+
+        class FakeMiniPanel:
+            def __init__(self):
+                self.rows = []
+
+            def set_items(self, rows, important_only=False):
+                self.rows = list(rows)
+
+        mini = FakeMiniPanel()
+        win._mini_news_panel = mini
+
+        FloatLabel._apply_news_items(win, [{
+            "id": "cls:mini", "source": "财联社", "title": "迷你资讯",
+            "published_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": int(datetime.now().timestamp()),
+            "important": False, "url": "", "stocks": [],
+        }])
+
+        self.assertEqual(mini.rows[0]["id"], "cls:mini")
+
     def test_news_mute_can_be_enabled_and_restored(self):
         win = FloatLabel.__new__(FloatLabel)
         win._desktop_alert_ignored_today = {}
@@ -219,16 +281,23 @@ class WidgetPanelTests(unittest.TestCase):
         with patch.object(FloatLabel, "_register_hotkey"), patch.object(FloatLabel, "_refresh_from_function"):
             win = FloatLabel(cfg)
         try:
-            changes = []
-            win.set_news_panel_visible = lambda visible: changes.append(bool(visible))
+            news_changes = []
+            mini_changes = []
+            win.set_news_panel_visible = lambda visible: news_changes.append(bool(visible))
+            win.set_mini_news_panel_visible = lambda visible: mini_changes.append(bool(visible))
 
             menu = win._build_context_menu()
             action = next(item for item in menu.actions() if item.text() == "实时资讯窗口")
+            mini_action = next(item for item in menu.actions() if item.text() == "迷你资讯窗口")
 
             self.assertTrue(action.isCheckable())
             self.assertFalse(action.isChecked())
             action.setChecked(True)
-            self.assertEqual(changes, [True])
+            self.assertEqual(news_changes, [True])
+            self.assertTrue(mini_action.isCheckable())
+            self.assertFalse(mini_action.isChecked())
+            mini_action.setChecked(True)
+            self.assertEqual(mini_changes, [True])
         finally:
             win.timer.stop()
             win._keep_top_timer.stop()

@@ -17,6 +17,12 @@ DEFAULT_NEWS_ALERT_CONFIG = {
     "interval_seconds": 30,
     "source": "sina",
     "window_pinned": False,
+    "mini_enabled": False,
+    "mini_items": 2,
+    "mini_opacity": 75,
+    "mini_width": 420,
+    "mini_font_size": 10,
+    "mini_pinned": True,
 }
 
 
@@ -31,12 +37,23 @@ def normalize_news_alert_config(value):
     source = str(value.get("source") or "sina").strip().lower()
     if source not in ("sina", "cls", "auto"):
         source = "sina"
+    def bounded_int(key, default, minimum, maximum):
+        try:
+            return max(minimum, min(maximum, int(value.get(key, default))))
+        except (TypeError, ValueError):
+            return default
     return {
         "enabled": bool(value.get("enabled", True)),
         "important_only": bool(value.get("important_only", False)),
         "interval_seconds": interval,
         "source": source,
         "window_pinned": bool(value.get("window_pinned", False)),
+        "mini_enabled": bool(value.get("mini_enabled", False)),
+        "mini_items": 2 if bounded_int("mini_items", 2, 1, 2) == 2 else 1,
+        "mini_opacity": bounded_int("mini_opacity", 75, 20, 100),
+        "mini_width": bounded_int("mini_width", 420, 320, 620),
+        "mini_font_size": bounded_int("mini_font_size", 10, 9, 14),
+        "mini_pinned": bool(value.get("mini_pinned", True)),
     }
 
 

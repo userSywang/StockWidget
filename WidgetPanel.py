@@ -18,6 +18,7 @@ import QuoteSource
 import NewsSource
 import NewsCache
 from NewsPanel import NewsPanel
+from MiniNewsPanel import MiniNewsPanel
 from StockLogic import (
     DEFAULT_WARNING_TEXT,
     evaluate_alert_rules,
@@ -44,6 +45,7 @@ DEFAULT_HOTKEY = "decimal"
 class FloatLabel(QWidget):
     hotkey_triggered = Signal()
     news_visibility_changed = Signal(bool)
+    mini_news_visibility_changed = Signal(bool)
     def __init__(self, cfg: dict):
         super().__init__()
         self._on_change = (lambda: None)
@@ -119,6 +121,7 @@ class FloatLabel(QWidget):
         self._news_bootstrap_needed = not bool(self._news_items)
         self._news_cache_save_pending = False
         self._news_panel = None
+        self._mini_news_panel = None
         self._latest_quotes     = {}
         self._http              = requests.Session()
         self._news_http         = requests.Session()
@@ -286,9 +289,11 @@ class FloatLabel(QWidget):
         self._news_timer = QTimer(self)
         self._news_timer.setInterval(self.news_alert_config["interval_seconds"] * 1000)
         self._news_timer.timeout.connect(self._poll_news)
-        if self.news_alert_config.get("enabled"):
+        if self.news_alert_config.get("enabled") or self.news_alert_config.get("mini_enabled"):
             self._news_timer.start()
             QTimer.singleShot(5000, self._start_news_polling)
+        if self.news_alert_config.get("mini_enabled"):
+            QTimer.singleShot(350, self._show_mini_news_panel)
 
         self._keep_top_timer = QTimer(self)
         self._keep_top_timer.setInterval(1000)  # 每 1000ms 检查一次
@@ -2456,7 +2461,8 @@ class FloatLabel(QWidget):
 
     def _apply_news_items(self, items, seed_only=False, manual=False):
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
-        if (not config.get("enabled") and not manual) or not items:
+        active = bool(config.get("enabled") or config.get("mini_enabled"))
+        if (not active and not manual) or not items:
             return False
         clean_items = [item for item in items if isinstance(item, dict) and str(item.get("id") or "").strip()]
         if not clean_items:
@@ -2476,6 +2482,9 @@ class FloatLabel(QWidget):
         if panel is not None:
             panel.set_items(self._news_items)
             panel.set_source_name(source, len(self._news_items))
+        mini_panel = getattr(self, "_mini_news_panel", None)
+        if mini_panel is not None:
+            mini_panel.set_items(self._news_items, important_only=config.get("important_only"))
 
         if seed_only:
             self._news_alert_initialized = True
@@ -2528,12 +2537,13 @@ class FloatLabel(QWidget):
             pass
 
     def _start_news_polling(self):
-        if NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})).get("enabled"):
+        config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        if config.get("enabled") or config.get("mini_enabled"):
             self._poll_news()
 
     def _poll_news(self, force=False):
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
-        if not config.get("enabled") and not force:
+        if not (config.get("enabled") or config.get("mini_enabled")) and not force:
             return
         future = getattr(self, "_news_future", None)
         if future is not None and not future.done():
@@ -2631,6 +2641,34 @@ class FloatLabel(QWidget):
         panel = getattr(self, "_news_panel", None)
         if panel is not None:
             panel.hide()
+
+    def _ensure_mini_news_panel(self):
+        panel = getattr(self, "_mini_news_panel", None)
+        if panel is not None:
+            return panel
+        panel = MiniNewsPanel()
+        panel.open_full_requested.connect(self.open_news_panel)
+        panel.disable_requested.connect(lambda: self.set_mini_news_panel_visible(False))
+        panel.visibility_changed.connect(self.mini_news_visibility_changed.emit)
+        config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        panel.apply_config(config)
+        panel.set_items(getattr(self, "_news_items", []), important_only=config.get("important_only"))
+        self._mini_news_panel = panel
+        return panel
+
+    def _show_mini_news_panel(self):
+        config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
+        if not config.get("mini_enabled"):
+            return
+        panel = self._ensure_mini_news_panel()
+        panel.apply_config(config)
+        panel.set_items(getattr(self, "_news_items", []), important_only=config.get("important_only"))
+        panel.show_mini(anchor=self)
+
+    def set_mini_news_panel_visible(self, visible):
+        config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
+        config["mini_enabled"] = bool(visible)
+        self.set_news_alert_config(config)
 
     def _set_news_important_only(self, enabled):
         config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
@@ -3098,9 +3136,10 @@ class FloatLabel(QWidget):
         timer = getattr(self, "_news_timer", None)
         if timer is not None:
             timer.setInterval(self.news_alert_config["interval_seconds"] * 1000)
-            if self.news_alert_config.get("enabled"):
+            active = bool(self.news_alert_config.get("enabled") or self.news_alert_config.get("mini_enabled"))
+            if active:
                 timer.start()
-                if not old_config.get("enabled"):
+                if not (old_config.get("enabled") or old_config.get("mini_enabled")):
                     self._poll_news()
             else:
                 timer.stop()
@@ -3108,6 +3147,11 @@ class FloatLabel(QWidget):
         if panel is not None:
             panel.set_important_only(self.news_alert_config.get("important_only"))
             panel.set_pinned(self.news_alert_config.get("window_pinned"))
+        mini_panel = getattr(self, "_mini_news_panel", None)
+        if self.news_alert_config.get("mini_enabled"):
+            self._show_mini_news_panel()
+        elif mini_panel is not None:
+            mini_panel.hide()
         self._notify_change()
 
     def set_flag(self, idx, checked: bool):
@@ -3327,6 +3371,11 @@ class FloatLabel(QWidget):
         act_open_news.toggled.connect(self.set_news_panel_visible)
         menu.addAction(act_open_news)
 
+        act_mini_news = QAction("迷你资讯窗口", menu, checkable=True)
+        act_mini_news.setChecked(bool(getattr(self, "news_alert_config", {}).get("mini_enabled")))
+        act_mini_news.toggled.connect(self.set_mini_news_panel_visible)
+        menu.addAction(act_mini_news)
+
         menu.addSeparator()
         menu.addAction(QAction("隐藏浮窗", menu, triggered=self.hide))
         return menu
@@ -3478,6 +3527,14 @@ class FloatLabel(QWidget):
                 news_panel.close()
                 news_panel.deleteLater()
                 self._news_panel = None
+        except Exception:
+            pass
+        try:
+            mini_panel = getattr(self, "_mini_news_panel", None)
+            if mini_panel is not None:
+                mini_panel.hide()
+                mini_panel.deleteLater()
+                self._mini_news_panel = None
         except Exception:
             pass
         try:

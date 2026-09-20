@@ -82,6 +82,11 @@ class App(QApplication):
         self.news_action.toggled.connect(self.win.set_news_panel_visible)
         self.win.news_visibility_changed.connect(self._sync_news_action)
         menu.addAction(self.news_action)
+        self.mini_news_action = QAction("迷你资讯窗口", self, checkable=True)
+        self.mini_news_action.setChecked(bool(self.win.news_alert_config.get("mini_enabled")))
+        self.mini_news_action.toggled.connect(self.win.set_mini_news_panel_visible)
+        self.win.mini_news_visibility_changed.connect(self._sync_mini_news_action)
+        menu.addAction(self.mini_news_action)
         menu.addAction(QAction("设置…", self, triggered=self.open_settings))
         menu.addSeparator()
         menu.addAction(QAction("退出", self, triggered=self.quit_app))
@@ -111,6 +116,11 @@ class App(QApplication):
         self.news_action.blockSignals(True)
         self.news_action.setChecked(bool(visible))
         self.news_action.blockSignals(False)
+
+    def _sync_mini_news_action(self, visible):
+        self.mini_news_action.blockSignals(True)
+        self.mini_news_action.setChecked(bool(visible))
+        self.mini_news_action.blockSignals(False)
 
     def on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick): self.toggle_win()

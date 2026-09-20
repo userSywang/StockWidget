@@ -3,6 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from MiniNewsPanel import MiniNewsPanel
@@ -30,15 +31,18 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.set_items([news_item(i) for i in range(10)])
 
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * 2 + 2)
+        self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         panel.expand_view()
         self.assertTrue(panel.is_expanded())
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * panel.EXPANDED_ITEMS + 2)
+        self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
 
         panel.list_widget.scrollToBottom()
         panel.collapse_view()
         self.assertFalse(panel.is_expanded())
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * 2 + 2)
         self.assertEqual(panel.list_widget.verticalScrollBar().value(), 0)
+        self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
         panel.close()
 
     def test_important_filter_uses_only_marked_rows(self):
