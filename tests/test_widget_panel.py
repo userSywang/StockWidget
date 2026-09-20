@@ -174,6 +174,33 @@ class WidgetPanelTests(unittest.TestCase):
 
         self.assertEqual(win._news_items[0]["id"], "sina:manual")
 
+    def test_important_only_uses_source_with_explicit_importance_flags(self):
+        win = FloatLabel.__new__(FloatLabel)
+        win.news_alert_config = {
+            "enabled": False,
+            "important_only": True,
+            "interval_seconds": 30,
+            "source": "sina",
+        }
+        win._news_future = None
+        win._news_http = object()
+        win._news_bootstrap_needed = True
+        calls = []
+
+        class FakeExecutor:
+            def submit(self, function, *args):
+                calls.append((function, args))
+                return object()
+
+        win._news_executor = FakeExecutor()
+        win._poll_news_future = lambda: None
+
+        FloatLabel._poll_news(win, force=True)
+
+        self.assertIs(calls[0][0], __import__("NewsSource").fetch_fast_news)
+        self.assertEqual(calls[0][1][-1], "auto")
+        self.assertFalse(win._news_future_seed_only)
+
     def test_news_mute_can_be_enabled_and_restored(self):
         win = FloatLabel.__new__(FloatLabel)
         win._desktop_alert_ignored_today = {}

@@ -2542,8 +2542,15 @@ class FloatLabel(QWidget):
         if executor is None:
             return
         source = config.get("source", "sina")
-        bootstrap = bool(getattr(self, "_news_bootstrap_needed", False)) and source == "sina"
-        self._news_bootstrap_needed = False
+        important_only = bool(config.get("important_only"))
+        fetch_source = "auto" if important_only and source == "sina" else source
+        bootstrap = (
+            bool(getattr(self, "_news_bootstrap_needed", False))
+            and source == "sina"
+            and not important_only
+        )
+        if bootstrap or not (important_only and source == "sina"):
+            self._news_bootstrap_needed = False
         self._news_future_seed_only = bootstrap
         self._news_future_manual = bool(force)
         if bootstrap:
@@ -2558,7 +2565,7 @@ class FloatLabel(QWidget):
                 NewsSource.fetch_fast_news,
                 self._news_http,
                 30,
-                source,
+                fetch_source,
             )
         self._poll_news_future()
 
