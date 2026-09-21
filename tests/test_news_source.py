@@ -31,12 +31,18 @@ class FakeSession:
 
 
 class NewsSourceTests(unittest.TestCase):
+    def test_mini_window_defaults_to_wide_and_not_pinned(self):
+        config = NewsSource.normalize_news_alert_config({})
+
+        self.assertEqual(config["mini_width"], 840)
+        self.assertFalse(config["mini_pinned"])
+
     def test_news_config_normalizes_mini_window_options(self):
         config = NewsSource.normalize_news_alert_config({
             "mini_enabled": True,
             "mini_items": 9,
             "mini_opacity": 5,
-            "mini_width": 900,
+            "mini_width": 1800,
             "mini_font_size": 30,
             "mini_pinned": False,
         })
@@ -44,7 +50,7 @@ class NewsSourceTests(unittest.TestCase):
         self.assertTrue(config["mini_enabled"])
         self.assertEqual(config["mini_items"], 1)
         self.assertEqual(config["mini_opacity"], 20)
-        self.assertEqual(config["mini_width"], 620)
+        self.assertEqual(config["mini_width"], 1280)
         self.assertEqual(config["mini_font_size"], 14)
         self.assertFalse(config["mini_pinned"])
 

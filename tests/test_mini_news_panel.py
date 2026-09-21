@@ -4,6 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from MiniNewsPanel import MiniNewsPanel, RollingNewsLabel
@@ -27,12 +28,15 @@ class MiniNewsPanelTests(unittest.TestCase):
 
     def test_idle_view_is_single_line_island_and_hover_shows_history(self):
         panel = MiniNewsPanel()
-        panel.apply_config({"mini_items": 2, "mini_opacity": 70, "mini_width": 420, "mini_font_size": 10})
+        panel.apply_config({"mini_items": 2, "mini_opacity": 70, "mini_width": 840, "mini_font_size": 10})
         panel.set_items([news_item(i) for i in range(10)])
 
+        self.assertEqual(panel.width(), 840)
         self.assertEqual(panel.height(), panel.IDLE_HEIGHT)
         self.assertTrue(panel.ticker.isVisibleTo(panel))
         self.assertFalse(panel.header_widget.isVisibleTo(panel))
+        self.assertFalse(panel.pin_button.isVisibleTo(panel))
+        self.assertFalse(panel.pin_button.isChecked())
         self.assertFalse(panel.list_widget.isVisibleTo(panel))
         self.assertFalse(hasattr(panel, "close_button"))
         self.assertIn("第 9 条资讯", panel.ticker.current_source_text())
@@ -42,6 +46,11 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertTrue(panel.is_expanded())
         self.assertFalse(panel.ticker.isVisibleTo(panel))
         self.assertTrue(panel.header_widget.isVisibleTo(panel))
+        self.assertTrue(panel.pin_button.isVisibleTo(panel))
+        pin_changes = []
+        panel.pin_changed.connect(pin_changes.append)
+        panel.pin_button.click()
+        self.assertEqual(pin_changes, [True])
         self.assertTrue(panel.list_widget.isVisibleTo(panel))
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * panel.EXPANDED_ITEMS + 2)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
@@ -70,14 +79,14 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.items()[0]["id"], "news:79")
         panel.close()
 
-    def test_rolling_messages_switch_items_and_fit_available_pixel_width(self):
+    def test_new_message_rolls_once_then_stays_still_and_fits_pixel_width(self):
         label = RollingNewsLabel()
         label.resize(220, 30)
         label.show()
         QApplication.processEvents()
         label.set_messages([
-            {"text": "甲" * 240, "color": "#eef1f5"},
-            {"text": "第二条资讯", "color": "#ff665e"},
+            {"id": "old", "text": "甲" * 240, "color": "#eef1f5"},
+            {"id": "older", "text": "第二条资讯", "color": "#ff665e"},
         ])
         narrow = label.current_display_text()
 
@@ -90,8 +99,18 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertGreater(len(wide), len(narrow))
         self.assertLessEqual(label.fontMetrics().horizontalAdvance(wide), label.content_width())
 
-        label.show_next_message(immediate=True)
-        self.assertEqual(label.current_source_text(), "第二条资讯")
+        QTest.qWait(label.ANIMATION_DURATION_MS + 80)
+        self.assertEqual(label.current_source_text(), "甲" * 240)
+        self.assertFalse(label.is_animating())
+
+        label.set_messages([
+            {"id": "new", "text": "最新一条资讯", "color": "#eef1f5"},
+            {"id": "old", "text": "甲" * 240, "color": "#eef1f5"},
+        ])
+        self.assertTrue(label.is_animating())
+        QTest.qWait(label.ANIMATION_DURATION_MS + 80)
+        self.assertEqual(label.current_source_text(), "最新一条资讯")
+        self.assertFalse(label.is_animating())
         label.close()
 
 

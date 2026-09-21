@@ -20,9 +20,9 @@ DEFAULT_NEWS_ALERT_CONFIG = {
     "mini_enabled": False,
     "mini_items": 1,
     "mini_opacity": 75,
-    "mini_width": 420,
+    "mini_width": 840,
     "mini_font_size": 10,
-    "mini_pinned": True,
+    "mini_pinned": False,
 }
 
 
@@ -51,9 +51,9 @@ def normalize_news_alert_config(value):
         "mini_enabled": bool(value.get("mini_enabled", False)),
         "mini_items": 1,
         "mini_opacity": bounded_int("mini_opacity", 75, 20, 100),
-        "mini_width": bounded_int("mini_width", 420, 320, 620),
+        "mini_width": bounded_int("mini_width", 840, 420, 1280),
         "mini_font_size": bounded_int("mini_font_size", 10, 9, 14),
-        "mini_pinned": bool(value.get("mini_pinned", True)),
+        "mini_pinned": bool(value.get("mini_pinned", False)),
     }
 
 

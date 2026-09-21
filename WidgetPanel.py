@@ -2648,6 +2648,7 @@ class FloatLabel(QWidget):
             return panel
         panel = MiniNewsPanel()
         panel.open_full_requested.connect(self.open_news_panel)
+        panel.pin_changed.connect(self._set_mini_news_pinned)
         panel.visibility_changed.connect(self.mini_news_visibility_changed.emit)
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
         panel.apply_config(config)
@@ -2696,6 +2697,13 @@ class FloatLabel(QWidget):
         config["window_pinned"] = bool(pinned)
         self.news_alert_config = NewsSource.normalize_news_alert_config(config)
         self._notify_change()
+
+    def _set_mini_news_pinned(self, pinned):
+        config = dict(NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {})))
+        if config.get("mini_pinned") == bool(pinned):
+            return
+        config["mini_pinned"] = bool(pinned)
+        self.set_news_alert_config(config)
 
     def send_strategy_push_test(self):
         self._send_strategy_push_text("## 策略测试推送\n>状态：策略远程推送已配置")

@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
 
 
 class RollingNewsLabel(QWidget):
-    ROTATE_INTERVAL_MS = 4500
     ANIMATION_INTERVAL_MS = 16
     ANIMATION_DURATION_MS = 260
 
@@ -31,9 +30,6 @@ class RollingNewsLabel(QWidget):
         self._elapsed = QElapsedTimer()
         self.setAccessibleName("最新实时资讯")
         self.setFixedHeight(28)
-        self._rotate_timer = QTimer(self)
-        self._rotate_timer.setInterval(self.ROTATE_INTERVAL_MS)
-        self._rotate_timer.timeout.connect(self.show_next_message)
         self._animation_timer = QTimer(self)
         self._animation_timer.setInterval(self.ANIMATION_INTERVAL_MS)
         self._animation_timer.timeout.connect(self._animate)
@@ -46,15 +42,37 @@ class RollingNewsLabel(QWidget):
             text = " ".join(str(message.get("text") or "").split())
             if not text:
                 continue
-            rows.append({"text": text, "color": QColor(message.get("color") or "#eef1f5")})
+            rows.append({
+                "id": str(message.get("id") or text),
+                "text": text,
+                "color": QColor(message.get("color") or "#eef1f5"),
+            })
         if rows == self._messages:
             return
+        old_latest_id = self._messages[0]["id"] if self._messages else ""
+        if self._next_index is not None:
+            self._index = self._next_index
+            self._next_index = None
+            self._progress = 0.0
+            self._animation_timer.stop()
+        current_id = self._messages[self._index]["id"] if self._messages else ""
         self._messages = rows
-        self._index = 0
-        self._next_index = None
-        self._progress = 0.0
-        self._animation_timer.stop()
-        self._restart_rotation()
+        current_index = next(
+            (index for index, row in enumerate(rows) if row["id"] == current_id),
+            0,
+        )
+        has_new_latest = bool(old_latest_id and rows and rows[0]["id"] != old_latest_id)
+        if has_new_latest and current_index != 0 and self.isVisible():
+            self._index = current_index
+            self._next_index = 0
+            self._progress = 0.0
+            self._elapsed.start()
+            self._animation_timer.start()
+        else:
+            self._index = 0
+            self._next_index = None
+            self._progress = 0.0
+            self._animation_timer.stop()
         self.update()
 
     def message_count(self):
@@ -68,6 +86,9 @@ class RollingNewsLabel(QWidget):
     def current_display_text(self):
         return self._elide(self.current_source_text())
 
+    def is_animating(self):
+        return self._animation_timer.isActive()
+
     def content_width(self):
         return max(1, self.width() - 16)
 
@@ -77,10 +98,8 @@ class RollingNewsLabel(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._restart_rotation()
 
     def hideEvent(self, event):
-        self._rotate_timer.stop()
         self._animation_timer.stop()
         if self._next_index is not None:
             self._index = self._next_index
@@ -106,26 +125,6 @@ class RollingNewsLabel(QWidget):
             self._draw_message(painter, self._index, -distance, 1.0 - self._progress)
             self._draw_message(painter, self._next_index, self.height() - distance, self._progress)
 
-    def show_next_message(self, immediate=False):
-        if len(self._messages) < 2:
-            return
-        next_index = (self._index + 1) % len(self._messages)
-        if immediate:
-            self._index = next_index
-            self._next_index = None
-            self._progress = 0.0
-            self._animation_timer.stop()
-            self._restart_rotation()
-            self.update()
-            return
-        if self._animation_timer.isActive():
-            return
-        self._next_index = next_index
-        self._progress = 0.0
-        self._elapsed.start()
-        self._rotate_timer.stop()
-        self._animation_timer.start()
-
     def _animate(self):
         self._progress = min(1.0, self._elapsed.elapsed() / self.ANIMATION_DURATION_MS)
         if self._progress >= 1.0:
@@ -133,14 +132,7 @@ class RollingNewsLabel(QWidget):
             self._next_index = None
             self._progress = 0.0
             self._animation_timer.stop()
-            self._restart_rotation()
         self.update()
-
-    def _restart_rotation(self):
-        if len(self._messages) > 1 and self.isVisible():
-            self._rotate_timer.start()
-        else:
-            self._rotate_timer.stop()
 
     def _elide(self, text):
         return self.fontMetrics().elidedText(str(text or ""), Qt.ElideRight, self.content_width())
@@ -163,6 +155,7 @@ class MiniNewsPanel(QWidget):
     IDLE_HEIGHT = 44
 
     open_full_requested = Signal()
+    pin_changed = Signal(bool)
     visibility_changed = Signal(bool)
 
     def __init__(self, parent=None):
@@ -195,6 +188,12 @@ class MiniNewsPanel(QWidget):
         self.expand_button.setObjectName("miniNewsButton")
         self.expand_button.clicked.connect(self.open_full_requested.emit)
         header.addWidget(self.expand_button)
+        self.pin_button = QPushButton("置顶")
+        self.pin_button.setObjectName("miniNewsPin")
+        self.pin_button.setCheckable(True)
+        self.pin_button.setToolTip("保持迷你资讯置顶")
+        self.pin_button.toggled.connect(self.pin_changed.emit)
+        header.addWidget(self.pin_button)
         root.addWidget(self.header_widget)
 
         self.ticker = RollingNewsLabel(self)
@@ -220,8 +219,9 @@ class MiniNewsPanel(QWidget):
             QScrollBar::handle:vertical { background: rgba(190,198,210,105); min-height: 24px; border-radius: 1px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; background: transparent; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-            QPushButton#miniNewsButton { color: #d9dee8; background: rgba(255,255,255,18); border: 0; padding: 3px 7px; }
-            QPushButton#miniNewsButton:hover { background: rgba(255,255,255,40); }
+            QPushButton#miniNewsButton, QPushButton#miniNewsPin { color: #d9dee8; background: rgba(255,255,255,18); border: 0; padding: 3px 7px; }
+            QPushButton#miniNewsButton:hover, QPushButton#miniNewsPin:hover { background: rgba(255,255,255,40); }
+            QPushButton#miniNewsPin:checked { color: #ffffff; background: rgba(75,125,255,120); }
         """)
         self._update_height()
 
@@ -229,12 +229,15 @@ class MiniNewsPanel(QWidget):
         self._collapsed_items = 1
         opacity = max(20, min(100, int(config.get("mini_opacity", 75))))
         self._background_alpha = round(255 * opacity / 100)
-        width = max(320, min(620, int(config.get("mini_width", 420))))
+        width = max(420, min(1280, int(config.get("mini_width", 840))))
         font_size = max(9, min(14, int(config.get("mini_font_size", 10))))
         self.setFixedWidth(width)
         self.setFont(QFont("Microsoft YaHei", font_size))
         self.ticker.update()
-        pinned = bool(config.get("mini_pinned", True))
+        pinned = bool(config.get("mini_pinned", False))
+        self.pin_button.blockSignals(True)
+        self.pin_button.setChecked(pinned)
+        self.pin_button.blockSignals(False)
         if self._pinned != pinned:
             geometry = self.geometry()
             visible = self.isVisible()
@@ -255,6 +258,7 @@ class MiniNewsPanel(QWidget):
         ticker_rows = self._items or [None]
         self.ticker.set_messages([
             {
+                "id": row.get("id") if row else "empty",
                 "text": self._ticker_text(row) if row else "暂无符合条件的消息",
                 "color": "#ff665e" if row and row.get("important") else "#eef1f5",
             }

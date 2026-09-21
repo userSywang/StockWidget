@@ -393,7 +393,7 @@ class SettingsDialog(QDialog):
         self.spin_news_mini_opacity.setSuffix("%")
         self.spin_news_mini_opacity.setValue(news_cfg["mini_opacity"])
         self.spin_news_mini_width = QSpinBox()
-        self.spin_news_mini_width.setRange(320, 620)
+        self.spin_news_mini_width.setRange(420, 1280)
         self.spin_news_mini_width.setSuffix(" px")
         self.spin_news_mini_width.setValue(news_cfg["mini_width"])
         self.spin_news_mini_font = QSpinBox()
