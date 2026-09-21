@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from MiniNewsPanel import MarqueeNewsLabel, MiniNewsPanel
+from MiniNewsPanel import MiniNewsPanel, RollingNewsLabel
 
 
 def news_item(index, important=False):
@@ -31,15 +31,16 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.set_items([news_item(i) for i in range(10)])
 
         self.assertEqual(panel.height(), panel.IDLE_HEIGHT)
-        self.assertTrue(panel.marquee.isVisibleTo(panel))
+        self.assertTrue(panel.ticker.isVisibleTo(panel))
         self.assertFalse(panel.header_widget.isVisibleTo(panel))
         self.assertFalse(panel.list_widget.isVisibleTo(panel))
         self.assertFalse(hasattr(panel, "close_button"))
-        self.assertIn("第 9 条资讯", panel.marquee.source_text())
+        self.assertIn("第 9 条资讯", panel.ticker.current_source_text())
+        self.assertEqual(panel.ticker.message_count(), 10)
 
         panel.expand_view()
         self.assertTrue(panel.is_expanded())
-        self.assertFalse(panel.marquee.isVisibleTo(panel))
+        self.assertFalse(panel.ticker.isVisibleTo(panel))
         self.assertTrue(panel.header_widget.isVisibleTo(panel))
         self.assertTrue(panel.list_widget.isVisibleTo(panel))
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * panel.EXPANDED_ITEMS + 2)
@@ -49,7 +50,7 @@ class MiniNewsPanelTests(unittest.TestCase):
         panel.collapse_view()
         self.assertFalse(panel.is_expanded())
         self.assertEqual(panel.height(), panel.IDLE_HEIGHT)
-        self.assertTrue(panel.marquee.isVisibleTo(panel))
+        self.assertTrue(panel.ticker.isVisibleTo(panel))
         self.assertFalse(panel.header_widget.isVisibleTo(panel))
         panel.close()
 
@@ -69,22 +70,28 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.items()[0]["id"], "news:79")
         panel.close()
 
-    def test_marquee_text_limit_tracks_available_pixel_width(self):
-        label = MarqueeNewsLabel()
+    def test_rolling_messages_switch_items_and_fit_available_pixel_width(self):
+        label = RollingNewsLabel()
         label.resize(220, 30)
         label.show()
         QApplication.processEvents()
-        label.set_source_text("甲" * 240)
-        narrow = label.display_text()
+        label.set_messages([
+            {"text": "甲" * 240, "color": "#eef1f5"},
+            {"text": "第二条资讯", "color": "#ff665e"},
+        ])
+        narrow = label.current_display_text()
 
         label.resize(440, 30)
         QApplication.processEvents()
-        wide = label.display_text()
+        wide = label.current_display_text()
 
         self.assertTrue(narrow.endswith("…"))
         self.assertTrue(wide.endswith("…"))
         self.assertGreater(len(wide), len(narrow))
-        self.assertLessEqual(label.fontMetrics().horizontalAdvance(wide), label.content_width() * label.TEXT_SCREENS)
+        self.assertLessEqual(label.fontMetrics().horizontalAdvance(wide), label.content_width())
+
+        label.show_next_message(immediate=True)
+        self.assertEqual(label.current_source_text(), "第二条资讯")
         label.close()
 
 

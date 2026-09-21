@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal, QSize, QTimer
+from PySide6.QtCore import Qt, Signal, QSize, QElapsedTimer, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -15,63 +15,77 @@ from PySide6.QtWidgets import (
 )
 
 
-class MarqueeNewsLabel(QWidget):
-    TEXT_SCREENS = 3
-    SCROLL_INTERVAL_MS = 24
-    TEXT_GAP = 56
+class RollingNewsLabel(QWidget):
+    ROTATE_INTERVAL_MS = 4500
+    ANIMATION_INTERVAL_MS = 16
+    ANIMATION_DURATION_MS = 260
 
     activated = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._source_text = ""
-        self._display_text = ""
-        self._offset = 0
-        self._text_color = QColor("#eef1f5")
-        self._scrolling = False
+        self._messages = []
+        self._index = 0
+        self._next_index = None
+        self._progress = 0.0
+        self._elapsed = QElapsedTimer()
         self.setAccessibleName("最新实时资讯")
         self.setFixedHeight(28)
-        self._timer = QTimer(self)
-        self._timer.setInterval(self.SCROLL_INTERVAL_MS)
-        self._timer.timeout.connect(self._advance)
+        self._rotate_timer = QTimer(self)
+        self._rotate_timer.setInterval(self.ROTATE_INTERVAL_MS)
+        self._rotate_timer.timeout.connect(self.show_next_message)
+        self._animation_timer = QTimer(self)
+        self._animation_timer.setInterval(self.ANIMATION_INTERVAL_MS)
+        self._animation_timer.timeout.connect(self._animate)
 
-    def set_source_text(self, text):
-        text = " ".join(str(text or "").split())
-        if text == self._source_text:
+    def set_messages(self, messages):
+        rows = []
+        for message in messages or []:
+            if not isinstance(message, dict):
+                continue
+            text = " ".join(str(message.get("text") or "").split())
+            if not text:
+                continue
+            rows.append({"text": text, "color": QColor(message.get("color") or "#eef1f5")})
+        if rows == self._messages:
             return
-        self._source_text = text
-        self._offset = 0
-        self._recalculate_text()
+        self._messages = rows
+        self._index = 0
+        self._next_index = None
+        self._progress = 0.0
+        self._animation_timer.stop()
+        self._restart_rotation()
+        self.update()
 
-    def source_text(self):
-        return self._source_text
+    def message_count(self):
+        return len(self._messages)
 
-    def display_text(self):
-        return self._display_text
+    def current_source_text(self):
+        if not self._messages:
+            return ""
+        return self._messages[self._index]["text"]
+
+    def current_display_text(self):
+        return self._elide(self.current_source_text())
 
     def content_width(self):
         return max(1, self.width() - 16)
 
-    def set_text_color(self, color):
-        self._text_color = QColor(color)
-        self.update()
-
-    def refresh_layout(self):
-        self._recalculate_text()
-
-    def is_scrolling(self):
-        return self._scrolling
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._recalculate_text()
+        self.update()
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._sync_timer()
+        self._restart_rotation()
 
     def hideEvent(self, event):
-        self._timer.stop()
+        self._rotate_timer.stop()
+        self._animation_timer.stop()
+        if self._next_index is not None:
+            self._index = self._next_index
+            self._next_index = None
+            self._progress = 0.0
         super().hideEvent(event)
 
     def mouseDoubleClickEvent(self, event):
@@ -83,40 +97,62 @@ class MarqueeNewsLabel(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
         painter.setClipRect(self.rect().adjusted(8, 0, -8, 0))
-        painter.setPen(self._text_color)
-        metrics = self.fontMetrics()
-        baseline = (self.height() - metrics.height()) // 2 + metrics.ascent()
-        x = 8 - self._offset
-        painter.drawText(x, baseline, self._display_text)
-        if self._scrolling:
-            next_x = x + metrics.horizontalAdvance(self._display_text) + self.TEXT_GAP
-            painter.drawText(next_x, baseline, self._display_text)
-
-    def _recalculate_text(self):
-        metrics = self.fontMetrics()
-        maximum_width = self.content_width() * self.TEXT_SCREENS
-        if metrics.horizontalAdvance(self._source_text) > maximum_width:
-            self._display_text = metrics.elidedText(self._source_text, Qt.ElideRight, maximum_width)
-        else:
-            self._display_text = self._source_text
-        self._offset = min(self._offset, metrics.horizontalAdvance(self._display_text) + self.TEXT_GAP)
-        self._scrolling = metrics.horizontalAdvance(self._display_text) > self.content_width()
-        self._sync_timer()
-        self.update()
-
-    def _sync_timer(self):
-        if self._scrolling and self.isVisible():
-            self._timer.start()
-        else:
-            self._timer.stop()
-            self._offset = 0
-
-    def _advance(self):
-        distance = self.fontMetrics().horizontalAdvance(self._display_text) + self.TEXT_GAP
-        if distance <= 0:
+        if not self._messages:
             return
-        self._offset = (self._offset + 1) % distance
+        if self._next_index is None:
+            self._draw_message(painter, self._index, 0, 1.0)
+        else:
+            distance = round(self.height() * self._progress)
+            self._draw_message(painter, self._index, -distance, 1.0 - self._progress)
+            self._draw_message(painter, self._next_index, self.height() - distance, self._progress)
+
+    def show_next_message(self, immediate=False):
+        if len(self._messages) < 2:
+            return
+        next_index = (self._index + 1) % len(self._messages)
+        if immediate:
+            self._index = next_index
+            self._next_index = None
+            self._progress = 0.0
+            self._animation_timer.stop()
+            self._restart_rotation()
+            self.update()
+            return
+        if self._animation_timer.isActive():
+            return
+        self._next_index = next_index
+        self._progress = 0.0
+        self._elapsed.start()
+        self._rotate_timer.stop()
+        self._animation_timer.start()
+
+    def _animate(self):
+        self._progress = min(1.0, self._elapsed.elapsed() / self.ANIMATION_DURATION_MS)
+        if self._progress >= 1.0:
+            self._index = self._next_index
+            self._next_index = None
+            self._progress = 0.0
+            self._animation_timer.stop()
+            self._restart_rotation()
         self.update()
+
+    def _restart_rotation(self):
+        if len(self._messages) > 1 and self.isVisible():
+            self._rotate_timer.start()
+        else:
+            self._rotate_timer.stop()
+
+    def _elide(self, text):
+        return self.fontMetrics().elidedText(str(text or ""), Qt.ElideRight, self.content_width())
+
+    def _draw_message(self, painter, index, y_offset, opacity):
+        message = self._messages[index]
+        metrics = self.fontMetrics()
+        baseline = y_offset + (self.height() - metrics.height()) // 2 + metrics.ascent()
+        painter.setOpacity(max(0.0, min(1.0, opacity)))
+        painter.setPen(message["color"])
+        painter.drawText(8, baseline, self._elide(message["text"]))
+        painter.setOpacity(1.0)
 
 
 class MiniNewsPanel(QWidget):
@@ -161,9 +197,9 @@ class MiniNewsPanel(QWidget):
         header.addWidget(self.expand_button)
         root.addWidget(self.header_widget)
 
-        self.marquee = MarqueeNewsLabel(self)
-        self.marquee.activated.connect(self.open_full_requested.emit)
-        root.addWidget(self.marquee)
+        self.ticker = RollingNewsLabel(self)
+        self.ticker.activated.connect(self.open_full_requested.emit)
+        root.addWidget(self.ticker)
 
         self.list_widget = QListWidget(self)
         self.list_widget.setObjectName("miniNewsList")
@@ -197,7 +233,7 @@ class MiniNewsPanel(QWidget):
         font_size = max(9, min(14, int(config.get("mini_font_size", 10))))
         self.setFixedWidth(width)
         self.setFont(QFont("Microsoft YaHei", font_size))
-        self.marquee.refresh_layout()
+        self.ticker.update()
         pinned = bool(config.get("mini_pinned", True))
         if self._pinned != pinned:
             geometry = self.geometry()
@@ -216,9 +252,14 @@ class MiniNewsPanel(QWidget):
         if important_only:
             rows = [item for item in rows if item.get("important")]
         self._items = rows[:self.MAX_ITEMS]
-        latest = self._items[0] if self._items else None
-        self.marquee.set_source_text(self._marquee_text(latest) if latest else "暂无符合条件的消息")
-        self.marquee.set_text_color("#ff665e" if latest and latest.get("important") else "#eef1f5")
+        ticker_rows = self._items or [None]
+        self.ticker.set_messages([
+            {
+                "text": self._ticker_text(row) if row else "暂无符合条件的消息",
+                "color": "#ff665e" if row and row.get("important") else "#eef1f5",
+            }
+            for row in ticker_rows
+        ])
         self.list_widget.clear()
         for row in self._items:
             item = QListWidgetItem(self._item_text(row))
@@ -313,10 +354,10 @@ class MiniNewsPanel(QWidget):
         if not self._expanded:
             self.header_widget.hide()
             self.list_widget.hide()
-            self.marquee.show()
+            self.ticker.show()
             self.setFixedHeight(self.IDLE_HEIGHT)
             return
-        self.marquee.hide()
+        self.ticker.hide()
         self.header_widget.show()
         self.list_widget.show()
         available = max(1, min(self.EXPANDED_ITEMS, max(1, self.list_widget.count())))
@@ -353,7 +394,7 @@ class MiniNewsPanel(QWidget):
         return first
 
     @staticmethod
-    def _marquee_text(item):
+    def _ticker_text(item):
         if not isinstance(item, dict):
             return ""
         raw = str(item.get("published_at") or "")
