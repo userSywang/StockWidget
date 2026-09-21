@@ -29,7 +29,7 @@ else:
     class _UpdateBridge:
         pass
 
-APP_VERSION = "1.0.11"
+APP_VERSION = "1.0.12"
 APP_VERSION_TAG = f"v{APP_VERSION}"
 REPO = os.environ.get("STOCKWIDGET_UPDATE_REPO", "userSywang/StockWidget")
 BRANCH = os.environ.get("STOCKWIDGET_UPDATE_BRANCH", "codex/strategy-alerts-page")

@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from MiniNewsPanel import MiniNewsPanel
+from MiniNewsPanel import MarqueeNewsLabel, MiniNewsPanel
 
 
 def news_item(index, important=False):
@@ -25,30 +25,32 @@ class MiniNewsPanelTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_collapsed_view_shows_only_latest_row_and_hover_expands(self):
+    def test_idle_view_is_single_line_island_and_hover_shows_history(self):
         panel = MiniNewsPanel()
         panel.apply_config({"mini_items": 2, "mini_opacity": 70, "mini_width": 420, "mini_font_size": 10})
         panel.set_items([news_item(i) for i in range(10)])
 
-        self.assertEqual(panel.ROW_HEIGHT, 93)
-        self.assertEqual(panel.EXPANDED_ITEMS, 4)
-        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
-        self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
-        self.assertEqual(
-            panel.list_widget.item(0).textAlignment(),
-            int(Qt.AlignLeft | Qt.AlignTop),
-        )
+        self.assertEqual(panel.height(), panel.IDLE_HEIGHT)
+        self.assertTrue(panel.marquee.isVisibleTo(panel))
+        self.assertFalse(panel.header_widget.isVisibleTo(panel))
+        self.assertFalse(panel.list_widget.isVisibleTo(panel))
+        self.assertFalse(hasattr(panel, "close_button"))
+        self.assertIn("第 9 条资讯", panel.marquee.source_text())
+
         panel.expand_view()
         self.assertTrue(panel.is_expanded())
+        self.assertFalse(panel.marquee.isVisibleTo(panel))
+        self.assertTrue(panel.header_widget.isVisibleTo(panel))
+        self.assertTrue(panel.list_widget.isVisibleTo(panel))
         self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT * panel.EXPANDED_ITEMS + 2)
         self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
 
         panel.list_widget.scrollToBottom()
         panel.collapse_view()
         self.assertFalse(panel.is_expanded())
-        self.assertEqual(panel.list_widget.height(), panel.ROW_HEIGHT + 2)
-        self.assertEqual(panel.list_widget.verticalScrollBar().value(), 0)
-        self.assertEqual(panel.list_widget.verticalScrollBarPolicy(), Qt.ScrollBarAlwaysOff)
+        self.assertEqual(panel.height(), panel.IDLE_HEIGHT)
+        self.assertTrue(panel.marquee.isVisibleTo(panel))
+        self.assertFalse(panel.header_widget.isVisibleTo(panel))
         panel.close()
 
     def test_important_filter_uses_only_marked_rows(self):
@@ -67,17 +69,23 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.items()[0]["id"], "news:79")
         panel.close()
 
-    def test_summary_limit_uses_added_message_height(self):
-        summary = "甲" * 120
+    def test_marquee_text_limit_tracks_available_pixel_width(self):
+        label = MarqueeNewsLabel()
+        label.resize(220, 30)
+        label.show()
+        QApplication.processEvents()
+        label.set_source_text("甲" * 240)
+        narrow = label.display_text()
 
-        text = MiniNewsPanel._item_text({
-            "published_at": "2026-09-20 10:30:00",
-            "title": "测试资讯",
-            "summary": summary,
-        })
+        label.resize(440, 30)
+        QApplication.processEvents()
+        wide = label.display_text()
 
-        self.assertEqual(MiniNewsPanel.SUMMARY_LIMIT, 96)
-        self.assertEqual(text.splitlines()[1], "甲" * 96 + "…")
+        self.assertTrue(narrow.endswith("…"))
+        self.assertTrue(wide.endswith("…"))
+        self.assertGreater(len(wide), len(narrow))
+        self.assertLessEqual(label.fontMetrics().horizontalAdvance(wide), label.content_width() * label.TEXT_SCREENS)
+        label.close()
 
 
 if __name__ == "__main__":

@@ -2648,7 +2648,6 @@ class FloatLabel(QWidget):
             return panel
         panel = MiniNewsPanel()
         panel.open_full_requested.connect(self.open_news_panel)
-        panel.disable_requested.connect(lambda: self.set_mini_news_panel_visible(False))
         panel.visibility_changed.connect(self.mini_news_visibility_changed.emit)
         config = NewsSource.normalize_news_alert_config(getattr(self, "news_alert_config", {}))
         panel.apply_config(config)

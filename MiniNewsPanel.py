@@ -15,14 +15,118 @@ from PySide6.QtWidgets import (
 )
 
 
+class MarqueeNewsLabel(QWidget):
+    TEXT_SCREENS = 3
+    SCROLL_INTERVAL_MS = 24
+    TEXT_GAP = 56
+
+    activated = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._source_text = ""
+        self._display_text = ""
+        self._offset = 0
+        self._text_color = QColor("#eef1f5")
+        self._scrolling = False
+        self.setAccessibleName("最新实时资讯")
+        self.setFixedHeight(28)
+        self._timer = QTimer(self)
+        self._timer.setInterval(self.SCROLL_INTERVAL_MS)
+        self._timer.timeout.connect(self._advance)
+
+    def set_source_text(self, text):
+        text = " ".join(str(text or "").split())
+        if text == self._source_text:
+            return
+        self._source_text = text
+        self._offset = 0
+        self._recalculate_text()
+
+    def source_text(self):
+        return self._source_text
+
+    def display_text(self):
+        return self._display_text
+
+    def content_width(self):
+        return max(1, self.width() - 16)
+
+    def set_text_color(self, color):
+        self._text_color = QColor(color)
+        self.update()
+
+    def refresh_layout(self):
+        self._recalculate_text()
+
+    def is_scrolling(self):
+        return self._scrolling
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._recalculate_text()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._sync_timer()
+
+    def hideEvent(self, event):
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.activated.emit()
+        super().mouseDoubleClickEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
+        painter.setClipRect(self.rect().adjusted(8, 0, -8, 0))
+        painter.setPen(self._text_color)
+        metrics = self.fontMetrics()
+        baseline = (self.height() - metrics.height()) // 2 + metrics.ascent()
+        x = 8 - self._offset
+        painter.drawText(x, baseline, self._display_text)
+        if self._scrolling:
+            next_x = x + metrics.horizontalAdvance(self._display_text) + self.TEXT_GAP
+            painter.drawText(next_x, baseline, self._display_text)
+
+    def _recalculate_text(self):
+        metrics = self.fontMetrics()
+        maximum_width = self.content_width() * self.TEXT_SCREENS
+        if metrics.horizontalAdvance(self._source_text) > maximum_width:
+            self._display_text = metrics.elidedText(self._source_text, Qt.ElideRight, maximum_width)
+        else:
+            self._display_text = self._source_text
+        self._offset = min(self._offset, metrics.horizontalAdvance(self._display_text) + self.TEXT_GAP)
+        self._scrolling = metrics.horizontalAdvance(self._display_text) > self.content_width()
+        self._sync_timer()
+        self.update()
+
+    def _sync_timer(self):
+        if self._scrolling and self.isVisible():
+            self._timer.start()
+        else:
+            self._timer.stop()
+            self._offset = 0
+
+    def _advance(self):
+        distance = self.fontMetrics().horizontalAdvance(self._display_text) + self.TEXT_GAP
+        if distance <= 0:
+            return
+        self._offset = (self._offset + 1) % distance
+        self.update()
+
+
 class MiniNewsPanel(QWidget):
     MAX_ITEMS = 50
     EXPANDED_ITEMS = 4
     ROW_HEIGHT = 93
-    SUMMARY_LIMIT = 96
+    HISTORY_SUMMARY_LIMIT = 96
+    IDLE_HEIGHT = 44
 
     open_full_requested = Signal()
-    disable_requested = Signal()
     visibility_changed = Signal(bool)
 
     def __init__(self, parent=None):
@@ -37,10 +141,12 @@ class MiniNewsPanel(QWidget):
         self._pinned = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 8, 10, 10)
+        root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(5)
 
-        header = QHBoxLayout()
+        self.header_widget = QWidget(self)
+        header = QHBoxLayout(self.header_widget)
+        header.setContentsMargins(2, 0, 2, 0)
         header.setSpacing(6)
         self.title_label = QLabel("实时资讯")
         self.title_label.setObjectName("miniNewsTitle")
@@ -53,12 +159,11 @@ class MiniNewsPanel(QWidget):
         self.expand_button.setObjectName("miniNewsButton")
         self.expand_button.clicked.connect(self.open_full_requested.emit)
         header.addWidget(self.expand_button)
-        self.close_button = QPushButton("×")
-        self.close_button.setObjectName("miniNewsClose")
-        self.close_button.setToolTip("关闭迷你资讯")
-        self.close_button.clicked.connect(self.disable_requested.emit)
-        header.addWidget(self.close_button)
-        root.addLayout(header)
+        root.addWidget(self.header_widget)
+
+        self.marquee = MarqueeNewsLabel(self)
+        self.marquee.activated.connect(self.open_full_requested.emit)
+        root.addWidget(self.marquee)
 
         self.list_widget = QListWidget(self)
         self.list_widget.setObjectName("miniNewsList")
@@ -79,8 +184,8 @@ class MiniNewsPanel(QWidget):
             QScrollBar::handle:vertical { background: rgba(190,198,210,105); min-height: 24px; border-radius: 1px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; background: transparent; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-            QPushButton#miniNewsButton, QPushButton#miniNewsClose { color: #d9dee8; background: rgba(255,255,255,18); border: 0; padding: 3px 7px; }
-            QPushButton#miniNewsButton:hover, QPushButton#miniNewsClose:hover { background: rgba(255,255,255,40); }
+            QPushButton#miniNewsButton { color: #d9dee8; background: rgba(255,255,255,18); border: 0; padding: 3px 7px; }
+            QPushButton#miniNewsButton:hover { background: rgba(255,255,255,40); }
         """)
         self._update_height()
 
@@ -92,6 +197,7 @@ class MiniNewsPanel(QWidget):
         font_size = max(9, min(14, int(config.get("mini_font_size", 10))))
         self.setFixedWidth(width)
         self.setFont(QFont("Microsoft YaHei", font_size))
+        self.marquee.refresh_layout()
         pinned = bool(config.get("mini_pinned", True))
         if self._pinned != pinned:
             geometry = self.geometry()
@@ -110,6 +216,9 @@ class MiniNewsPanel(QWidget):
         if important_only:
             rows = [item for item in rows if item.get("important")]
         self._items = rows[:self.MAX_ITEMS]
+        latest = self._items[0] if self._items else None
+        self.marquee.set_source_text(self._marquee_text(latest) if latest else "暂无符合条件的消息")
+        self.marquee.set_text_color("#ff665e" if latest and latest.get("important") else "#eef1f5")
         self.list_widget.clear()
         for row in self._items:
             item = QListWidgetItem(self._item_text(row))
@@ -196,14 +305,23 @@ class MiniNewsPanel(QWidget):
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setPen(QColor(255, 255, 255, 32))
         painter.setBrush(QColor(20, 24, 31, self._background_alpha))
-        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 6, 6)
+        radius = 20 if not self._expanded else 7
+        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), radius, radius)
         super().paintEvent(event)
 
     def _update_height(self):
-        count = self.EXPANDED_ITEMS if self._expanded else self._collapsed_items
-        available = max(1, min(count, max(1, self.list_widget.count())))
+        if not self._expanded:
+            self.header_widget.hide()
+            self.list_widget.hide()
+            self.marquee.show()
+            self.setFixedHeight(self.IDLE_HEIGHT)
+            return
+        self.marquee.hide()
+        self.header_widget.show()
+        self.list_widget.show()
+        available = max(1, min(self.EXPANDED_ITEMS, max(1, self.list_widget.count())))
         self.list_widget.setFixedHeight(available * self.ROW_HEIGHT + 2)
-        self.setFixedHeight(self.list_widget.height() + 50)
+        self.setFixedHeight(self.list_widget.height() + 46)
 
     def _latest_time(self):
         if not self._items:
@@ -228,8 +346,23 @@ class MiniNewsPanel(QWidget):
                 break
         first = f"{time_text}  {title}" if time_text else title
         if summary and summary != title:
-            excerpt = summary[:MiniNewsPanel.SUMMARY_LIMIT].rstrip()
-            if len(summary) > MiniNewsPanel.SUMMARY_LIMIT:
+            excerpt = summary[:MiniNewsPanel.HISTORY_SUMMARY_LIMIT].rstrip()
+            if len(summary) > MiniNewsPanel.HISTORY_SUMMARY_LIMIT:
                 excerpt += "…"
             return first + "\n" + excerpt
         return first
+
+    @staticmethod
+    def _marquee_text(item):
+        if not isinstance(item, dict):
+            return ""
+        raw = str(item.get("published_at") or "")
+        time_text = raw[11:16] if len(raw) >= 16 else raw[-5:]
+        title = " ".join(str(item.get("title") or "财经快讯").split())
+        summary = " ".join(str(item.get("summary") or "").split())
+        for prefix in (f"【{title}】", title):
+            if summary.startswith(prefix):
+                summary = summary[len(prefix):].lstrip(" ：:，,")
+                break
+        parts = [part for part in (time_text, title, summary if summary != title else "") if part]
+        return "  ·  ".join(parts)
