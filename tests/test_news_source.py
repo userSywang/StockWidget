@@ -51,7 +51,7 @@ class NewsSourceTests(unittest.TestCase):
         self.assertEqual(config["mini_items"], 1)
         self.assertEqual(config["mini_opacity"], 20)
         self.assertEqual(config["mini_width"], 1280)
-        self.assertEqual(config["mini_font_size"], 14)
+        self.assertEqual(config["mini_font_size"], 20)
         self.assertFalse(config["mini_pinned"])
 
     def test_parse_sina_payload_normalizes_timeline_message(self):

@@ -52,7 +52,7 @@ def normalize_news_alert_config(value):
         "mini_items": 1,
         "mini_opacity": bounded_int("mini_opacity", 75, 20, 100),
         "mini_width": bounded_int("mini_width", 840, 420, 1280),
-        "mini_font_size": bounded_int("mini_font_size", 10, 9, 14),
+        "mini_font_size": bounded_int("mini_font_size", 10, 9, 20),
         "mini_pinned": bool(value.get("mini_pinned", False)),
     }
 

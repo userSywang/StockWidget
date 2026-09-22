@@ -1423,6 +1423,19 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertTrue(dlg.spin_news_mini_opacity.isEnabled())
         dlg.close()
 
+    def test_mini_news_font_control_allows_readable_large_text(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+
+        self.assertEqual(dlg.spin_news_mini_font.maximum(), 20)
+        self.assertEqual(dlg.lbl_news_mini_font.text(), "迷你字号")
+        dlg.chk_news_mini_enabled.setChecked(True)
+        dlg.spin_news_mini_font.setValue(18)
+        dlg._on_news_alert_config_changed()
+
+        self.assertEqual(win.news_alert_config["mini_font_size"], 18)
+        dlg.close()
+
     def test_news_alert_controls_fit_inside_data_source_page(self):
         win = FakeWindow()
         dlg = SettingsDialog(win, None)

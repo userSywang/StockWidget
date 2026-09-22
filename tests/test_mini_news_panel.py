@@ -63,6 +63,15 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertFalse(panel.header_widget.isVisibleTo(panel))
         panel.close()
 
+    def test_large_font_increases_ticker_and_idle_height_without_clipping(self):
+        panel = MiniNewsPanel()
+        panel.apply_config({"mini_width": 840, "mini_font_size": 18})
+
+        self.assertEqual(panel.font().pointSize(), 18)
+        self.assertGreaterEqual(panel.ticker.height(), panel.fontMetrics().height() + 6)
+        self.assertEqual(panel.height(), panel.ticker.height() + 16)
+        panel.close()
+
     def test_important_filter_uses_only_marked_rows(self):
         panel = MiniNewsPanel()
         panel.set_items([news_item(1), news_item(2, important=True)], important_only=True)

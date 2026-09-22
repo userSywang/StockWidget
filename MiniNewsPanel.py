@@ -168,6 +168,9 @@ class MiniNewsPanel(QWidget):
         self._expanded = False
         self._drag_offset = None
         self._pinned = None
+        self._idle_height = self.IDLE_HEIGHT
+        self._row_height = self.ROW_HEIGHT
+        self._expanded_header_height = 46
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
@@ -230,9 +233,19 @@ class MiniNewsPanel(QWidget):
         opacity = max(20, min(100, int(config.get("mini_opacity", 75))))
         self._background_alpha = round(255 * opacity / 100)
         width = max(420, min(1280, int(config.get("mini_width", 840))))
-        font_size = max(9, min(14, int(config.get("mini_font_size", 10))))
+        font_size = max(9, min(20, int(config.get("mini_font_size", 10))))
+        font = QFont("Microsoft YaHei", font_size, QFont.Medium)
         self.setFixedWidth(width)
-        self.setFont(QFont("Microsoft YaHei", font_size))
+        self.setFont(font)
+        self.ticker.setFont(font)
+        self.list_widget.setFont(font)
+        metrics = self.fontMetrics()
+        self.ticker.setFixedHeight(max(28, metrics.height() + 8))
+        self._idle_height = self.ticker.height() + 16
+        self._row_height = max(self.ROW_HEIGHT, metrics.lineSpacing() * 3 + 18)
+        self._expanded_header_height = max(46, metrics.height() + 24)
+        for index in range(self.list_widget.count()):
+            self.list_widget.item(index).setSizeHint(QSize(0, self._row_height))
         self.ticker.update()
         pinned = bool(config.get("mini_pinned", False))
         self.pin_button.blockSignals(True)
@@ -267,14 +280,14 @@ class MiniNewsPanel(QWidget):
         self.list_widget.clear()
         for row in self._items:
             item = QListWidgetItem(self._item_text(row))
-            item.setSizeHint(QSize(0, self.ROW_HEIGHT))
+            item.setSizeHint(QSize(0, self._row_height))
             item.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
             item.setForeground(QColor("#ff665e" if row.get("important") else "#eef1f5"))
             item.setToolTip(str(row.get("title") or ""))
             self.list_widget.addItem(item)
         if not self._items:
             empty = QListWidgetItem("暂无符合条件的消息")
-            empty.setSizeHint(QSize(0, self.ROW_HEIGHT))
+            empty.setSizeHint(QSize(0, self._row_height))
             empty.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
             empty.setForeground(QColor("#aeb7c6"))
             self.list_widget.addItem(empty)
@@ -359,14 +372,14 @@ class MiniNewsPanel(QWidget):
             self.header_widget.hide()
             self.list_widget.hide()
             self.ticker.show()
-            self.setFixedHeight(self.IDLE_HEIGHT)
+            self.setFixedHeight(self._idle_height)
             return
         self.ticker.hide()
         self.header_widget.show()
         self.list_widget.show()
         available = max(1, min(self.EXPANDED_ITEMS, max(1, self.list_widget.count())))
-        self.list_widget.setFixedHeight(available * self.ROW_HEIGHT + 2)
-        self.setFixedHeight(self.list_widget.height() + 46)
+        self.list_widget.setFixedHeight(available * self._row_height + 2)
+        self.setFixedHeight(self.list_widget.height() + self._expanded_header_height)
 
     def _latest_time(self):
         if not self._items:
