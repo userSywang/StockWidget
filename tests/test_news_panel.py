@@ -106,6 +106,19 @@ class NewsPanelTests(unittest.TestCase):
         self.assertFalse(panel.isMinimized())
         panel.close()
 
+    def test_auto_show_does_not_raise_or_activate_window(self):
+        panel = NewsPanel()
+        calls = []
+        panel.show = lambda: calls.append("show")
+        panel.raise_ = lambda: calls.append("raise")
+        panel.activateWindow = lambda: calls.append("activate")
+
+        panel.show_news(auto_show=True)
+
+        self.assertEqual(calls, ["show"])
+        self.assertTrue(panel.testAttribute(Qt.WA_ShowWithoutActivating))
+        panel.close()
+
     def test_setting_same_importance_filter_does_not_rebuild(self):
         panel = NewsPanel()
         rebuilds = []

@@ -80,6 +80,15 @@ class MiniNewsPanelTests(unittest.TestCase):
         self.assertEqual(panel.list_widget.count(), 1)
         panel.close()
 
+    def test_identical_poll_result_does_not_rebuild_mini_panel(self):
+        panel = MiniNewsPanel()
+        rows = [news_item(1), news_item(2)]
+
+        self.assertTrue(panel.set_items(rows))
+        self.assertFalse(panel.set_items(rows))
+        self.assertTrue(panel.set_items([news_item(1), news_item(3)]))
+        panel.close()
+
     def test_mini_list_is_bounded(self):
         panel = MiniNewsPanel()
         panel.set_items([news_item(i) for i in range(80)])

@@ -163,6 +163,8 @@ class MiniNewsPanel(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         self._items = []
+        self._items_rendered = False
+        self._important_only = False
         self._collapsed_items = 1
         self._background_alpha = 190
         self._expanded = False
@@ -265,9 +267,15 @@ class MiniNewsPanel(QWidget):
     def set_items(self, items, important_only=False):
         rows = [dict(item) for item in items or [] if isinstance(item, dict) and item.get("id")]
         rows.sort(key=lambda item: int(item.get("timestamp") or 0), reverse=True)
+        important_only = bool(important_only)
         if important_only:
             rows = [item for item in rows if item.get("important")]
-        self._items = rows[:self.MAX_ITEMS]
+        rows = rows[:self.MAX_ITEMS]
+        if self._items_rendered and rows == self._items and important_only == self._important_only:
+            return False
+        self._items = rows
+        self._important_only = important_only
+        self._items_rendered = True
         ticker_rows = self._items or [None]
         self.ticker.set_messages([
             {
@@ -294,6 +302,7 @@ class MiniNewsPanel(QWidget):
         self.list_widget.scrollToTop()
         self.status_label.setText(self._latest_time())
         self._update_height()
+        return True
 
     def items(self):
         return list(self._items)

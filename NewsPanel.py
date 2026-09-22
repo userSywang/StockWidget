@@ -201,6 +201,7 @@ class NewsPanel(QWidget):
     def show_news(self, auto_show=False, anchor=None):
         if auto_show and self._muted_today:
             return
+        self.setAttribute(Qt.WA_ShowWithoutActivating, bool(auto_show))
         if not self.isVisible():
             target_screen = None
             if anchor is not None:
@@ -212,8 +213,6 @@ class NewsPanel(QWidget):
         if not auto_show:
             self._activate_manual()
             QTimer.singleShot(0, self._activate_manual)
-        else:
-            self.raise_()
 
     def _activate_manual(self):
         if not self.isVisible():
