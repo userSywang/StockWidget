@@ -966,6 +966,12 @@
    "name": "鹏华中证银行ETF",
    "category": "沪基"
   },
+  "sh512740": {
+   "code": "sh512740",
+   "market": "sh",
+   "name": "广发中证汽车零部件主题ETF",
+   "category": "沪基"
+  },
   "sh512750": {
    "code": "sh512750",
    "market": "sh",
@@ -1371,7 +1377,7 @@
   "sh513690": {
    "code": "sh513690",
    "market": "sh",
-   "name": "博时恒生高股息ETF",
+   "name": "博时港股红利ETF",
    "category": "沪基"
   },
   "sh513700": {
@@ -1491,7 +1497,7 @@
   "sh513950": {
    "code": "sh513950",
    "market": "sh",
-   "name": "富国恒生港股通高股息低波动ETF(QDII)",
+   "name": "富国恒生港股通红利低波动ETF(QDII)",
    "category": "沪基"
   },
   "sh513970": {
@@ -1728,6 +1734,12 @@
    "name": "富国中证大数据产业ETF",
    "category": "沪基"
   },
+  "sh515440": {
+   "code": "sh515440",
+   "market": "sh",
+   "name": "南方中证A股ETF",
+   "category": "沪基"
+  },
   "sh515450": {
    "code": "sh515450",
    "market": "sh",
@@ -1920,6 +1932,12 @@
    "name": "博时智能消费ETF",
    "category": "沪基"
   },
+  "sh515940": {
+   "code": "sh515940",
+   "market": "sh",
+   "name": "南方恒生A股电网设备ETF",
+   "category": "沪基"
+  },
   "sh515950": {
    "code": "sh515950",
    "market": "sh",
@@ -1966,6 +1984,12 @@
    "code": "sh516020",
    "market": "sh",
    "name": "华宝化工ETF",
+   "category": "沪基"
+  },
+  "sh516040": {
+   "code": "sh516040",
+   "market": "sh",
+   "name": "华夏沪深300自由现金流ETF",
    "category": "沪基"
   },
   "sh516050": {
@@ -2502,6 +2526,12 @@
    "name": "嘉实中证沪港深互联网ETF",
    "category": "沪基"
   },
+  "sh517230": {
+   "code": "sh517230",
+   "market": "sh",
+   "name": "永赢中证沪港深云计算产业ETF",
+   "category": "沪基"
+  },
   "sh517300": {
    "code": "sh517300",
    "market": "sh",
@@ -2679,7 +2709,7 @@
   "sh520550": {
    "code": "sh520550",
    "market": "sh",
-   "name": "招商恒生港股通高股息低波动ETF",
+   "name": "招商恒生港股通红利低波动ETF",
    "category": "沪基"
   },
   "sh520560": {
@@ -2871,7 +2901,7 @@
   "sh520890": {
    "code": "sh520890",
    "market": "sh",
-   "name": "华泰柏瑞恒生港股通高股息低波动ETF",
+   "name": "华泰柏瑞恒生港股通红利低波动ETF",
    "category": "沪基"
   },
   "sh520900": {
@@ -2956,6 +2986,12 @@
    "code": "sh526050",
    "market": "sh",
    "name": "招商中证港股通信息技术综合ETF",
+   "category": "沪基"
+  },
+  "sh526060": {
+   "code": "sh526060",
+   "market": "sh",
+   "name": "华泰柏瑞中证港股通信息技术综合ETF",
    "category": "沪基"
   },
   "sh526070": {
@@ -3816,6 +3852,12 @@
    "name": "鑫元中证畜牧养殖产业ETF",
    "category": "沪基"
   },
+  "sh561410": {
+   "code": "sh561410",
+   "market": "sh",
+   "name": "工银瑞信中证光伏产业ETF",
+   "category": "沪基"
+  },
   "sh561420": {
    "code": "sh561420",
    "market": "sh",
@@ -3864,6 +3906,12 @@
    "name": "华泰柏瑞中证中药ETF",
    "category": "沪基"
   },
+  "sh561530": {
+   "code": "sh561530",
+   "market": "sh",
+   "name": "银华中证银行ETF",
+   "category": "沪基"
+  },
   "sh561550": {
    "code": "sh561550",
    "market": "sh",
@@ -3900,6 +3948,12 @@
    "name": "平安中证消费电子主题ETF",
    "category": "沪基"
   },
+  "sh561610": {
+   "code": "sh561610",
+   "market": "sh",
+   "name": "鑫元中证绿色电力ETF",
+   "category": "沪基"
+  },
   "sh561620": {
    "code": "sh561620",
    "market": "sh",
@@ -3924,10 +3978,22 @@
    "name": "平安中证A500红利低波动ETF",
    "category": "沪基"
   },
+  "sh561690": {
+   "code": "sh561690",
+   "market": "sh",
+   "name": "农银沪深300质量ETF",
+   "category": "沪基"
+  },
   "sh561700": {
    "code": "sh561700",
    "market": "sh",
    "name": "博时中证全指电力公用事业ETF",
+   "category": "沪基"
+  },
+  "sh561730": {
+   "code": "sh561730",
+   "market": "sh",
+   "name": "华夏中证A股ETF",
    "category": "沪基"
   },
   "sh561750": {
@@ -3970,6 +4036,12 @@
    "code": "sh561810",
    "market": "sh",
    "name": "华泰柏瑞中证全指医疗器械ETF",
+   "category": "沪基"
+  },
+  "sh561830": {
+   "code": "sh561830",
+   "market": "sh",
+   "name": "国泰海通中证有色金属矿业主题ETF",
    "category": "沪基"
   },
   "sh561870": {
@@ -4078,6 +4150,30 @@
    "code": "sh562080",
    "market": "sh",
    "name": "华宝沪深300自由现金流ETF",
+   "category": "沪基"
+  },
+  "sh562110": {
+   "code": "sh562110",
+   "market": "sh",
+   "name": "东方红中证云计算50ETF",
+   "category": "沪基"
+  },
+  "sh562150": {
+   "code": "sh562150",
+   "market": "sh",
+   "name": "鹏华中证全指红利质量ETF",
+   "category": "沪基"
+  },
+  "sh562170": {
+   "code": "sh562170",
+   "market": "sh",
+   "name": "易方达沪深300自由现金流ETF",
+   "category": "沪基"
+  },
+  "sh562180": {
+   "code": "sh562180",
+   "market": "sh",
+   "name": "招商中证A500红利低波动ETF",
    "category": "沪基"
   },
   "sh562300": {
@@ -5376,10 +5472,28 @@
    "name": "永赢上证科创板芯片设计主题ETF",
    "category": "沪基"
   },
+  "sh589430": {
+   "code": "sh589430",
+   "market": "sh",
+   "name": "华宝上证科创板芯片设计主题ETF",
+   "category": "沪基"
+  },
+  "sh589460": {
+   "code": "sh589460",
+   "market": "sh",
+   "name": "华宝上证科创板200ETF",
+   "category": "沪基"
+  },
   "sh589500": {
    "code": "sh589500",
    "market": "sh",
    "name": "工银瑞信上证科创板综合价格ETF",
+   "category": "沪基"
+  },
+  "sh589510": {
+   "code": "sh589510",
+   "market": "sh",
+   "name": "易方达上证科创板新材料ETF",
    "category": "沪基"
   },
   "sh589520": {
@@ -6249,7 +6363,7 @@
   "sh600165": {
    "code": "sh600165",
    "market": "sh",
-   "name": "ST宁科",
+   "name": "宁科生物",
    "category": "沪A"
   },
   "sh600166": {
@@ -7809,7 +7923,7 @@
   "sh600525": {
    "code": "sh600525",
    "market": "sh",
-   "name": "ST长园",
+   "name": "长园集团",
    "category": "沪A"
   },
   "sh600526": {
@@ -10206,6 +10320,12 @@
    "name": "福元医药",
    "category": "沪A"
   },
+  "sh601091": {
+   "code": "sh601091",
+   "market": "sh",
+   "name": "沈鼓集团",
+   "category": "沪A"
+  },
   "sh601096": {
    "code": "sh601096",
    "market": "sh",
@@ -10294,6 +10414,12 @@
    "code": "sh601121",
    "market": "sh",
    "name": "宝地矿业",
+   "category": "沪A"
+  },
+  "sh601123": {
+   "code": "sh601123",
+   "market": "sh",
+   "name": "马矿股份",
    "category": "沪A"
   },
   "sh601126": {
@@ -13366,6 +13492,12 @@
    "code": "sh603444",
    "market": "sh",
    "name": "吉比特",
+   "category": "沪A"
+  },
+  "sh603448": {
+   "code": "sh603448",
+   "market": "sh",
+   "name": "天博智能",
    "category": "沪A"
   },
   "sh603456": {
@@ -18567,7 +18699,7 @@
   "sh688607": {
    "code": "sh688607",
    "market": "sh",
-   "name": "康众医疗",
+   "name": "康众科技",
    "category": "沪A"
   },
   "sh688608": {
@@ -19296,6 +19428,12 @@
    "name": "瑞可达",
    "category": "沪A"
   },
+  "sh688801": {
+   "code": "sh688801",
+   "market": "sh",
+   "name": "燧原科技",
+   "category": "沪A"
+  },
   "sh688802": {
    "code": "sh688802",
    "market": "sh",
@@ -19384,6 +19522,24 @@
    "code": "sh688828",
    "market": "sh",
    "name": "国仪公司",
+   "category": "沪A"
+  },
+  "sh688835": {
+   "code": "sh688835",
+   "market": "sh",
+   "name": "高凯技术",
+   "category": "沪A"
+  },
+  "sh688836": {
+   "code": "sh688836",
+   "market": "sh",
+   "name": "宇树科技",
+   "category": "沪A"
+  },
+  "sh688837": {
+   "code": "sh688837",
+   "market": "sh",
+   "name": "信诺维",
    "category": "沪A"
   },
   "sh688981": {
@@ -20763,7 +20919,7 @@
   "sz000711": {
    "code": "sz000711",
    "market": "sz",
-   "name": "ST京蓝",
+   "name": "京蓝科技",
    "category": "深A"
   },
   "sz000712": {
@@ -22923,7 +23079,7 @@
   "sz002058": {
    "code": "sz002058",
    "market": "sz",
-   "name": "威尔泰",
+   "name": "紫竹高科",
    "category": "深A"
   },
   "sz002059": {
@@ -25881,7 +26037,7 @@
   "sz002586": {
    "code": "sz002586",
    "market": "sz",
-   "name": "ST围海",
+   "name": "围海股份",
    "category": "深A"
   },
   "sz002587": {
@@ -26739,7 +26895,7 @@
   "sz002743": {
    "code": "sz002743",
    "market": "sz",
-   "name": "富煌钢构",
+   "name": "ST富煌",
    "category": "深A"
   },
   "sz002745": {
@@ -28362,16 +28518,136 @@
    "name": "中国广核",
    "category": "深A"
   },
+  "sz158000": {
+   "code": "sz158000",
+   "market": "sz",
+   "name": "鹏华中证港股通内地金融ETF",
+   "category": "深基"
+  },
+  "sz158001": {
+   "code": "sz158001",
+   "market": "sz",
+   "name": "嘉实国证价值100ETF",
+   "category": "深基"
+  },
+  "sz158003": {
+   "code": "sz158003",
+   "market": "sz",
+   "name": "嘉实中证港股通医疗主题ETF",
+   "category": "深基"
+  },
+  "sz158005": {
+   "code": "sz158005",
+   "market": "sz",
+   "name": "博时中证工程机械主题ETF",
+   "category": "深基"
+  },
   "sz158006": {
    "code": "sz158006",
    "market": "sz",
    "name": "博时中证细分化工产业主题ETF",
    "category": "深基"
   },
+  "sz158008": {
+   "code": "sz158008",
+   "market": "sz",
+   "name": "华夏国证储能电池ETF",
+   "category": "深基"
+  },
   "sz158009": {
    "code": "sz158009",
    "market": "sz",
    "name": "南方国证航天航空行业ETF",
+   "category": "深基"
+  },
+  "sz158010": {
+   "code": "sz158010",
+   "market": "sz",
+   "name": "嘉实中证医疗ETF",
+   "category": "深基"
+  },
+  "sz158011": {
+   "code": "sz158011",
+   "market": "sz",
+   "name": "国泰创业板软件ETF",
+   "category": "深基"
+  },
+  "sz158012": {
+   "code": "sz158012",
+   "market": "sz",
+   "name": "南方中证云计算50ETF",
+   "category": "深基"
+  },
+  "sz158013": {
+   "code": "sz158013",
+   "market": "sz",
+   "name": "易方达国证航天航空行业ETF",
+   "category": "深基"
+  },
+  "sz158017": {
+   "code": "sz158017",
+   "market": "sz",
+   "name": "易方达中证细分化工产业主题ETF",
+   "category": "深基"
+  },
+  "sz158019": {
+   "code": "sz158019",
+   "market": "sz",
+   "name": "永赢中证电池主题ETF",
+   "category": "深基"
+  },
+  "sz158022": {
+   "code": "sz158022",
+   "market": "sz",
+   "name": "国联创业板综合增强策略ETF",
+   "category": "深基"
+  },
+  "sz158023": {
+   "code": "sz158023",
+   "market": "sz",
+   "name": "万家中证800红利低波动ETF",
+   "category": "深基"
+  },
+  "sz158027": {
+   "code": "sz158027",
+   "market": "sz",
+   "name": "易方达中证工业互联网主题ETF",
+   "category": "深基"
+  },
+  "sz158028": {
+   "code": "sz158028",
+   "market": "sz",
+   "name": "招商中证稀有金属主题ETF",
+   "category": "深基"
+  },
+  "sz158032": {
+   "code": "sz158032",
+   "market": "sz",
+   "name": "景顺长城中证细分化工产业主题ETF",
+   "category": "深基"
+  },
+  "sz158038": {
+   "code": "sz158038",
+   "market": "sz",
+   "name": "富国国证粮食产业ETF",
+   "category": "深基"
+  },
+  "sz158041": {
+   "code": "sz158041",
+   "market": "sz",
+   "name": "华夏创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158050": {
+   "code": "sz158050",
+   "market": "sz",
+   "name": "易方达创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158061": {
+   "code": "sz158061",
+   "market": "sz",
+   "name": "天弘创业板算力基础设施ETF",
    "category": "深基"
   },
   "sz159001": {
@@ -28488,6 +28764,12 @@
    "name": "万家中证畜牧养殖产业ETF",
    "category": "深基"
   },
+  "sz159025": {
+   "code": "sz159025",
+   "market": "sz",
+   "name": "华安中证家电龙头ETF",
+   "category": "深基"
+  },
   "sz159026": {
    "code": "sz159026",
    "market": "sz",
@@ -28584,6 +28866,12 @@
    "name": "汇添富国证价值100ETF",
    "category": "深基"
   },
+  "sz159043": {
+   "code": "sz159043",
+   "market": "sz",
+   "name": "华安中证全指食品ETF",
+   "category": "深基"
+  },
   "sz159045": {
    "code": "sz159045",
    "market": "sz",
@@ -28623,7 +28911,7 @@
   "sz159052": {
    "code": "sz159052",
    "market": "sz",
-   "name": "嘉实国证新能源电池ETF",
+   "name": "嘉实国证储能电池ETF",
    "category": "深基"
   },
   "sz159053": {
@@ -28725,13 +29013,19 @@
   "sz159071": {
    "code": "sz159071",
    "market": "sz",
-   "name": "华宝国证新能源电池ETF",
+   "name": "华宝国证储能电池ETF",
    "category": "深基"
   },
   "sz159072": {
    "code": "sz159072",
    "market": "sz",
    "name": "景顺长城国证粮食产业ETF",
+   "category": "深基"
+  },
+  "sz159073": {
+   "code": "sz159073",
+   "market": "sz",
+   "name": "汇添富国证粮食产业ETF",
    "category": "深基"
   },
   "sz159075": {
@@ -28762,6 +29056,12 @@
    "code": "sz159079",
    "market": "sz",
    "name": "兴全国证价值100ETF",
+   "category": "深基"
+  },
+  "sz159082": {
+   "code": "sz159082",
+   "market": "sz",
+   "name": "华夏中证细分化工产业主题ETF",
    "category": "深基"
   },
   "sz159083": {
@@ -28804,6 +29104,12 @@
    "code": "sz159095",
    "market": "sz",
    "name": "银华中证云计算50ETF",
+   "category": "深基"
+  },
+  "sz159096": {
+   "code": "sz159096",
+   "market": "sz",
+   "name": "华夏国证价值100ETF",
    "category": "深基"
   },
   "sz159098": {
@@ -29325,7 +29631,7 @@
   "sz159193": {
    "code": "sz159193",
    "market": "sz",
-   "name": "银华国证新能源电池ETF",
+   "name": "银华国证储能电池ETF",
    "category": "深基"
   },
   "sz159195": {
@@ -29907,7 +30213,7 @@
   "sz159305": {
    "code": "sz159305",
    "market": "sz",
-   "name": "广发国证新能源电池ETF",
+   "name": "广发国证储能电池ETF",
    "category": "深基"
   },
   "sz159306": {
@@ -30579,7 +30885,7 @@
   "sz159545": {
    "code": "sz159545",
    "market": "sz",
-   "name": "易方达恒生港股通高股息低波动ETF",
+   "name": "易方达恒生港股通红利低波动ETF",
    "category": "深基"
   },
   "sz159546": {
@@ -30687,7 +30993,7 @@
   "sz159566": {
    "code": "sz159566",
    "market": "sz",
-   "name": "易方达国证新能源电池ETF",
+   "name": "易方达国证储能电池ETF",
    "category": "深基"
   },
   "sz159567": {
@@ -31047,7 +31353,7 @@
   "sz159638": {
    "code": "sz159638",
    "market": "sz",
-   "name": "嘉实中证高端装备细分50ETF",
+   "name": "嘉实中证智选航空航天科技ETF",
    "category": "深基"
   },
   "sz159639": {
@@ -31467,7 +31773,7 @@
   "sz159726": {
    "code": "sz159726",
    "market": "sz",
-   "name": "华夏恒生港股通中国内地企业高股息率ETF",
+   "name": "华夏恒生港股通中国内地企业红利ETF",
    "category": "深基"
   },
   "sz159728": {
@@ -35241,7 +35547,7 @@
   "sz300472": {
    "code": "sz300472",
    "market": "sz",
-   "name": "*ST新元",
+   "name": "ST新元",
    "category": "深A"
   },
   "sz300473": {
@@ -35757,7 +36063,7 @@
   "sz300562": {
    "code": "sz300562",
    "market": "sz",
-   "name": "乐心医疗",
+   "name": "乐心股份",
    "category": "深A"
   },
   "sz300563": {
@@ -38907,7 +39213,7 @@
   "sz301117": {
    "code": "sz301117",
    "market": "sz",
-   "name": "佳缘科技",
+   "name": "ST佳缘",
    "category": "深A"
   },
   "sz301118": {
@@ -40659,7 +40965,7 @@
   "sz301560": {
    "code": "sz301560",
    "market": "sz",
-   "name": "众捷汽车",
+   "name": "众捷股份",
    "category": "深A"
   },
   "sz301563": {
@@ -40950,6 +41256,12 @@
    "name": "南网数字",
    "category": "深A"
   },
+  "sz301655": {
+   "code": "sz301655",
+   "market": "sz",
+   "name": "绿控传动",
+   "category": "深A"
+  },
   "sz301656": {
    "code": "sz301656",
    "market": "sz",
@@ -41034,10 +41346,34 @@
    "name": "新广益",
    "category": "深A"
   },
+  "sz301688": {
+   "code": "sz301688",
+   "market": "sz",
+   "name": "格林生物",
+   "category": "深A"
+  },
+  "sz301689": {
+   "code": "sz301689",
+   "market": "sz",
+   "name": "电科思仪",
+   "category": "深A"
+  },
   "sz301696": {
    "code": "sz301696",
    "market": "sz",
    "name": "三瑞智能",
+   "category": "深A"
+  },
+  "sz301697": {
+   "code": "sz301697",
+   "market": "sz",
+   "name": "贝特利",
+   "category": "深A"
+  },
+  "sz301699": {
+   "code": "sz301699",
+   "market": "sz",
+   "name": "洛轴股份",
    "category": "深A"
   },
   "sz301707": {
@@ -41059,5 +41395,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-08-18 16:25:45"
+ "updated_at": "2026-09-21 14:29:01"
 }
