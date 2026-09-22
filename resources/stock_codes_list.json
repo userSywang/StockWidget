@@ -28620,6 +28620,12 @@
    "name": "招商中证稀有金属主题ETF",
    "category": "深基"
   },
+  "sz158031": {
+   "code": "sz158031",
+   "market": "sz",
+   "name": "易方达创业板人工智能ETF",
+   "category": "深基"
+  },
   "sz158032": {
    "code": "sz158032",
    "market": "sz",
@@ -28636,6 +28642,12 @@
    "code": "sz158041",
    "market": "sz",
    "name": "华夏创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158049": {
+   "code": "sz158049",
+   "market": "sz",
+   "name": "广发创业板算力基础设施ETF",
    "category": "深基"
   },
   "sz158050": {
@@ -41340,6 +41352,12 @@
    "name": "慧谷新材",
    "category": "深A"
   },
+  "sz301686": {
+   "code": "sz301686",
+   "market": "sz",
+   "name": "中塑股份",
+   "category": "深A"
+  },
   "sz301687": {
    "code": "sz301687",
    "market": "sz",
@@ -41395,5 +41413,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-09-21 14:29:01"
+ "updated_at": "2026-09-22 12:48:20"
 }
