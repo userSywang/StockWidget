@@ -834,6 +834,12 @@
    "name": "华夏中证电池主题ETF",
    "category": "沪基"
   },
+  "sh512470": {
+   "code": "sh512470",
+   "market": "sh",
+   "name": "广发中证工业有色金属主题ETF",
+   "category": "沪基"
+  },
   "sh512480": {
    "code": "sh512480",
    "market": "sh",
@@ -1750,6 +1756,12 @@
    "code": "sh515460",
    "market": "sh",
    "name": "南方中证全指红利质量ETF",
+   "category": "沪基"
+  },
+  "sh515470": {
+   "code": "sh515470",
+   "market": "sh",
+   "name": "南方中证人工智能主题ETF",
    "category": "沪基"
   },
   "sh515480": {
@@ -5482,6 +5494,12 @@
    "code": "sh589460",
    "market": "sh",
    "name": "华宝上证科创板200ETF",
+   "category": "沪基"
+  },
+  "sh589480": {
+   "code": "sh589480",
+   "market": "sh",
+   "name": "嘉实上证科创板芯片设计主题ETF",
    "category": "沪基"
   },
   "sh589500": {
@@ -28650,6 +28668,12 @@
    "name": "华夏创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158042": {
+   "code": "sz158042",
+   "market": "sz",
+   "name": "富国恒生科技ETF(QDII)",
+   "category": "深基"
+  },
   "sz158049": {
    "code": "sz158049",
    "market": "sz",
@@ -28668,6 +28692,12 @@
    "name": "大成创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158056": {
+   "code": "sz158056",
+   "market": "sz",
+   "name": "嘉实创业板算力基础设施ETF",
+   "category": "深基"
+  },
   "sz158057": {
    "code": "sz158057",
    "market": "sz",
@@ -28678,6 +28708,12 @@
    "code": "sz158061",
    "market": "sz",
    "name": "天弘创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158063": {
+   "code": "sz158063",
+   "market": "sz",
+   "name": "南方创业板算力基础设施ETF",
    "category": "深基"
   },
   "sz159001": {
@@ -41431,5 +41467,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-09-23 12:58:21"
+ "updated_at": "2026-09-24 12:52:20"
 }
