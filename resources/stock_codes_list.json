@@ -4242,6 +4242,12 @@
    "name": "银华中证中药ETF",
    "category": "沪基"
   },
+  "sh562450": {
+   "code": "sh562450",
+   "market": "sh",
+   "name": "博时中证有色金属矿业主题ETF",
+   "category": "沪基"
+  },
   "sh562500": {
    "code": "sh562500",
    "market": "sh",
@@ -28626,6 +28632,12 @@
    "name": "万家中证800红利低波动ETF",
    "category": "深基"
   },
+  "sz158025": {
+   "code": "sz158025",
+   "market": "sz",
+   "name": "鹏华创业板成长ETF",
+   "category": "深基"
+  },
   "sz158026": {
    "code": "sz158026",
    "market": "sz",
@@ -33543,7 +33555,7 @@
   "sz300096": {
    "code": "sz300096",
    "market": "sz",
-   "name": "ST易联众",
+   "name": "易联众",
    "category": "深A"
   },
   "sz300097": {
@@ -41467,5 +41479,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-09-25 12:55:38"
+ "updated_at": "2026-09-28 15:49:37"
 }
