@@ -28674,6 +28674,12 @@
    "name": "富国国证粮食产业ETF",
    "category": "深基"
   },
+  "sz158039": {
+   "code": "sz158039",
+   "market": "sz",
+   "name": "广发标普港股通低波红利ETF",
+   "category": "深基"
+  },
   "sz158041": {
    "code": "sz158041",
    "market": "sz",
@@ -34185,7 +34191,7 @@
   "sz300211": {
    "code": "sz300211",
    "market": "sz",
-   "name": "*ST亿通",
+   "name": "亿通科技",
    "category": "深A"
   },
   "sz300212": {
@@ -40407,7 +40413,7 @@
   "sz301339": {
    "code": "sz301339",
    "market": "sz",
-   "name": "通行宝",
+   "name": "苏交数智",
    "category": "深A"
   },
   "sz301345": {
@@ -41466,6 +41472,12 @@
    "name": "展芯股份",
    "category": "深A"
   },
+  "sz301716": {
+   "code": "sz301716",
+   "market": "sz",
+   "name": "鸿富诚",
+   "category": "深A"
+  },
   "sz301717": {
    "code": "sz301717",
    "market": "sz",
@@ -41479,5 +41491,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-09-28 15:49:37"
+ "updated_at": "2026-09-29 14:17:22"
 }
