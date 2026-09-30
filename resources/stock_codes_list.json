@@ -1776,6 +1776,12 @@
    "name": "泰康中证500ETF",
    "category": "沪基"
   },
+  "sh515540": {
+   "code": "sh515540",
+   "market": "sh",
+   "name": "浦银中证工业有色金属主题ETF",
+   "category": "沪基"
+  },
   "sh515550": {
    "code": "sh515550",
    "market": "sh",
@@ -3978,6 +3984,12 @@
    "name": "华泰柏瑞中证全指红利质量ETF",
    "category": "沪基"
   },
+  "sh561650": {
+   "code": "sh561650",
+   "market": "sh",
+   "name": "汇添富中证全指红利质量ETF",
+   "category": "沪基"
+  },
   "sh561660": {
    "code": "sh561660",
    "market": "sh",
@@ -4186,6 +4198,12 @@
    "code": "sh562180",
    "market": "sh",
    "name": "招商中证A500红利低波动ETF",
+   "category": "沪基"
+  },
+  "sh562200": {
+   "code": "sh562200",
+   "market": "sh",
+   "name": "嘉实中证全指红利质量ETF",
    "category": "沪基"
   },
   "sh562300": {
@@ -5506,6 +5524,12 @@
    "code": "sh589480",
    "market": "sh",
    "name": "嘉实上证科创板芯片设计主题ETF",
+   "category": "沪基"
+  },
+  "sh589490": {
+   "code": "sh589490",
+   "market": "sh",
+   "name": "华夏上证科创板成长ETF",
    "category": "沪基"
   },
   "sh589500": {
@@ -7275,7 +7299,7 @@
   "sh600363": {
    "code": "sh600363",
    "market": "sh",
-   "name": "联创光电",
+   "name": "ST联光",
    "category": "沪A"
   },
   "sh600365": {
@@ -22260,6 +22284,12 @@
    "name": "永达股份",
    "category": "深A"
   },
+  "sz001246": {
+   "code": "sz001246",
+   "market": "sz",
+   "name": "力勤资源",
+   "category": "深A"
+  },
   "sz001248": {
    "code": "sz001248",
    "market": "sz",
@@ -28720,6 +28750,12 @@
    "code": "sz158057",
    "market": "sz",
    "name": "鹏华创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158059": {
+   "code": "sz158059",
+   "market": "sz",
+   "name": "富国创业板算力基础设施ETF",
    "category": "深基"
   },
   "sz158061": {
@@ -35943,7 +35979,7 @@
   "sz300527": {
    "code": "sz300527",
    "market": "sz",
-   "name": "ST应急",
+   "name": "中船应急",
    "category": "深A"
   },
   "sz300528": {
@@ -39417,7 +39453,7 @@
   "sz301139": {
    "code": "sz301139",
    "market": "sz",
-   "name": "*ST元道",
+   "name": "元道退",
    "category": "深A"
   },
   "sz301141": {
@@ -41491,5 +41527,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-09-29 14:17:22"
+ "updated_at": "2026-09-30 14:08:50"
 }
