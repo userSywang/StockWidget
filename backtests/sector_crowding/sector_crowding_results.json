@@ -93,7 +93,556 @@
         ]
       }
     },
-    "acceptance": "暂未验收（样本不足）"
+    "acceptance": "暂未验收（样本不足）",
+    "variants": {
+      "raw": {
+        "signals": 12,
+        "horizons": {
+          "20": {
+            "samples": 12,
+            "positive_rate_pct": 91.66666666666667,
+            "median_return_pct": 5.61441024946131,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 5.851053005598805,
+            "median_max_adverse_pct": -3.335182067004039,
+            "signal_dates": [
+              "2018-06-19",
+              "2018-10-11",
+              "2020-09-10",
+              "2020-12-22",
+              "2021-02-22",
+              "2021-03-24",
+              "2022-04-25",
+              "2022-09-23",
+              "2023-08-25",
+              "2023-10-30",
+              "2025-04-07",
+              "2026-07-17"
+            ]
+          },
+          "60": {
+            "samples": 11,
+            "positive_rate_pct": 54.54545454545455,
+            "median_return_pct": 0.6437989287185752,
+            "excess_positive_rate_pct": 63.63636363636363,
+            "median_excess_return_pct": 4.529914846530736,
+            "median_max_adverse_pct": -5.412207559144733,
+            "signal_dates": [
+              "2018-06-19",
+              "2018-10-11",
+              "2020-09-10",
+              "2020-12-22",
+              "2021-02-22",
+              "2021-03-24",
+              "2022-04-25",
+              "2022-09-23",
+              "2023-08-25",
+              "2023-10-30",
+              "2025-04-07"
+            ]
+          },
+          "120": {
+            "samples": 11,
+            "positive_rate_pct": 72.72727272727273,
+            "median_return_pct": 14.048103648261211,
+            "excess_positive_rate_pct": 81.81818181818181,
+            "median_excess_return_pct": 14.631299411568467,
+            "median_max_adverse_pct": -5.412207559144733,
+            "signal_dates": [
+              "2018-06-19",
+              "2018-10-11",
+              "2020-09-10",
+              "2020-12-22",
+              "2021-02-22",
+              "2021-03-24",
+              "2022-04-25",
+              "2022-09-23",
+              "2023-08-25",
+              "2023-10-30",
+              "2025-04-07"
+            ]
+          },
+          "250": {
+            "samples": 11,
+            "positive_rate_pct": 90.9090909090909,
+            "median_return_pct": 12.05191594561188,
+            "excess_positive_rate_pct": 81.81818181818181,
+            "median_excess_return_pct": 17.473195770876426,
+            "median_max_adverse_pct": -5.412207559144733,
+            "signal_dates": [
+              "2018-06-19",
+              "2018-10-11",
+              "2020-09-10",
+              "2020-12-22",
+              "2021-02-22",
+              "2021-03-24",
+              "2022-04-25",
+              "2022-09-23",
+              "2023-08-25",
+              "2023-10-30",
+              "2025-04-07"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "crowding_rise_3": {
+        "signals": 12,
+        "horizons": {
+          "20": {
+            "samples": 12,
+            "positive_rate_pct": 58.333333333333336,
+            "median_return_pct": 2.1734622188735564,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": -0.27977539472133217,
+            "median_max_adverse_pct": -3.085114842565284,
+            "signal_dates": [
+              "2018-07-03",
+              "2018-10-16",
+              "2020-09-17",
+              "2020-12-25",
+              "2021-02-25",
+              "2021-04-01",
+              "2022-05-16",
+              "2022-10-17",
+              "2023-08-30",
+              "2023-11-09",
+              "2025-04-11",
+              "2026-07-27"
+            ]
+          },
+          "60": {
+            "samples": 11,
+            "positive_rate_pct": 45.45454545454545,
+            "median_return_pct": -0.5355041404402794,
+            "excess_positive_rate_pct": 45.45454545454545,
+            "median_excess_return_pct": -2.0195623122534423,
+            "median_max_adverse_pct": -9.235660656826184,
+            "signal_dates": [
+              "2018-07-03",
+              "2018-10-16",
+              "2020-09-17",
+              "2020-12-25",
+              "2021-02-25",
+              "2021-04-01",
+              "2022-05-16",
+              "2022-10-17",
+              "2023-08-30",
+              "2023-11-09",
+              "2025-04-11"
+            ]
+          },
+          "120": {
+            "samples": 11,
+            "positive_rate_pct": 72.72727272727273,
+            "median_return_pct": 11.107412471021828,
+            "excess_positive_rate_pct": 81.81818181818181,
+            "median_excess_return_pct": 12.579113023758026,
+            "median_max_adverse_pct": -11.830282007542259,
+            "signal_dates": [
+              "2018-07-03",
+              "2018-10-16",
+              "2020-09-17",
+              "2020-12-25",
+              "2021-02-25",
+              "2021-04-01",
+              "2022-05-16",
+              "2022-10-17",
+              "2023-08-30",
+              "2023-11-09",
+              "2025-04-11"
+            ]
+          },
+          "250": {
+            "samples": 11,
+            "positive_rate_pct": 81.81818181818181,
+            "median_return_pct": 7.620447150204668,
+            "excess_positive_rate_pct": 81.81818181818181,
+            "median_excess_return_pct": 15.754744968816182,
+            "median_max_adverse_pct": -11.830282007542259,
+            "signal_dates": [
+              "2018-07-03",
+              "2018-10-16",
+              "2020-09-17",
+              "2020-12-25",
+              "2021-02-25",
+              "2021-04-01",
+              "2022-05-16",
+              "2022-10-17",
+              "2023-08-30",
+              "2023-11-09",
+              "2025-04-11"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "crowding_rise_5": {
+        "signals": 8,
+        "horizons": {
+          "20": {
+            "samples": 8,
+            "positive_rate_pct": 75.0,
+            "median_return_pct": 2.7455846065939093,
+            "excess_positive_rate_pct": 62.5,
+            "median_excess_return_pct": 2.1986865289301716,
+            "median_max_adverse_pct": -4.647913965179767,
+            "signal_dates": [
+              "2018-11-06",
+              "2021-01-05",
+              "2021-04-06",
+              "2022-10-19",
+              "2023-09-01",
+              "2023-11-13",
+              "2025-04-15",
+              "2026-08-12"
+            ]
+          },
+          "60": {
+            "samples": 7,
+            "positive_rate_pct": 42.857142857142854,
+            "median_return_pct": -0.8904016337644594,
+            "excess_positive_rate_pct": 42.857142857142854,
+            "median_excess_return_pct": -0.5293158189125124,
+            "median_max_adverse_pct": -8.800286977347781,
+            "signal_dates": [
+              "2018-11-06",
+              "2021-01-05",
+              "2021-04-06",
+              "2022-10-19",
+              "2023-09-01",
+              "2023-11-13",
+              "2025-04-15"
+            ]
+          },
+          "120": {
+            "samples": 7,
+            "positive_rate_pct": 85.71428571428571,
+            "median_return_pct": 15.271933066023946,
+            "excess_positive_rate_pct": 71.42857142857143,
+            "median_excess_return_pct": 13.183302897212368,
+            "median_max_adverse_pct": -8.800286977347781,
+            "signal_dates": [
+              "2018-11-06",
+              "2021-01-05",
+              "2021-04-06",
+              "2022-10-19",
+              "2023-09-01",
+              "2023-11-13",
+              "2025-04-15"
+            ]
+          },
+          "250": {
+            "samples": 7,
+            "positive_rate_pct": 71.42857142857143,
+            "median_return_pct": 27.086422368142337,
+            "excess_positive_rate_pct": 71.42857142857143,
+            "median_excess_return_pct": 18.204612244593456,
+            "median_max_adverse_pct": -11.44111161519713,
+            "signal_dates": [
+              "2018-11-06",
+              "2021-01-05",
+              "2021-04-06",
+              "2022-10-19",
+              "2023-09-01",
+              "2023-11-13",
+              "2025-04-15"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "ma20_reclaim": {
+        "signals": 11,
+        "horizons": {
+          "20": {
+            "samples": 11,
+            "positive_rate_pct": 54.54545454545455,
+            "median_return_pct": 0.7699402807741729,
+            "excess_positive_rate_pct": 63.63636363636363,
+            "median_excess_return_pct": 1.2198328461980656,
+            "median_max_adverse_pct": -4.146721137134557,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-01",
+              "2022-05-10",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23",
+              "2026-08-12"
+            ]
+          },
+          "60": {
+            "samples": 10,
+            "positive_rate_pct": 60.0,
+            "median_return_pct": 1.1907667597706895,
+            "excess_positive_rate_pct": 40.0,
+            "median_excess_return_pct": -0.7606926475770825,
+            "median_max_adverse_pct": -8.178097022735198,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-01",
+              "2022-05-10",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          },
+          "120": {
+            "samples": 10,
+            "positive_rate_pct": 70.0,
+            "median_return_pct": 15.045706610495891,
+            "excess_positive_rate_pct": 80.0,
+            "median_excess_return_pct": 10.910064478539388,
+            "median_max_adverse_pct": -9.99020237996142,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-01",
+              "2022-05-10",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          },
+          "250": {
+            "samples": 10,
+            "positive_rate_pct": 70.0,
+            "median_return_pct": 20.899696382298472,
+            "excess_positive_rate_pct": 70.0,
+            "median_excess_return_pct": 18.552318243082183,
+            "median_max_adverse_pct": -11.223846057273978,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-01",
+              "2022-05-10",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "ma20_volume": {
+        "signals": 11,
+        "horizons": {
+          "20": {
+            "samples": 11,
+            "positive_rate_pct": 45.45454545454545,
+            "median_return_pct": -1.4581405019651994,
+            "excess_positive_rate_pct": 45.45454545454545,
+            "median_excess_return_pct": -1.650447084427431,
+            "median_max_adverse_pct": -7.478649781160762,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-16",
+              "2022-05-11",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23",
+              "2026-08-13"
+            ]
+          },
+          "60": {
+            "samples": 10,
+            "positive_rate_pct": 60.0,
+            "median_return_pct": 1.4309808035530613,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 1.5644592127814272,
+            "median_max_adverse_pct": -8.281170650792607,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-16",
+              "2022-05-11",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          },
+          "120": {
+            "samples": 10,
+            "positive_rate_pct": 70.0,
+            "median_return_pct": 15.29507294776754,
+            "excess_positive_rate_pct": 80.0,
+            "median_excess_return_pct": 9.905316326514146,
+            "median_max_adverse_pct": -10.093276008018831,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-16",
+              "2022-05-11",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          },
+          "250": {
+            "samples": 10,
+            "positive_rate_pct": 70.0,
+            "median_return_pct": 20.899696382298472,
+            "excess_positive_rate_pct": 70.0,
+            "median_excess_return_pct": 18.552318243082183,
+            "median_max_adverse_pct": -12.30140199331185,
+            "signal_dates": [
+              "2018-07-10",
+              "2018-11-01",
+              "2020-10-12",
+              "2021-01-04",
+              "2021-04-16",
+              "2022-05-11",
+              "2022-10-13",
+              "2023-09-11",
+              "2023-11-07",
+              "2025-04-23"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "daily_weekly": {
+        "signals": 4,
+        "horizons": {
+          "20": {
+            "samples": 4,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 0.9070070145679066,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 4.273963915522261,
+            "median_max_adverse_pct": -4.20431590269027,
+            "signal_dates": [
+              "2018-11-16",
+              "2022-06-17",
+              "2023-11-17",
+              "2025-06-06"
+            ]
+          },
+          "60": {
+            "samples": 4,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 5.827926941334571,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 8.680812808215183,
+            "median_max_adverse_pct": -6.124418749602989,
+            "signal_dates": [
+              "2018-11-16",
+              "2022-06-17",
+              "2023-11-17",
+              "2025-06-06"
+            ]
+          },
+          "120": {
+            "samples": 4,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 11.973857776746922,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 11.697869211778361,
+            "median_max_adverse_pct": -9.484864419954619,
+            "signal_dates": [
+              "2018-11-16",
+              "2022-06-17",
+              "2023-11-17",
+              "2025-06-06"
+            ]
+          },
+          "250": {
+            "samples": 4,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 87.4498929980577,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 85.1443165785341,
+            "median_max_adverse_pct": -9.484864419954619,
+            "signal_dates": [
+              "2018-11-16",
+              "2022-06-17",
+              "2023-11-17",
+              "2025-06-06"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "daily_weekly_market": {
+        "signals": 2,
+        "horizons": {
+          "20": {
+            "samples": 2,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 5.000956770731257,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 5.251599802179746,
+            "median_max_adverse_pct": -2.616177271099307,
+            "signal_dates": [
+              "2022-06-17",
+              "2025-06-06"
+            ]
+          },
+          "60": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 58.91904519687871,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 52.985966107950944,
+            "median_max_adverse_pct": -2.616177271099307,
+            "signal_dates": [
+              "2022-06-17",
+              "2025-06-06"
+            ]
+          },
+          "120": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 70.16793467776114,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 64.66196772803525,
+            "median_max_adverse_pct": -5.9766229414509375,
+            "signal_dates": [
+              "2022-06-17",
+              "2025-06-06"
+            ]
+          },
+          "250": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 277.5510965118602,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 269.0350283575915,
+            "median_max_adverse_pct": -5.9766229414509375,
+            "signal_dates": [
+              "2022-06-17",
+              "2025-06-06"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      }
+    }
   },
   "PCB（国证PCB）": {
     "provider": "cni",
@@ -173,7 +722,468 @@
         ]
       }
     },
-    "acceptance": "未达到（样本亦不足）"
+    "acceptance": "未达到（样本亦不足）",
+    "variants": {
+      "raw": {
+        "signals": 8,
+        "horizons": {
+          "20": {
+            "samples": 8,
+            "positive_rate_pct": 75.0,
+            "median_return_pct": 8.823541951199799,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 3.7306963302283336,
+            "median_max_adverse_pct": -6.115525501467401,
+            "signal_dates": [
+              "2020-09-09",
+              "2022-03-07",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-08-22",
+              "2024-01-22",
+              "2025-04-08",
+              "2026-07-21"
+            ]
+          },
+          "60": {
+            "samples": 7,
+            "positive_rate_pct": 85.71428571428571,
+            "median_return_pct": 8.496686371523076,
+            "excess_positive_rate_pct": 85.71428571428571,
+            "median_excess_return_pct": 1.18508120591172,
+            "median_max_adverse_pct": -3.0641515051186508,
+            "signal_dates": [
+              "2020-09-09",
+              "2022-03-07",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-08-22",
+              "2024-01-22",
+              "2025-04-08"
+            ]
+          },
+          "120": {
+            "samples": 7,
+            "positive_rate_pct": 42.857142857142854,
+            "median_return_pct": -4.476482652264879,
+            "excess_positive_rate_pct": 42.857142857142854,
+            "median_excess_return_pct": -1.832991161813624,
+            "median_max_adverse_pct": -14.409234143329252,
+            "signal_dates": [
+              "2020-09-09",
+              "2022-03-07",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-08-22",
+              "2024-01-22",
+              "2025-04-08"
+            ]
+          },
+          "250": {
+            "samples": 7,
+            "positive_rate_pct": 71.42857142857143,
+            "median_return_pct": 9.475068289315725,
+            "excess_positive_rate_pct": 71.42857142857143,
+            "median_excess_return_pct": 18.160099474346914,
+            "median_max_adverse_pct": -18.433563403241536,
+            "signal_dates": [
+              "2020-09-09",
+              "2022-03-07",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-08-22",
+              "2024-01-22",
+              "2025-04-08"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_3": {
+        "signals": 8,
+        "horizons": {
+          "20": {
+            "samples": 8,
+            "positive_rate_pct": 87.5,
+            "median_return_pct": 2.9538005500566955,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 3.0881707574208326,
+            "median_max_adverse_pct": -6.498232493001993,
+            "signal_dates": [
+              "2020-11-04",
+              "2022-03-14",
+              "2022-04-14",
+              "2022-10-18",
+              "2023-08-31",
+              "2024-01-25",
+              "2025-05-08",
+              "2026-07-24"
+            ]
+          },
+          "60": {
+            "samples": 7,
+            "positive_rate_pct": 71.42857142857143,
+            "median_return_pct": 4.258219998246271,
+            "excess_positive_rate_pct": 57.142857142857146,
+            "median_excess_return_pct": 1.9833978111783335,
+            "median_max_adverse_pct": -12.98304753389271,
+            "signal_dates": [
+              "2020-11-04",
+              "2022-03-14",
+              "2022-04-14",
+              "2022-10-18",
+              "2023-08-31",
+              "2024-01-25",
+              "2025-05-08"
+            ]
+          },
+          "120": {
+            "samples": 7,
+            "positive_rate_pct": 57.142857142857146,
+            "median_return_pct": 3.684371462359004,
+            "excess_positive_rate_pct": 71.42857142857143,
+            "median_excess_return_pct": 2.0429725799463894,
+            "median_max_adverse_pct": -19.257189041746415,
+            "signal_dates": [
+              "2020-11-04",
+              "2022-03-14",
+              "2022-04-14",
+              "2022-10-18",
+              "2023-08-31",
+              "2024-01-25",
+              "2025-05-08"
+            ]
+          },
+          "250": {
+            "samples": 7,
+            "positive_rate_pct": 85.71428571428571,
+            "median_return_pct": 16.665904436247516,
+            "excess_positive_rate_pct": 85.71428571428571,
+            "median_excess_return_pct": 12.278044898733654,
+            "median_max_adverse_pct": -19.257189041746415,
+            "signal_dates": [
+              "2020-11-04",
+              "2022-03-14",
+              "2022-04-14",
+              "2022-10-18",
+              "2023-08-31",
+              "2024-01-25",
+              "2025-05-08"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_5": {
+        "signals": 4,
+        "horizons": {
+          "20": {
+            "samples": 4,
+            "positive_rate_pct": 75.0,
+            "median_return_pct": 6.5280605866728125,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 2.9854907520644236,
+            "median_max_adverse_pct": -1.9048302763913172,
+            "signal_dates": [
+              "2022-05-05",
+              "2022-11-04",
+              "2024-02-20",
+              "2026-08-12"
+            ]
+          },
+          "60": {
+            "samples": 3,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 21.922528676690533,
+            "excess_positive_rate_pct": 66.66666666666667,
+            "median_excess_return_pct": 13.537555529393796,
+            "median_max_adverse_pct": 0.0,
+            "signal_dates": [
+              "2022-05-05",
+              "2022-11-04",
+              "2024-02-20"
+            ]
+          },
+          "120": {
+            "samples": 3,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 7.108141188823569,
+            "excess_positive_rate_pct": 66.66666666666667,
+            "median_excess_return_pct": 10.708935442478328,
+            "median_max_adverse_pct": -3.2810239364137406,
+            "signal_dates": [
+              "2022-05-05",
+              "2022-11-04",
+              "2024-02-20"
+            ]
+          },
+          "250": {
+            "samples": 3,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 13.36152928105292,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 6.193434776970241,
+            "median_max_adverse_pct": -3.2810239364137406,
+            "signal_dates": [
+              "2022-05-05",
+              "2022-11-04",
+              "2024-02-20"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "ma20_reclaim": {
+        "signals": 7,
+        "horizons": {
+          "20": {
+            "samples": 7,
+            "positive_rate_pct": 57.142857142857146,
+            "median_return_pct": 0.5417950034751984,
+            "excess_positive_rate_pct": 42.857142857142854,
+            "median_excess_return_pct": -0.8414522350060238,
+            "median_max_adverse_pct": -2.1392664192836475,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-04-30",
+              "2026-08-07"
+            ]
+          },
+          "60": {
+            "samples": 6,
+            "positive_rate_pct": 83.33333333333333,
+            "median_return_pct": 11.193652081220351,
+            "excess_positive_rate_pct": 66.66666666666667,
+            "median_excess_return_pct": 9.05123219568228,
+            "median_max_adverse_pct": -2.285396579722926,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-04-30"
+            ]
+          },
+          "120": {
+            "samples": 6,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 16.00887981702983,
+            "excess_positive_rate_pct": 83.33333333333333,
+            "median_excess_return_pct": 13.079999130739683,
+            "median_max_adverse_pct": -5.070098338460177,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-04-30"
+            ]
+          },
+          "250": {
+            "samples": 6,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 6.534600185918382,
+            "excess_positive_rate_pct": 83.33333333333333,
+            "median_excess_return_pct": 9.092626117183183,
+            "median_max_adverse_pct": -5.240289133099541,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-04-30"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "ma20_volume": {
+        "signals": 7,
+        "horizons": {
+          "20": {
+            "samples": 7,
+            "positive_rate_pct": 57.142857142857146,
+            "median_return_pct": 4.10190401085182,
+            "excess_positive_rate_pct": 57.142857142857146,
+            "median_excess_return_pct": 2.083911287304774,
+            "median_max_adverse_pct": -2.1392664192836475,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-05-06",
+              "2026-08-07"
+            ]
+          },
+          "60": {
+            "samples": 6,
+            "positive_rate_pct": 83.33333333333333,
+            "median_return_pct": 11.193652081220351,
+            "excess_positive_rate_pct": 66.66666666666667,
+            "median_excess_return_pct": 9.05123219568228,
+            "median_max_adverse_pct": -2.0199753366935083,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-05-06"
+            ]
+          },
+          "120": {
+            "samples": 6,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 16.00887981702983,
+            "excess_positive_rate_pct": 83.33333333333333,
+            "median_excess_return_pct": 13.079999130739683,
+            "median_max_adverse_pct": -5.070098338460177,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-05-06"
+            ]
+          },
+          "250": {
+            "samples": 6,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 6.534600185918382,
+            "excess_positive_rate_pct": 83.33333333333333,
+            "median_excess_return_pct": 9.092626117183183,
+            "median_max_adverse_pct": -5.240289133099541,
+            "signal_dates": [
+              "2020-09-18",
+              "2022-05-11",
+              "2022-10-17",
+              "2023-09-04",
+              "2024-02-19",
+              "2025-05-06"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "daily_weekly": {
+        "signals": 2,
+        "horizons": {
+          "20": {
+            "samples": 2,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 9.048537194523826,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 8.306146043968088,
+            "median_max_adverse_pct": -3.72084026857053,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "60": {
+            "samples": 2,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 44.75933110025849,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 38.30117321728505,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "120": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 47.483478715644964,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 44.115226450004734,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "250": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 200.27431105419024,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 185.02798736624828,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      },
+      "daily_weekly_market": {
+        "signals": 2,
+        "horizons": {
+          "20": {
+            "samples": 2,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 9.048537194523826,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 8.306146043968088,
+            "median_max_adverse_pct": -3.72084026857053,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "60": {
+            "samples": 2,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 44.75933110025849,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 38.30117321728505,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "120": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 47.483478715644964,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 44.115226450004734,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          },
+          "250": {
+            "samples": 2,
+            "positive_rate_pct": 100.0,
+            "median_return_pct": 200.27431105419024,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 185.02798736624828,
+            "median_max_adverse_pct": -6.427943558033034,
+            "signal_dates": [
+              "2024-03-08",
+              "2025-06-06"
+            ]
+          }
+        },
+        "acceptance": "暂未验收（样本不足）"
+      }
+    }
   },
   "化工（中证细分化工）": {
     "provider": "csi",
@@ -314,7 +1324,736 @@
         ]
       }
     },
-    "acceptance": "未达到（样本亦不足）"
+    "acceptance": "未达到（样本亦不足）",
+    "variants": {
+      "raw": {
+        "signals": 23,
+        "horizons": {
+          "20": {
+            "samples": 23,
+            "positive_rate_pct": 69.56521739130434,
+            "median_return_pct": 1.6629558348113749,
+            "excess_positive_rate_pct": 56.52173913043478,
+            "median_excess_return_pct": 0.127246343523868,
+            "median_max_adverse_pct": -4.165395178516951,
+            "signal_dates": [
+              "2008-04-01",
+              "2008-06-18",
+              "2008-08-20",
+              "2008-09-18",
+              "2008-10-28",
+              "2011-12-13",
+              "2012-12-04",
+              "2013-06-24",
+              "2015-07-06",
+              "2016-01-26",
+              "2018-06-19",
+              "2018-09-11",
+              "2018-10-19",
+              "2019-01-04",
+              "2019-06-14",
+              "2022-03-09",
+              "2022-04-21",
+              "2022-10-12",
+              "2023-04-25",
+              "2023-05-29",
+              "2023-10-19",
+              "2024-01-22",
+              "2026-06-08"
+            ]
+          },
+          "60": {
+            "samples": 23,
+            "positive_rate_pct": 43.47826086956522,
+            "median_return_pct": -1.603942155675031,
+            "excess_positive_rate_pct": 56.52173913043478,
+            "median_excess_return_pct": 0.8696756129738414,
+            "median_max_adverse_pct": -8.99759553841728,
+            "signal_dates": [
+              "2008-04-01",
+              "2008-06-18",
+              "2008-08-20",
+              "2008-09-18",
+              "2008-10-28",
+              "2011-12-13",
+              "2012-12-04",
+              "2013-06-24",
+              "2015-07-06",
+              "2016-01-26",
+              "2018-06-19",
+              "2018-09-11",
+              "2018-10-19",
+              "2019-01-04",
+              "2019-06-14",
+              "2022-03-09",
+              "2022-04-21",
+              "2022-10-12",
+              "2023-04-25",
+              "2023-05-29",
+              "2023-10-19",
+              "2024-01-22",
+              "2026-06-08"
+            ]
+          },
+          "120": {
+            "samples": 22,
+            "positive_rate_pct": 45.45454545454545,
+            "median_return_pct": -1.552988158905666,
+            "excess_positive_rate_pct": 27.272727272727273,
+            "median_excess_return_pct": -2.463648428908188,
+            "median_max_adverse_pct": -12.36431566713671,
+            "signal_dates": [
+              "2008-04-01",
+              "2008-06-18",
+              "2008-08-20",
+              "2008-09-18",
+              "2008-10-28",
+              "2011-12-13",
+              "2012-12-04",
+              "2013-06-24",
+              "2015-07-06",
+              "2016-01-26",
+              "2018-06-19",
+              "2018-09-11",
+              "2018-10-19",
+              "2019-01-04",
+              "2019-06-14",
+              "2022-03-09",
+              "2022-04-21",
+              "2022-10-12",
+              "2023-04-25",
+              "2023-05-29",
+              "2023-10-19",
+              "2024-01-22"
+            ]
+          },
+          "250": {
+            "samples": 22,
+            "positive_rate_pct": 40.90909090909091,
+            "median_return_pct": -3.573033714586471,
+            "excess_positive_rate_pct": 22.727272727272727,
+            "median_excess_return_pct": -13.082542802402125,
+            "median_max_adverse_pct": -21.054428968114753,
+            "signal_dates": [
+              "2008-04-01",
+              "2008-06-18",
+              "2008-08-20",
+              "2008-09-18",
+              "2008-10-28",
+              "2011-12-13",
+              "2012-12-04",
+              "2013-06-24",
+              "2015-07-06",
+              "2016-01-26",
+              "2018-06-19",
+              "2018-09-11",
+              "2018-10-19",
+              "2019-01-04",
+              "2019-06-14",
+              "2022-03-09",
+              "2022-04-21",
+              "2022-10-12",
+              "2023-04-25",
+              "2023-05-29",
+              "2023-10-19",
+              "2024-01-22"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_3": {
+        "signals": 19,
+        "horizons": {
+          "20": {
+            "samples": 19,
+            "positive_rate_pct": 63.1578947368421,
+            "median_return_pct": 2.9880567640873767,
+            "excess_positive_rate_pct": 57.89473684210526,
+            "median_excess_return_pct": 1.0480094513737104,
+            "median_max_adverse_pct": -2.444912527528731,
+            "signal_dates": [
+              "2008-04-24",
+              "2008-10-31",
+              "2012-01-12",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-03",
+              "2018-07-03",
+              "2018-09-14",
+              "2018-10-24",
+              "2019-01-25",
+              "2019-06-24",
+              "2022-03-14",
+              "2022-04-28",
+              "2022-11-02",
+              "2023-07-12",
+              "2023-10-27",
+              "2024-01-25",
+              "2026-06-16"
+            ]
+          },
+          "60": {
+            "samples": 19,
+            "positive_rate_pct": 57.89473684210526,
+            "median_return_pct": 2.7000575896884316,
+            "excess_positive_rate_pct": 63.1578947368421,
+            "median_excess_return_pct": 2.7812737636667584,
+            "median_max_adverse_pct": -8.807073421841082,
+            "signal_dates": [
+              "2008-04-24",
+              "2008-10-31",
+              "2012-01-12",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-03",
+              "2018-07-03",
+              "2018-09-14",
+              "2018-10-24",
+              "2019-01-25",
+              "2019-06-24",
+              "2022-03-14",
+              "2022-04-28",
+              "2022-11-02",
+              "2023-07-12",
+              "2023-10-27",
+              "2024-01-25",
+              "2026-06-16"
+            ]
+          },
+          "120": {
+            "samples": 18,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": -1.8047919656303701,
+            "excess_positive_rate_pct": 33.333333333333336,
+            "median_excess_return_pct": -2.8924378356490976,
+            "median_max_adverse_pct": -7.954036667804654,
+            "signal_dates": [
+              "2008-04-24",
+              "2008-10-31",
+              "2012-01-12",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-03",
+              "2018-07-03",
+              "2018-09-14",
+              "2018-10-24",
+              "2019-01-25",
+              "2019-06-24",
+              "2022-03-14",
+              "2022-04-28",
+              "2022-11-02",
+              "2023-07-12",
+              "2023-10-27",
+              "2024-01-25"
+            ]
+          },
+          "250": {
+            "samples": 18,
+            "positive_rate_pct": 44.44444444444444,
+            "median_return_pct": -4.286292900205574,
+            "excess_positive_rate_pct": 27.77777777777778,
+            "median_excess_return_pct": -9.468937166264284,
+            "median_max_adverse_pct": -15.052280920098237,
+            "signal_dates": [
+              "2008-04-24",
+              "2008-10-31",
+              "2012-01-12",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-03",
+              "2018-07-03",
+              "2018-09-14",
+              "2018-10-24",
+              "2019-01-25",
+              "2019-06-24",
+              "2022-03-14",
+              "2022-04-28",
+              "2022-11-02",
+              "2023-07-12",
+              "2023-10-27",
+              "2024-01-25"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_5": {
+        "signals": 11,
+        "horizons": {
+          "20": {
+            "samples": 11,
+            "positive_rate_pct": 63.63636363636363,
+            "median_return_pct": 3.158003988880509,
+            "excess_positive_rate_pct": 45.45454545454545,
+            "median_excess_return_pct": -0.06681444611276177,
+            "median_max_adverse_pct": -2.455382749635371,
+            "signal_dates": [
+              "2008-04-28",
+              "2008-11-17",
+              "2012-12-11",
+              "2016-02-05",
+              "2018-07-18",
+              "2018-10-26",
+              "2019-02-13",
+              "2022-11-04",
+              "2023-10-31",
+              "2024-02-20",
+              "2026-07-27"
+            ]
+          },
+          "60": {
+            "samples": 10,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 1.9951801016266923,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 1.0112023261214187,
+            "median_max_adverse_pct": -6.6987806620587005,
+            "signal_dates": [
+              "2008-04-28",
+              "2008-11-17",
+              "2012-12-11",
+              "2016-02-05",
+              "2018-07-18",
+              "2018-10-26",
+              "2019-02-13",
+              "2022-11-04",
+              "2023-10-31",
+              "2024-02-20"
+            ]
+          },
+          "120": {
+            "samples": 10,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -1.3554924664199663,
+            "excess_positive_rate_pct": 40.0,
+            "median_excess_return_pct": -2.4456750612428744,
+            "median_max_adverse_pct": -10.388187143218175,
+            "signal_dates": [
+              "2008-04-28",
+              "2008-11-17",
+              "2012-12-11",
+              "2016-02-05",
+              "2018-07-18",
+              "2018-10-26",
+              "2019-02-13",
+              "2022-11-04",
+              "2023-10-31",
+              "2024-02-20"
+            ]
+          },
+          "250": {
+            "samples": 10,
+            "positive_rate_pct": 60.0,
+            "median_return_pct": 4.828077329399005,
+            "excess_positive_rate_pct": 30.0,
+            "median_excess_return_pct": -6.892479942940871,
+            "median_max_adverse_pct": -12.134152968252549,
+            "signal_dates": [
+              "2008-04-28",
+              "2008-11-17",
+              "2012-12-11",
+              "2016-02-05",
+              "2018-07-18",
+              "2018-10-26",
+              "2019-02-13",
+              "2022-11-04",
+              "2023-10-31",
+              "2024-02-20"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "ma20_reclaim": {
+        "signals": 21,
+        "horizons": {
+          "20": {
+            "samples": 21,
+            "positive_rate_pct": 42.857142857142854,
+            "median_return_pct": -0.4114988358113525,
+            "excess_positive_rate_pct": 52.38095238095238,
+            "median_excess_return_pct": 1.1152697493802766,
+            "median_max_adverse_pct": -6.229983632966595,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-01",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07",
+              "2026-06-12"
+            ]
+          },
+          "60": {
+            "samples": 21,
+            "positive_rate_pct": 47.61904761904762,
+            "median_return_pct": -3.9463712316050725,
+            "excess_positive_rate_pct": 61.904761904761905,
+            "median_excess_return_pct": 2.122311363808538,
+            "median_max_adverse_pct": -12.126018409315819,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-01",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07",
+              "2026-06-12"
+            ]
+          },
+          "120": {
+            "samples": 20,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -4.935119928299536,
+            "excess_positive_rate_pct": 30.0,
+            "median_excess_return_pct": -2.2245799176379144,
+            "median_max_adverse_pct": -13.814599480815836,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-01",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07"
+            ]
+          },
+          "250": {
+            "samples": 20,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -4.568795546899401,
+            "excess_positive_rate_pct": 30.0,
+            "median_excess_return_pct": -10.50175898487073,
+            "median_max_adverse_pct": -21.956378445887815,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-01",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "ma20_volume": {
+        "signals": 21,
+        "horizons": {
+          "20": {
+            "samples": 21,
+            "positive_rate_pct": 42.857142857142854,
+            "median_return_pct": -0.4114988358113525,
+            "excess_positive_rate_pct": 52.38095238095238,
+            "median_excess_return_pct": 1.1152697493802766,
+            "median_max_adverse_pct": -6.229983632966595,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-08",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07",
+              "2026-06-12"
+            ]
+          },
+          "60": {
+            "samples": 21,
+            "positive_rate_pct": 47.61904761904762,
+            "median_return_pct": -3.9463712316050725,
+            "excess_positive_rate_pct": 61.904761904761905,
+            "median_excess_return_pct": 2.122311363808538,
+            "median_max_adverse_pct": -12.126018409315819,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-08",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07",
+              "2026-06-12"
+            ]
+          },
+          "120": {
+            "samples": 20,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -4.935119928299536,
+            "excess_positive_rate_pct": 30.0,
+            "median_excess_return_pct": -2.2245799176379144,
+            "median_max_adverse_pct": -13.814599480815836,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-08",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07"
+            ]
+          },
+          "250": {
+            "samples": 20,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -4.568795546899401,
+            "excess_positive_rate_pct": 30.0,
+            "median_excess_return_pct": -10.50175898487073,
+            "median_max_adverse_pct": -21.380782149419712,
+            "signal_dates": [
+              "2008-04-30",
+              "2008-07-03",
+              "2008-09-22",
+              "2008-11-13",
+              "2012-01-10",
+              "2012-12-07",
+              "2013-07-11",
+              "2015-07-20",
+              "2016-02-16",
+              "2018-07-12",
+              "2018-09-21",
+              "2018-11-02",
+              "2019-01-11",
+              "2019-06-20",
+              "2022-04-08",
+              "2022-05-11",
+              "2022-11-04",
+              "2023-06-15",
+              "2023-10-30",
+              "2024-02-07"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "daily_weekly": {
+        "signals": 5,
+        "horizons": {
+          "20": {
+            "samples": 5,
+            "positive_rate_pct": 80.0,
+            "median_return_pct": 2.294177017946142,
+            "excess_positive_rate_pct": 60.0,
+            "median_excess_return_pct": 1.1453262281621024,
+            "median_max_adverse_pct": -1.6090601240460134,
+            "signal_dates": [
+              "2008-12-19",
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "60": {
+            "samples": 5,
+            "positive_rate_pct": 80.0,
+            "median_return_pct": 8.410707027343012,
+            "excess_positive_rate_pct": 60.0,
+            "median_excess_return_pct": 1.604722910165468,
+            "median_max_adverse_pct": -1.6090601240460134,
+            "signal_dates": [
+              "2008-12-19",
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "120": {
+            "samples": 5,
+            "positive_rate_pct": 20.0,
+            "median_return_pct": -8.365036376673263,
+            "excess_positive_rate_pct": 20.0,
+            "median_excess_return_pct": -9.54963151103695,
+            "median_max_adverse_pct": -16.23500870054948,
+            "signal_dates": [
+              "2008-12-19",
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "250": {
+            "samples": 5,
+            "positive_rate_pct": 60.0,
+            "median_return_pct": 2.3877773525780244,
+            "excess_positive_rate_pct": 40.0,
+            "median_excess_return_pct": -5.201223752349637,
+            "median_max_adverse_pct": -17.544423344910008,
+            "signal_dates": [
+              "2008-12-19",
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "daily_weekly_market": {
+        "signals": 4,
+        "horizons": {
+          "20": {
+            "samples": 4,
+            "positive_rate_pct": 75.0,
+            "median_return_pct": 7.3897646194434845,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 2.4837069787501997,
+            "median_max_adverse_pct": -1.020828273714386,
+            "signal_dates": [
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-15",
+              "2024-03-06"
+            ]
+          },
+          "60": {
+            "samples": 4,
+            "positive_rate_pct": 75.0,
+            "median_return_pct": 5.756796872841063,
+            "excess_positive_rate_pct": 75.0,
+            "median_excess_return_pct": 3.3363970989082503,
+            "median_max_adverse_pct": -1.0951063658050153,
+            "signal_dates": [
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-15",
+              "2024-03-06"
+            ]
+          },
+          "120": {
+            "samples": 4,
+            "positive_rate_pct": 0.0,
+            "median_return_pct": -10.440849955968668,
+            "excess_positive_rate_pct": 25.0,
+            "median_excess_return_pct": -5.710019705512309,
+            "median_max_adverse_pct": -13.553798595441252,
+            "signal_dates": [
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-15",
+              "2024-03-06"
+            ]
+          },
+          "250": {
+            "samples": 4,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": -2.3462955996384425,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": -5.224195213513116,
+            "median_max_adverse_pct": -14.211552547949497,
+            "signal_dates": [
+              "2013-01-04",
+              "2019-02-15",
+              "2022-06-15",
+              "2024-03-06"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      }
+    }
   },
   "有色铜代理（中证工业有色）": {
     "provider": "csi",
@@ -433,6 +2172,666 @@
         ]
       }
     },
-    "acceptance": "未达到（样本亦不足）"
+    "acceptance": "未达到（样本亦不足）",
+    "variants": {
+      "raw": {
+        "signals": 17,
+        "horizons": {
+          "20": {
+            "samples": 17,
+            "positive_rate_pct": 64.70588235294117,
+            "median_return_pct": 0.9487666034155628,
+            "excess_positive_rate_pct": 64.70588235294117,
+            "median_excess_return_pct": 1.7607220152693448,
+            "median_max_adverse_pct": -2.868755255611377,
+            "signal_dates": [
+              "2010-07-02",
+              "2011-09-23",
+              "2011-12-15",
+              "2013-04-15",
+              "2013-06-24",
+              "2015-07-06",
+              "2017-11-17",
+              "2018-06-19",
+              "2019-05-17",
+              "2020-03-24",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-03-16",
+              "2023-08-28",
+              "2023-10-23",
+              "2024-02-02",
+              "2025-04-08"
+            ]
+          },
+          "60": {
+            "samples": 17,
+            "positive_rate_pct": 47.05882352941177,
+            "median_return_pct": -0.8055529647392534,
+            "excess_positive_rate_pct": 58.8235294117647,
+            "median_excess_return_pct": 1.4984467111816668,
+            "median_max_adverse_pct": -7.39641599080465,
+            "signal_dates": [
+              "2010-07-02",
+              "2011-09-23",
+              "2011-12-15",
+              "2013-04-15",
+              "2013-06-24",
+              "2015-07-06",
+              "2017-11-17",
+              "2018-06-19",
+              "2019-05-17",
+              "2020-03-24",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-03-16",
+              "2023-08-28",
+              "2023-10-23",
+              "2024-02-02",
+              "2025-04-08"
+            ]
+          },
+          "120": {
+            "samples": 17,
+            "positive_rate_pct": 41.1764705882353,
+            "median_return_pct": -3.310870312907477,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -0.22835551969334622,
+            "median_max_adverse_pct": -8.753295154985906,
+            "signal_dates": [
+              "2010-07-02",
+              "2011-09-23",
+              "2011-12-15",
+              "2013-04-15",
+              "2013-06-24",
+              "2015-07-06",
+              "2017-11-17",
+              "2018-06-19",
+              "2019-05-17",
+              "2020-03-24",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-03-16",
+              "2023-08-28",
+              "2023-10-23",
+              "2024-02-02",
+              "2025-04-08"
+            ]
+          },
+          "250": {
+            "samples": 17,
+            "positive_rate_pct": 41.1764705882353,
+            "median_return_pct": -1.972452383514478,
+            "excess_positive_rate_pct": 35.294117647058826,
+            "median_excess_return_pct": -1.7332797588851978,
+            "median_max_adverse_pct": -19.13016966175257,
+            "signal_dates": [
+              "2010-07-02",
+              "2011-09-23",
+              "2011-12-15",
+              "2013-04-15",
+              "2013-06-24",
+              "2015-07-06",
+              "2017-11-17",
+              "2018-06-19",
+              "2019-05-17",
+              "2020-03-24",
+              "2022-04-11",
+              "2022-10-12",
+              "2023-03-16",
+              "2023-08-28",
+              "2023-10-23",
+              "2024-02-02",
+              "2025-04-08"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_3": {
+        "signals": 17,
+        "horizons": {
+          "20": {
+            "samples": 17,
+            "positive_rate_pct": 70.58823529411765,
+            "median_return_pct": 3.4143610557990645,
+            "excess_positive_rate_pct": 58.8235294117647,
+            "median_excess_return_pct": 0.46870234233866714,
+            "median_max_adverse_pct": -2.4010429351174145,
+            "signal_dates": [
+              "2010-07-22",
+              "2011-10-31",
+              "2012-01-06",
+              "2013-05-07",
+              "2013-06-28",
+              "2015-07-16",
+              "2017-12-08",
+              "2018-06-22",
+              "2019-05-29",
+              "2020-03-27",
+              "2022-04-28",
+              "2022-10-17",
+              "2023-03-21",
+              "2023-08-31",
+              "2023-10-26",
+              "2024-02-08",
+              "2025-04-11"
+            ]
+          },
+          "60": {
+            "samples": 17,
+            "positive_rate_pct": 47.05882352941177,
+            "median_return_pct": -0.5159394105185511,
+            "excess_positive_rate_pct": 52.94117647058823,
+            "median_excess_return_pct": 0.2538975712524483,
+            "median_max_adverse_pct": -6.897813997515245,
+            "signal_dates": [
+              "2010-07-22",
+              "2011-10-31",
+              "2012-01-06",
+              "2013-05-07",
+              "2013-06-28",
+              "2015-07-16",
+              "2017-12-08",
+              "2018-06-22",
+              "2019-05-29",
+              "2020-03-27",
+              "2022-04-28",
+              "2022-10-17",
+              "2023-03-21",
+              "2023-08-31",
+              "2023-10-26",
+              "2024-02-08",
+              "2025-04-11"
+            ]
+          },
+          "120": {
+            "samples": 17,
+            "positive_rate_pct": 41.1764705882353,
+            "median_return_pct": -5.29630554674263,
+            "excess_positive_rate_pct": 47.05882352941177,
+            "median_excess_return_pct": -3.2277880855154484,
+            "median_max_adverse_pct": -9.223291706162652,
+            "signal_dates": [
+              "2010-07-22",
+              "2011-10-31",
+              "2012-01-06",
+              "2013-05-07",
+              "2013-06-28",
+              "2015-07-16",
+              "2017-12-08",
+              "2018-06-22",
+              "2019-05-29",
+              "2020-03-27",
+              "2022-04-28",
+              "2022-10-17",
+              "2023-03-21",
+              "2023-08-31",
+              "2023-10-26",
+              "2024-02-08",
+              "2025-04-11"
+            ]
+          },
+          "250": {
+            "samples": 17,
+            "positive_rate_pct": 41.1764705882353,
+            "median_return_pct": -5.834096038564929,
+            "excess_positive_rate_pct": 29.41176470588235,
+            "median_excess_return_pct": -7.751803158065762,
+            "median_max_adverse_pct": -18.22223495647275,
+            "signal_dates": [
+              "2010-07-22",
+              "2011-10-31",
+              "2012-01-06",
+              "2013-05-07",
+              "2013-06-28",
+              "2015-07-16",
+              "2017-12-08",
+              "2018-06-22",
+              "2019-05-29",
+              "2020-03-27",
+              "2022-04-28",
+              "2022-10-17",
+              "2023-03-21",
+              "2023-08-31",
+              "2023-10-26",
+              "2024-02-08",
+              "2025-04-11"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "crowding_rise_5": {
+        "signals": 8,
+        "horizons": {
+          "20": {
+            "samples": 8,
+            "positive_rate_pct": 87.5,
+            "median_return_pct": 5.7209130274036735,
+            "excess_positive_rate_pct": 62.5,
+            "median_excess_return_pct": 5.456857725723651,
+            "median_max_adverse_pct": -1.501418794216508,
+            "signal_dates": [
+              "2010-07-26",
+              "2013-07-02",
+              "2015-07-20",
+              "2018-06-26",
+              "2022-05-05",
+              "2023-03-23",
+              "2023-10-30",
+              "2024-02-20"
+            ]
+          },
+          "60": {
+            "samples": 8,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": 0.4752880425213324,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": 0.6911019709268995,
+            "median_max_adverse_pct": -5.761855705097879,
+            "signal_dates": [
+              "2010-07-26",
+              "2013-07-02",
+              "2015-07-20",
+              "2018-06-26",
+              "2022-05-05",
+              "2023-03-23",
+              "2023-10-30",
+              "2024-02-20"
+            ]
+          },
+          "120": {
+            "samples": 8,
+            "positive_rate_pct": 25.0,
+            "median_return_pct": -5.495803927166232,
+            "excess_positive_rate_pct": 50.0,
+            "median_excess_return_pct": -0.5732179695574213,
+            "median_max_adverse_pct": -12.701610278853432,
+            "signal_dates": [
+              "2010-07-26",
+              "2013-07-02",
+              "2015-07-20",
+              "2018-06-26",
+              "2022-05-05",
+              "2023-03-23",
+              "2023-10-30",
+              "2024-02-20"
+            ]
+          },
+          "250": {
+            "samples": 8,
+            "positive_rate_pct": 50.0,
+            "median_return_pct": -1.5232042580676175,
+            "excess_positive_rate_pct": 25.0,
+            "median_excess_return_pct": -5.32822619538239,
+            "median_max_adverse_pct": -15.94901665537843,
+            "signal_dates": [
+              "2010-07-26",
+              "2013-07-02",
+              "2015-07-20",
+              "2018-06-26",
+              "2022-05-05",
+              "2023-03-23",
+              "2023-10-30",
+              "2024-02-20"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "ma20_reclaim": {
+        "signals": 17,
+        "horizons": {
+          "20": {
+            "samples": 17,
+            "positive_rate_pct": 47.05882352941177,
+            "median_return_pct": -0.3023319047557482,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -1.9986356063551591,
+            "median_max_adverse_pct": -3.878250942319217,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-06"
+            ]
+          },
+          "60": {
+            "samples": 17,
+            "positive_rate_pct": 52.94117647058823,
+            "median_return_pct": 1.2742876491118382,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -0.7186970007618698,
+            "median_max_adverse_pct": -6.647417554672231,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-06"
+            ]
+          },
+          "120": {
+            "samples": 17,
+            "positive_rate_pct": 35.294117647058826,
+            "median_return_pct": -6.513387508464863,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -4.161576344701445,
+            "median_max_adverse_pct": -11.0580969274792,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-06"
+            ]
+          },
+          "250": {
+            "samples": 17,
+            "positive_rate_pct": 35.294117647058826,
+            "median_return_pct": -9.173539808113118,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -5.555234299694134,
+            "median_max_adverse_pct": -18.9675160290534,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-06"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "ma20_volume": {
+        "signals": 17,
+        "horizons": {
+          "20": {
+            "samples": 17,
+            "positive_rate_pct": 47.05882352941177,
+            "median_return_pct": -0.3023319047557482,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -1.9986356063551591,
+            "median_max_adverse_pct": -3.878250942319217,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-14"
+            ]
+          },
+          "60": {
+            "samples": 17,
+            "positive_rate_pct": 52.94117647058823,
+            "median_return_pct": 1.2742876491118382,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -0.7186970007618698,
+            "median_max_adverse_pct": -6.647417554672231,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-14"
+            ]
+          },
+          "120": {
+            "samples": 17,
+            "positive_rate_pct": 35.294117647058826,
+            "median_return_pct": -6.513387508464863,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -4.161576344701445,
+            "median_max_adverse_pct": -11.0580969274792,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-14"
+            ]
+          },
+          "250": {
+            "samples": 17,
+            "positive_rate_pct": 35.294117647058826,
+            "median_return_pct": -9.173539808113118,
+            "excess_positive_rate_pct": 41.1764705882353,
+            "median_excess_return_pct": -5.555234299694134,
+            "median_max_adverse_pct": -18.9675160290534,
+            "signal_dates": [
+              "2010-07-20",
+              "2011-10-28",
+              "2012-01-09",
+              "2013-05-07",
+              "2013-07-11",
+              "2015-07-23",
+              "2017-12-27",
+              "2018-07-13",
+              "2019-05-21",
+              "2020-04-07",
+              "2022-05-11",
+              "2022-11-01",
+              "2023-04-03",
+              "2023-09-04",
+              "2023-10-30",
+              "2024-02-08",
+              "2025-05-14"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "daily_weekly": {
+        "signals": 5,
+        "horizons": {
+          "20": {
+            "samples": 5,
+            "positive_rate_pct": 80.0,
+            "median_return_pct": 4.81473371773351,
+            "excess_positive_rate_pct": 80.0,
+            "median_excess_return_pct": 2.7058148008193728,
+            "median_max_adverse_pct": -1.5552389125471633,
+            "signal_dates": [
+              "2010-08-13",
+              "2012-02-17",
+              "2018-01-12",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "60": {
+            "samples": 5,
+            "positive_rate_pct": 60.0,
+            "median_return_pct": 4.951403051075998,
+            "excess_positive_rate_pct": 80.0,
+            "median_excess_return_pct": 5.758646239432741,
+            "median_max_adverse_pct": -3.395295664591036,
+            "signal_dates": [
+              "2010-08-13",
+              "2012-02-17",
+              "2018-01-12",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "120": {
+            "samples": 5,
+            "positive_rate_pct": 20.0,
+            "median_return_pct": -10.540537927567328,
+            "excess_positive_rate_pct": 40.0,
+            "median_excess_return_pct": -4.493441711649904,
+            "median_max_adverse_pct": -12.222770075603762,
+            "signal_dates": [
+              "2010-08-13",
+              "2012-02-17",
+              "2018-01-12",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          },
+          "250": {
+            "samples": 5,
+            "positive_rate_pct": 40.0,
+            "median_return_pct": -7.960603180053704,
+            "excess_positive_rate_pct": 20.0,
+            "median_excess_return_pct": -8.044796783032215,
+            "median_max_adverse_pct": -20.31566031968042,
+            "signal_dates": [
+              "2010-08-13",
+              "2012-02-17",
+              "2018-01-12",
+              "2022-06-10",
+              "2024-03-01"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      },
+      "daily_weekly_market": {
+        "signals": 3,
+        "horizons": {
+          "20": {
+            "samples": 3,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 8.17941536155271,
+            "excess_positive_rate_pct": 66.66666666666667,
+            "median_excess_return_pct": 7.346050773921919,
+            "median_max_adverse_pct": -4.06169868633871,
+            "signal_dates": [
+              "2010-08-17",
+              "2018-01-12",
+              "2024-03-06"
+            ]
+          },
+          "60": {
+            "samples": 3,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 3.356540822340537,
+            "excess_positive_rate_pct": 100.0,
+            "median_excess_return_pct": 2.101338338360881,
+            "median_max_adverse_pct": -4.06169868633871,
+            "signal_dates": [
+              "2010-08-17",
+              "2018-01-12",
+              "2024-03-06"
+            ]
+          },
+          "120": {
+            "samples": 3,
+            "positive_rate_pct": 33.333333333333336,
+            "median_return_pct": -12.016464060336263,
+            "excess_positive_rate_pct": 33.333333333333336,
+            "median_excess_return_pct": -5.268429443173018,
+            "median_max_adverse_pct": -12.992041093067941,
+            "signal_dates": [
+              "2010-08-17",
+              "2018-01-12",
+              "2024-03-06"
+            ]
+          },
+          "250": {
+            "samples": 3,
+            "positive_rate_pct": 66.66666666666667,
+            "median_return_pct": 7.654638063795849,
+            "excess_positive_rate_pct": 33.333333333333336,
+            "median_excess_return_pct": -5.525978967319944,
+            "median_max_adverse_pct": -17.94323828325275,
+            "signal_dates": [
+              "2010-08-17",
+              "2018-01-12",
+              "2024-03-06"
+            ]
+          }
+        },
+        "acceptance": "未达到（样本亦不足）"
+      }
+    }
   }
 }
