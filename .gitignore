@@ -13,5 +13,6 @@ strategy_condition_builder.png
 *.json.bak
 *.py.bak
 build/
+backtests/**/cache/
 *.spec
 !StockWidget.spec
