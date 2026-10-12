@@ -28728,6 +28728,12 @@
    "name": "富国恒生科技ETF(QDII)",
    "category": "深基"
   },
+  "sz158046": {
+   "code": "sz158046",
+   "market": "sz",
+   "name": "南方中证卫星产业ETF",
+   "category": "深基"
+  },
   "sz158049": {
    "code": "sz158049",
    "market": "sz",
@@ -41533,5 +41539,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-09 14:34:54"
+ "updated_at": "2026-10-12 16:56:21"
 }
