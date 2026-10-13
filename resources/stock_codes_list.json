@@ -3720,6 +3720,12 @@
    "name": "华安中证国有企业红利ETF",
    "category": "沪基"
   },
+  "sh561070": {
+   "code": "sh561070",
+   "market": "sh",
+   "name": "工银瑞信中证工程机械主题ETF",
+   "category": "沪基"
+  },
   "sh561080": {
    "code": "sh561080",
    "market": "sh",
@@ -10302,12 +10308,6 @@
    "name": "赛轮轮胎",
    "category": "沪A"
   },
-  "sh601059": {
-   "code": "sh601059",
-   "market": "sh",
-   "name": "信达证券",
-   "category": "沪A"
-  },
   "sh601061": {
    "code": "sh601061",
    "market": "sh",
@@ -10594,12 +10594,6 @@
    "code": "sh601188",
    "market": "sh",
    "name": "龙江交通",
-   "category": "沪A"
-  },
-  "sh601198": {
-   "code": "sh601198",
-   "market": "sh",
-   "name": "东兴证券",
    "category": "沪A"
   },
   "sh601199": {
@@ -41406,6 +41400,12 @@
    "name": "首航新能",
    "category": "深A"
   },
+  "sz301660": {
+   "code": "sz301660",
+   "market": "sz",
+   "name": "粤芯半导体",
+   "category": "深A"
+  },
   "sz301662": {
    "code": "sz301662",
    "market": "sz",
@@ -41539,5 +41539,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-12 16:56:21"
+ "updated_at": "2026-10-13 15:15:09"
 }
