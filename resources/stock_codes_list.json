@@ -13929,7 +13929,7 @@
   "sh603608": {
    "code": "sh603608",
    "market": "sh",
-   "name": "天创时尚",
+   "name": "天创股份",
    "category": "沪A"
   },
   "sh603609": {
@@ -28704,6 +28704,12 @@
    "name": "景顺长城中证细分化工产业主题ETF",
    "category": "深基"
   },
+  "sz158037": {
+   "code": "sz158037",
+   "market": "sz",
+   "name": "博时中证机器人ETF",
+   "category": "深基"
+  },
   "sz158038": {
    "code": "sz158038",
    "market": "sz",
@@ -28734,10 +28740,22 @@
    "name": "富国恒生科技ETF(QDII)",
    "category": "深基"
   },
+  "sz158043": {
+   "code": "sz158043",
+   "market": "sz",
+   "name": "南方国证价值100ETF",
+   "category": "深基"
+  },
   "sz158046": {
    "code": "sz158046",
    "market": "sz",
    "name": "南方中证卫星产业ETF",
+   "category": "深基"
+  },
+  "sz158047": {
+   "code": "sz158047",
+   "market": "sz",
+   "name": "永赢国证粮食产业ETF",
    "category": "深基"
   },
   "sz158049": {
@@ -41142,6 +41160,12 @@
    "name": "思泰克",
    "category": "深A"
   },
+  "sz301569": {
+   "code": "sz301569",
+   "market": "sz",
+   "name": "联亚药业",
+   "category": "深A"
+  },
   "sz301571": {
    "code": "sz301571",
    "market": "sz",
@@ -41557,5 +41581,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-14 13:01:39"
+ "updated_at": "2026-10-15 12:48:57"
 }
