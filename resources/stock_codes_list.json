@@ -3018,6 +3018,12 @@
    "name": "博时恒指港股通ETF",
    "category": "沪基"
   },
+  "sh526090": {
+   "code": "sh526090",
+   "market": "sh",
+   "name": "富国中证港股通内地金融ETF",
+   "category": "沪基"
+  },
   "sh530000": {
    "code": "sh530000",
    "market": "sh",
@@ -4270,6 +4276,12 @@
    "code": "sh562400",
    "market": "sh",
    "name": "万家中证金融科技主题ETF",
+   "category": "沪基"
+  },
+  "sh562420": {
+   "code": "sh562420",
+   "market": "sh",
+   "name": "平安中证卫星产业ETF",
    "category": "沪基"
   },
   "sh562450": {
@@ -28770,10 +28782,22 @@
    "name": "易方达创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158052": {
+   "code": "sz158052",
+   "market": "sz",
+   "name": "景顺长城创业板金融科技ETF",
+   "category": "深基"
+  },
   "sz158053": {
    "code": "sz158053",
    "market": "sz",
    "name": "大成创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158055": {
+   "code": "sz158055",
+   "market": "sz",
+   "name": "国泰创业板算力ETF",
    "category": "深基"
   },
   "sz158056": {
@@ -41581,5 +41605,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-15 12:48:57"
+ "updated_at": "2026-10-16 12:41:18"
 }
