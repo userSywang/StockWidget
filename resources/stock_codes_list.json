@@ -28782,6 +28782,12 @@
    "name": "易方达创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158051": {
+   "code": "sz158051",
+   "market": "sz",
+   "name": "国联安中证金融科技主题ETF",
+   "category": "深基"
+  },
   "sz158052": {
    "code": "sz158052",
    "market": "sz",
@@ -28830,10 +28836,22 @@
    "name": "天弘创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158062": {
+   "code": "sz158062",
+   "market": "sz",
+   "name": "建信创业板金融科技ETF",
+   "category": "深基"
+  },
   "sz158063": {
    "code": "sz158063",
    "market": "sz",
    "name": "南方创业板算力基础设施ETF",
+   "category": "深基"
+  },
+  "sz158067": {
+   "code": "sz158067",
+   "market": "sz",
+   "name": "万家创业板金融科技ETF",
    "category": "深基"
   },
   "sz159001": {
@@ -41605,5 +41623,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-16 12:41:18"
+ "updated_at": "2026-10-19 14:55:30"
 }
