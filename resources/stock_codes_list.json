@@ -29094,6 +29094,12 @@
    "name": "天弘国证绿色电力ETF",
    "category": "深基"
   },
+  "sz159047": {
+   "code": "sz159047",
+   "market": "sz",
+   "name": "银华中证港股通信息技术综合ETF",
+   "category": "深基"
+  },
   "sz159048": {
    "code": "sz159048",
    "market": "sz",
@@ -29296,6 +29302,12 @@
    "code": "sz159087",
    "market": "sz",
    "name": "万家中证细分化工产业主题ETF",
+   "category": "深基"
+  },
+  "sz159089": {
+   "code": "sz159089",
+   "market": "sz",
+   "name": "国联国证港股通互联网ETF",
    "category": "深基"
   },
   "sz159091": {
@@ -41629,5 +41641,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-20 12:55:03"
+ "updated_at": "2026-10-21 13:08:44"
 }
