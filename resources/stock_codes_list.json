@@ -28848,6 +28848,12 @@
    "name": "南方创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158066": {
+   "code": "sz158066",
+   "market": "sz",
+   "name": "前海开源中证大数据产业ETF",
+   "category": "深基"
+  },
   "sz158067": {
    "code": "sz158067",
    "market": "sz",
@@ -41634,6 +41640,12 @@
    "name": "超纯应材",
    "category": "深A"
   },
+  "sz301718": {
+   "code": "sz301718",
+   "market": "sz",
+   "name": "通则康威",
+   "category": "深A"
+  },
   "sz302132": {
    "code": "sz302132",
    "market": "sz",
@@ -41641,5 +41653,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-21 13:08:44"
+ "updated_at": "2026-10-22 13:10:00"
 }
