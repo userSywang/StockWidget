@@ -19674,12 +19674,6 @@
    "name": "沙河股份",
    "category": "深A"
   },
-  "sz000016": {
-   "code": "sz000016",
-   "market": "sz",
-   "name": "*ST康佳A",
-   "category": "深A"
-  },
   "sz000017": {
    "code": "sz000017",
    "market": "sz",
@@ -26895,7 +26889,7 @@
   "sz002731": {
    "code": "sz002731",
    "market": "sz",
-   "name": "*ST萃华",
+   "name": "萃华退",
    "category": "深A"
   },
   "sz002732": {
@@ -28714,6 +28708,12 @@
    "code": "sz158032",
    "market": "sz",
    "name": "景顺长城中证细分化工产业主题ETF",
+   "category": "深基"
+  },
+  "sz158036": {
+   "code": "sz158036",
+   "market": "sz",
+   "name": "华夏中证卫星产业ETF",
    "category": "深基"
   },
   "sz158037": {
@@ -41653,5 +41653,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-22 13:10:00"
+ "updated_at": "2026-10-23 12:49:43"
 }
