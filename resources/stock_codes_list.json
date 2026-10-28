@@ -28866,6 +28866,12 @@
    "name": "南方创业板软件ETF",
    "category": "深基"
   },
+  "sz158078": {
+   "code": "sz158078",
+   "market": "sz",
+   "name": "华宝创业板电池ETF",
+   "category": "深基"
+  },
   "sz159001": {
    "code": "sz159001",
    "market": "sz",
@@ -39558,12 +39564,6 @@
    "name": "华研精机",
    "category": "深A"
   },
-  "sz301139": {
-   "code": "sz301139",
-   "market": "sz",
-   "name": "元道退",
-   "category": "深A"
-  },
   "sz301141": {
    "code": "sz301141",
    "market": "sz",
@@ -41653,5 +41653,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-27 13:31:06"
+ "updated_at": "2026-10-28 14:22:21"
 }
