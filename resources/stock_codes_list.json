@@ -28848,6 +28848,12 @@
    "name": "南方创业板算力基础设施ETF",
    "category": "深基"
   },
+  "sz158065": {
+   "code": "sz158065",
+   "market": "sz",
+   "name": "招商国证粮食产业ETF",
+   "category": "深基"
+  },
   "sz158066": {
    "code": "sz158066",
    "market": "sz",
@@ -28870,6 +28876,12 @@
    "code": "sz158078",
    "market": "sz",
    "name": "华宝创业板电池ETF",
+   "category": "深基"
+  },
+  "sz158079": {
+   "code": "sz158079",
+   "market": "sz",
+   "name": "华安创业板电池ETF",
    "category": "深基"
   },
   "sz158082": {
@@ -41659,5 +41671,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-10-30 14:29:00"
+ "updated_at": "2026-11-02 17:23:04"
 }
