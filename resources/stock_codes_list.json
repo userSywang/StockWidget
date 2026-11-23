@@ -4812,6 +4812,60 @@
    "name": "富国中证800自由现金流ETF",
    "category": "沪基"
   },
+  "sh581000": {
+   "code": "sh581000",
+   "market": "sh",
+   "name": "摩根大盘成长主动股票ETF",
+   "category": "沪基"
+  },
+  "sh581010": {
+   "code": "sh581010",
+   "market": "sh",
+   "name": "汇添富均衡策略智选主动管理ETF",
+   "category": "沪基"
+  },
+  "sh581020": {
+   "code": "sh581020",
+   "market": "sh",
+   "name": "华安均衡慧选主动管理ETF",
+   "category": "沪基"
+  },
+  "sh581030": {
+   "code": "sh581030",
+   "market": "sh",
+   "name": "华夏质量甄选主动股票ETF",
+   "category": "沪基"
+  },
+  "sh581050": {
+   "code": "sh581050",
+   "market": "sh",
+   "name": "易方达品质均衡主动管理ETF",
+   "category": "沪基"
+  },
+  "sh581060": {
+   "code": "sh581060",
+   "market": "sh",
+   "name": "永赢景气均衡主动管理ETF",
+   "category": "沪基"
+  },
+  "sh581070": {
+   "code": "sh581070",
+   "market": "sh",
+   "name": "平安红利景气主动管理ETF",
+   "category": "沪基"
+  },
+  "sh581080": {
+   "code": "sh581080",
+   "market": "sh",
+   "name": "招商价值智选主动ETF",
+   "category": "沪基"
+  },
+  "sh581090": {
+   "code": "sh581090",
+   "market": "sh",
+   "name": "华泰柏瑞价值精选主动ETF",
+   "category": "沪基"
+  },
   "sh588000": {
    "code": "sh588000",
    "market": "sh",
@@ -15081,7 +15135,7 @@
   "sh603955": {
    "code": "sh603955",
    "market": "sh",
-   "name": "大千生态",
+   "name": "灵动股份",
    "category": "沪A"
   },
   "sh603956": {
@@ -23523,7 +23577,7 @@
   "sz002122": {
    "code": "sz002122",
    "market": "sz",
-   "name": "ST汇洲",
+   "name": "汇洲智能",
    "category": "深A"
   },
   "sz002123": {
@@ -28930,6 +28984,60 @@
    "code": "sz158082",
    "market": "sz",
    "name": "银华创业板电池ETF",
+   "category": "深基"
+  },
+  "sz158900": {
+   "code": "sz158900",
+   "market": "sz",
+   "name": "南方均衡配置主动管理ETF",
+   "category": "深基"
+  },
+  "sz158901": {
+   "code": "sz158901",
+   "market": "sz",
+   "name": "富国价值优选量化选股主动管理ETF",
+   "category": "深基"
+  },
+  "sz158902": {
+   "code": "sz158902",
+   "market": "sz",
+   "name": "大成红利智选主动ETF",
+   "category": "深基"
+  },
+  "sz158903": {
+   "code": "sz158903",
+   "market": "sz",
+   "name": "鹏华价值臻选主动管理ETF",
+   "category": "深基"
+  },
+  "sz158905": {
+   "code": "sz158905",
+   "market": "sz",
+   "name": "工银红利主动管理ETF",
+   "category": "深基"
+  },
+  "sz158906": {
+   "code": "sz158906",
+   "market": "sz",
+   "name": "华宝均衡精选主动ETF",
+   "category": "深基"
+  },
+  "sz158907": {
+   "code": "sz158907",
+   "market": "sz",
+   "name": "国泰鑫汇均衡收益主动ETF",
+   "category": "深基"
+  },
+  "sz158908": {
+   "code": "sz158908",
+   "market": "sz",
+   "name": "天弘均衡量化选股主动管理ETF",
+   "category": "深基"
+  },
+  "sz158909": {
+   "code": "sz158909",
+   "market": "sz",
+   "name": "建信均衡优选主动管理ETF",
    "category": "深基"
   },
   "sz159001": {
@@ -35169,7 +35277,7 @@
   "sz300351": {
    "code": "sz300351",
    "market": "sz",
-   "name": "永贵电器",
+   "name": "永贵智能",
    "category": "深A"
   },
   "sz300352": {
@@ -41713,5 +41821,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-11-20 16:19:56"
+ "updated_at": "2026-11-23 19:26:38"
 }
