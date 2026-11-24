@@ -3018,6 +3018,12 @@
    "name": "博时恒指港股通ETF",
    "category": "沪基"
   },
+  "sh526080": {
+   "code": "sh526080",
+   "market": "sh",
+   "name": "恒生生物科技ETF东财",
+   "category": "沪基"
+  },
   "sh526090": {
    "code": "sh526090",
    "market": "sh",
@@ -4366,6 +4372,12 @@
    "code": "sh562700",
    "market": "sh",
    "name": "华夏中证汽车零部件主题ETF",
+   "category": "沪基"
+  },
+  "sh562710": {
+   "code": "sh562710",
+   "market": "sh",
+   "name": "鹏华上证综合增强策略ETF",
    "category": "沪基"
   },
   "sh562720": {
@@ -21717,7 +21729,7 @@
   "sz000892": {
    "code": "sz000892",
    "market": "sz",
-   "name": "欢瑞世纪",
+   "name": "ST欢瑞",
    "category": "深A"
   },
   "sz000893": {
@@ -27717,7 +27729,7 @@
   "sz002872": {
    "code": "sz002872",
    "market": "sz",
-   "name": "ST天圣",
+   "name": "天圣制药",
    "category": "深A"
   },
   "sz002873": {
@@ -36111,7 +36123,7 @@
   "sz300500": {
    "code": "sz300500",
    "market": "sz",
-   "name": "启迪设计",
+   "name": "ST启设",
    "category": "深A"
   },
   "sz300501": {
@@ -41821,5 +41833,5 @@
    "category": "深A"
   }
  },
- "updated_at": "2026-11-23 19:26:38"
+ "updated_at": "2026-11-24 19:02:59"
 }
