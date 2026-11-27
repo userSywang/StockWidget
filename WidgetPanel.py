@@ -15,6 +15,7 @@ from Display import SimpleTableModel, KLineDelegate
 from Display import PriceAlertNameDelegate
 from HotkeyManager import GlobalHotkeyManager, normalize_hotkey
 import QuoteSource
+from StockCodeSearch import ALL_SHARE_INDEX_NAMES, CSI_ALL_SHARE, CSI_EQUAL_WEIGHT, EASTMONEY_ALL_SHARE
 import NewsSource
 import NewsCache
 from NewsPanel import NewsPanel
@@ -985,6 +986,8 @@ class FloatLabel(QWidget):
             "prev_close": prev_close,
             "avg": avg,
         }
+        if "date" in quote:
+            stored["date"] = quote["date"]
         return row, sign, stored
 
     def _custom_value(self, item, logical_name, fallback_names):
@@ -1084,10 +1087,31 @@ class FloatLabel(QWidget):
         sign_by_code = {}
         quote_by_code = {}
         getter = getattr(getattr(self, "_http", None), "get", requests.get)
-        parsed_quotes = QuoteSource.fetch_sina_quotes(requested_codes, getter=getter)
+        live_codes = [code for code in requested_codes if code not in (CSI_EQUAL_WEIGHT, EASTMONEY_ALL_SHARE)]
+        try:
+            parsed_quotes = QuoteSource.fetch_sina_quotes(live_codes, getter=getter)
+        except requests.RequestException:
+            if CSI_ALL_SHARE not in live_codes:
+                raise
+            parsed_quotes = {}
+        index_parts = parsed_quotes.get(CSI_ALL_SHARE, [])
+        index_missing = CSI_ALL_SHARE in live_codes and (
+            len(index_parts) < 32 or not index_parts[0] or not QuoteSource._to_float(index_parts[3]) > 0
+        )
+        if index_missing:
+            parsed_quotes.pop(CSI_ALL_SHARE, None)
+            try:
+                index_quotes = QuoteSource.fetch_tencent_index_quotes([CSI_ALL_SHARE], getter=getter)
+            except requests.RequestException:
+                index_quotes = {}
+            if CSI_ALL_SHARE in index_quotes:
+                row, sign, stored = self._format_plain_quote(CSI_ALL_SHARE, index_quotes[CSI_ALL_SHARE])
+                row_by_code[CSI_ALL_SHARE] = row
+                sign_by_code[CSI_ALL_SHARE] = sign
+                quote_by_code[CSI_ALL_SHARE] = stored
         realtime_metrics = {}
         try:
-            realtime_metrics = QuoteSource.fetch_eastmoney_realtime_metrics(requested_codes, getter=getter)
+            realtime_metrics = QuoteSource.fetch_eastmoney_realtime_metrics(live_codes, getter=getter)
         except Exception:
             realtime_metrics = {}
         for code, parts in parsed_quotes.items():
@@ -1283,7 +1307,7 @@ class FloatLabel(QWidget):
             if code in row_by_code:
                 continue
             display_code = code[2:] if self.short_code and len(code) > 2 else code
-            name = f"板块{code[2:]}" if code[:2] in ("bk", "gn", "sw") else code
+            name = ALL_SHARE_INDEX_NAMES.get(code) or (f"板块{code[2:]}" if code[:2] in ("bk", "gn", "sw") else code)
             if self.name_length > 0:
                 name = name[:self.name_length]
             row_by_code[code] = [
@@ -1291,7 +1315,7 @@ class FloatLabel(QWidget):
                 name,
                 "-",
                 "-",
-                "无数据",
+                "需东财数据源" if code == EASTMONEY_ALL_SHARE else "无数据",
                 "-",
                 "-",
                 "-",
@@ -1509,6 +1533,21 @@ class FloatLabel(QWidget):
                 daily_by_code[code] = cached.get("rows", [])
                 continue
 
+            if code == EASTMONEY_ALL_SHARE:
+                continue
+            if code == CSI_EQUAL_WEIGHT:
+                getter = getattr(getattr(self, "_http", None), "get", requests.get)
+                try:
+                    rows = QuoteSource.fetch_csi_daily_closes(code[2:], limit, today=today, getter=getter)
+                except (requests.RequestException, ValueError):
+                    rows = []
+                if not rows:
+                    rows = cached.get("rows", []) if cached else []
+                daily_by_code[code] = rows
+                cache[cache_key] = {"date": today_key, "time": time.monotonic(), "rows": rows}
+                self._daily_kline_cache = cache
+                continue
+
             errors = []
             rows = []
             try:
@@ -1538,12 +1577,26 @@ class FloatLabel(QWidget):
         row_by_code, sign_by_code, quote_by_code = self._get_price(request_codes)
         daily_by_code = {}
         daily_codes = self._daily_request_codes()
+        if CSI_EQUAL_WEIGHT in request_codes and CSI_EQUAL_WEIGHT not in quote_by_code:
+            daily_codes = normalize_codes([*daily_codes, CSI_EQUAL_WEIGHT])
         if daily_codes:
             try:
                 limit = 60 if getattr(self, "_kline_chart_code", "") else 20
                 daily_by_code = self._get_daily_klines(daily_codes, limit=limit)
             except Exception:
                 daily_by_code = {}
+        equal_weight = daily_by_code.get(CSI_EQUAL_WEIGHT)
+        if isinstance(equal_weight, list) and len(equal_weight) >= 2 and CSI_EQUAL_WEIGHT not in quote_by_code:
+            previous, latest = equal_weight[-2:]
+            row, sign, _ = self._format_plain_quote(CSI_EQUAL_WEIGHT, {
+                "name": ALL_SHARE_INDEX_NAMES[CSI_EQUAL_WEIGHT],
+                "price": latest["close"],
+                "prev_close": previous["close"],
+            })
+            row[4] += f" {latest['date'][5:]}收盘"
+            row[12:14] = ["-", ""]
+            row_by_code[CSI_EQUAL_WEIGHT] = row
+            sign_by_code[CSI_EQUAL_WEIGHT] = sign
         intraday_by_code = {}
         intraday_codes = self._intraday_request_codes()
         if intraday_codes:
@@ -1650,7 +1703,7 @@ class FloatLabel(QWidget):
                 price = float(quote.get("price", 0.0))
             except Exception:
                 price = 0.0
-            if price > 0:
+            if price > 0 and quote.get("date", today_key) == today_key:
                 if merged and str(merged[-1].get("date") or "") == today_key:
                     merged[-1]["close"] = price
                     merged[-1]["high"] = max(float(merged[-1].get("high", price) or price), price)

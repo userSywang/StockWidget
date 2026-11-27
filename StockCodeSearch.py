@@ -8,7 +8,18 @@ import requests
 from StockLogic import normalize_code_or_none
 
 
+CSI_ALL_SHARE = "sh000985"
+CSI_EQUAL_WEIGHT = "sh932535"
+EASTMONEY_ALL_SHARE = "ei800004"
+
+ALL_SHARE_INDEX_NAMES = {
+    CSI_ALL_SHARE: "中证全指",
+    CSI_EQUAL_WEIGHT: "中证全指等权",
+    EASTMONEY_ALL_SHARE: "东方财富全A",
+}
+
 BUILTIN_STOCK_CODES = {
+    **ALL_SHARE_INDEX_NAMES,
     "sh000001": "上证指数",
     "sh512000": "券商ETF华宝",
     "sh515880": "通信ETF国泰",
@@ -35,6 +46,25 @@ BUILTIN_STOCK_CODES = {
 
 def _compact(text):
     return "".join(str(text or "").split()).lower()
+
+
+_ALL_SHARE_ALIASES = {
+    "000985": CSI_ALL_SHARE,
+    "000985.sh": CSI_ALL_SHARE,
+    "中证全指指数": CSI_ALL_SHARE,
+    "932535": CSI_EQUAL_WEIGHT,
+    "932535.sh": CSI_EQUAL_WEIGHT,
+    "中证全指等权重指数": CSI_EQUAL_WEIGHT,
+    "中证全指等权重": CSI_EQUAL_WEIGHT,
+    "全指等权": CSI_EQUAL_WEIGHT,
+    "全a等权": CSI_EQUAL_WEIGHT,
+    "800004": EASTMONEY_ALL_SHARE,
+    "800004.ei": EASTMONEY_ALL_SHARE,
+    "东财全a": EASTMONEY_ALL_SHARE,
+    "东方财富全a(沪深京)": EASTMONEY_ALL_SHARE,
+    "东方财富全a（沪深京）": EASTMONEY_ALL_SHARE,
+    **{_compact(name): code for code, name in ALL_SHARE_INDEX_NAMES.items()},
+}
 
 
 _INDEX_CACHE = {}
@@ -130,11 +160,13 @@ def _iter_index_entries(code_index):
 
 def resolve_stock_code(text, code_names=None, code_index=None):
     raw = str(text or "").strip()
+    query = _compact(raw)
+    if query in _ALL_SHARE_ALIASES:
+        return _ALL_SHARE_ALIASES[query]
     code = normalize_code_or_none(raw)
     if code:
         return code
 
-    query = _compact(raw)
     if not query:
         return ""
 

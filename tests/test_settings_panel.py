@@ -118,6 +118,24 @@ class SettingsPanelTests(unittest.TestCase):
         self.assertEqual(group.child(1).data(0, dlg._pending_role()), True)
         dlg.close()
 
+    def test_watchlist_accepts_all_share_index_codes_and_names(self):
+        win = FakeWindow()
+        dlg = SettingsDialog(win, None)
+        self.addCleanup(dlg.close)
+        group = dlg.tree_codes.topLevelItem(0)
+        for query in ("000985", "932535", "800004.EI", "sz000985"):
+            group.addChild(dlg._make_code_item(query, True))
+
+        groups, checked = dlg._collect_groups_from_tree()
+
+        expected = ["sh000985", "sh932535", "ei800004", "sz000985"]
+        self.assertEqual(groups[0]["codes"][-4:], expected)
+        self.assertEqual(checked[-4:], expected)
+        self.assertEqual(dlg._code_from_item_text("中证全指"), "sh000985")
+        self.assertEqual(dlg._code_from_item_text("全指等权"), "sh932535")
+        self.assertEqual(dlg._code_from_item_text("东方财富全A"), "ei800004")
+        self.assertEqual(dlg._code_from_item_text("平安银行"), "sz000001")
+
     def test_current_self_selected_code_opens_price_alert_editor(self):
         win = FakeWindow()
         win.groups = [{"name": "默认", "codes": ["sh603259"]}]

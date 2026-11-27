@@ -3,6 +3,9 @@
 
 WidgetPanel 中的同名方法是对本模块的委托，保持类方法签名不变以便测试注入。
 """
+from datetime import date, timedelta
+import math
+
 import requests
 
 from StockLogic import normalize_codes
@@ -81,6 +84,64 @@ def fetch_sina_quotes(codes, getter=None):
     response = getter(url, headers=headers, timeout=3)
     response.encoding = "gbk"
     return parse_sina_response(getattr(response, "text", ""))
+
+
+def fetch_tencent_index_quotes(codes, getter=None):
+    if not codes:
+        return {}
+    getter = _resolve_getter(getter)
+    response = getter("https://qt.gtimg.cn/q=" + ",".join(codes), timeout=3)
+    response.encoding = "gbk"
+    quotes = {}
+    for line in response.text.splitlines():
+        key, sep, value = line.partition('="')
+        code = key.removeprefix("v_")
+        if not sep or code not in codes:
+            continue
+        fields = value.removesuffix('";').split("~")
+        if len(fields) <= 37 or fields[2] != code[2:]:
+            continue
+        price = _to_float(fields[3])
+        if not math.isfinite(price) or price <= 0 or not fields[1]:
+            continue
+        try:
+            quote_date = date.fromisoformat(fields[30][:8]).isoformat()
+        except ValueError:
+            quote_date = ""
+        quotes[code] = {
+            "name": fields[1],
+            "price": price,
+            "prev_close": _to_float(fields[4]),
+            "open": _to_float(fields[5]) or price,
+            "high": _to_float(fields[33]) or price,
+            "low": _to_float(fields[34]) or price,
+            "volume": _to_float(fields[36]) * 100,
+            "amount": _to_float(fields[37]) * 10000,
+            "date": quote_date,
+        }
+    return quotes
+
+
+def fetch_csi_daily_closes(index_code, limit, *, today, getter=None):
+    getter = _resolve_getter(getter)
+    start = today - timedelta(days=limit * 2 + 30)
+    url = (
+        "https://www.csindex.com.cn/csindex-home/perf/index-perf"
+        f"?indexCode={index_code}&startDate={start:%Y%m%d}&endDate={today:%Y%m%d}"
+    )
+    response = getter(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+    rows = {}
+    for item in (response.json().get("data") or []):
+        if str(item.get("indexCode")) != index_code:
+            continue
+        try:
+            day = date.fromisoformat(item["tradeDate"])
+            close = float(item["close"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if day <= today and close > 0 and math.isfinite(close):
+            rows[day] = {"date": day.isoformat(), "close": close}
+    return [rows[day] for day in sorted(rows)[-limit:]]
 
 
 def parse_tencent_daily_payload(code, payload):

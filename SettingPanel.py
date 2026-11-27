@@ -32,7 +32,7 @@ from StockLogic import (
     strategy_rules_for_position,
     strategy_stop_price,
 )
-from StockCodeSearch import BUILTIN_STOCK_CODES, resolve_stock_code
+from StockCodeSearch import ALL_SHARE_INDEX_NAMES, BUILTIN_STOCK_CODES, resolve_stock_code
 from VersionCheck import APP_VERSION_TAG
 
 class SettingsDialog(QDialog):
@@ -1577,6 +1577,8 @@ class SettingsDialog(QDialog):
         return Qt.UserRole + 2
 
     def _display_name_for_code(self, code: str):
+        if code in ALL_SHARE_INDEX_NAMES:
+            return ALL_SHARE_INDEX_NAMES[code]
         names = getattr(self.win, "code_names", {})
         if not isinstance(names, dict):
             names = {}
@@ -1620,8 +1622,7 @@ class SettingsDialog(QDialog):
         text = str(text or "").strip()
         first = text.split()[0] if text.split() else text
         return (
-            normalize_code_or_none(first)
-            or normalize_code_or_none(text)
+            (normalize_code_or_none(first) if first != text and not first.isdigit() else None)
             or resolve_stock_code(text, getattr(self.win, "code_names", {}))
         )
 

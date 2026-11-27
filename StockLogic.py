@@ -173,7 +173,9 @@ def normalize_code_or_none(value: str):
     s = re.sub(r"[^a-z0-9]", "", s)
     if not s:
         return None
-    if _RE_FULL.match(s):
+    if s == "800004ei":
+        return "ei800004"
+    if _RE_FULL.match(s) or s == "ei800004":
         return s
     if _RE_6.match(s):
         if s.startswith("86"):

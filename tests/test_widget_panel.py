@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
@@ -499,6 +500,50 @@ class WidgetPanelTests(unittest.TestCase):
             win._keep_top_timer.stop()
             win.shutdown_background()
             win.close()
+
+    def test_all_share_indices_refresh_with_their_own_sources(self):
+        fields = [""] + ["0"] * 29 + ["2026-11-27", "10:00:00", "00"]
+        tencent = [""] * 38
+        tencent[1:6] = ["中证全指", "000985", "4200", "4100", "4110"]
+        tencent[30] = "20261127100000"
+        tencent[33:38] = ["4220", "4090", "", "1234", "5678"]
+        calls = []
+
+        def get(url, **kwargs):
+            calls.append(url)
+            if "hq.sinajs.cn" in url:
+                return SimpleNamespace(text=f'var hq_str_sh000985="{",".join(fields)}";')
+            if "qt.gtimg.cn" in url:
+                return SimpleNamespace(text=f'v_sh000985="{"~".join(tencent)}";')
+            if "www.csindex.com.cn" in url:
+                return SimpleNamespace(json=lambda: {"data": [
+                    {"indexCode": "932535", "tradeDate": "20261126", "close": 2300, "open": None},
+                    {"indexCode": "932535", "tradeDate": "20261125", "close": 2350, "open": None},
+                ]})
+            return SimpleNamespace(json=lambda: {})
+
+        codes = ["sh000985", "sh932535", "ei800004"]
+        win = FloatLabel.__new__(FloatLabel)
+        win._http = SimpleNamespace(get=get)
+        win._today = lambda: date(2026, 11, 27)
+        win._daily_request_codes = lambda: []
+        win.short_code = False
+        win.name_length = 0
+        rows, signs, quotes, daily, _ = win._get_refresh_data(codes)
+        win._get_refresh_data(codes)
+
+        self.assertEqual(rows["sh000985"][1:3], ["中证全指", "4200.00 "])
+        self.assertEqual(signs["sh000985"]["delta"], 1)
+        self.assertEqual(quotes["sh000985"]["amount"], 56_780_000)
+        self.assertEqual(rows["sh932535"][4], "-2.13% 11-26收盘")
+        self.assertEqual(rows["sh932535"][13], "")
+        self.assertNotIn("sh932535", quotes)
+        self.assertEqual(daily["sh932535"][-1]["close"], 2300)
+        self.assertEqual(sum("www.csindex.com.cn" in url for url in calls), 1)
+        self.assertEqual(rows["ei800004"][1], "东方财富全A")
+        self.assertEqual(rows["ei800004"][4], "需东财数据源")
+        self.assertNotIn("ei800004", quotes)
+        self.assertFalse(any("ei800004" in url for url in calls))
 
     def test_get_price_enriches_turnover_and_volume_ratio_from_eastmoney(self):
         class FakeResponse:
